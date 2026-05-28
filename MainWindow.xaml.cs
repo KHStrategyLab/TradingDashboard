@@ -199,6 +199,7 @@ namespace TradingDashboard
                 if (stocks.Count == 0)
                 {
                     AppendLog("조건식 결과 0건");
+                    ApplyCachedWatchListFallback("조건식 결과 0건");
                     return;
                 }
 
@@ -211,8 +212,60 @@ namespace TradingDashboard
             catch (Exception ex)
             {
                 AppendLog($"조건식 조회 오류: {ex.Message}");
-                MessageBox.Show($"키움 조건식(01) 조회 오류: {ex.Message}");
+                if (!ApplyCachedWatchListFallback("조건식 조회 실패"))
+                    MessageBox.Show($"키움 조건식(01) 조회 오류: {ex.Message}");
             }
+        }
+
+        private bool ApplyCachedWatchListFallback(string reason)
+        {
+            List<WatchStockItem> cachedStocks = BuildWatchListFromCache();
+            if (cachedStocks.Count == 0)
+            {
+                AppendLog($"{reason}, 사용 가능한 관심종목 캐시 없음");
+                return false;
+            }
+
+            ApplyWatchList(cachedStocks);
+            AppendLog($"{reason}, 관심종목 캐시 {cachedStocks.Count}건 반영");
+            ScheduleWatchlistBasePriceRefresh(cachedStocks, TimeSpan.FromSeconds(30));
+            _ = StartRealtimeTradeAsync();
+            return true;
+        }
+
+        private List<WatchStockItem> BuildWatchListFromCache()
+        {
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            List<WatchlistStockCacheEntry> entries = _watchlistMemoryCache.Values
+                .Where(e => !string.IsNullOrWhiteSpace(e.Code) && (e.SnapshotDate == today || e.LastSeenConditionDate == today))
+                .OrderBy(e => e.LastUsedAt)
+                .ToList();
+
+            if (entries.Count == 0)
+            {
+                entries = _watchlistMemoryCache.Values
+                    .Where(e => !string.IsNullOrWhiteSpace(e.Code))
+                    .OrderBy(e => e.LastUsedAt)
+                    .Take(10)
+                    .ToList();
+            }
+
+            return entries
+                .Select(e => new WatchStockItem
+                {
+                    Code = e.Code,
+                    Name = string.IsNullOrWhiteSpace(e.Name) ? e.Code : e.Name,
+                    MarketTypeCode = e.MarketTypeCode,
+                    MarketName = e.MarketName,
+                    ProgramMarketType = e.ProgramMarketType,
+                    LastPrice = e.LastPrice,
+                    OrderWarning = e.OrderWarning,
+                    AuditInfo = e.AuditInfo,
+                    StockState = e.StockState,
+                    SectorName = e.SectorName,
+                    SupportsNxt = e.SupportsNxt
+                })
+                .ToList();
         }
 
         private void ApplyWatchList(IEnumerable<WatchStockItem> stocks)
