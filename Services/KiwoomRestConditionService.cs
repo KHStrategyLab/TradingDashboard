@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
@@ -16,7 +17,29 @@ namespace TradingDashboard.Services
     {
         private readonly KiwoomSettings _settings;
         private readonly HttpClient _httpClient;
+        private readonly SemaphoreSlim _restRequestGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _restConcurrencyGate = new SemaphoreSlim(5, 5);
+        private readonly SemaphoreSlim _tokenGate = new SemaphoreSlim(1, 1);
+        private DateTime _lastRestRequestAtUtc = DateTime.MinValue;
+        private DateTime _restBurstWindowStartUtc = DateTime.MinValue;
+        private DateTime _restSustainedUntilUtc = DateTime.MinValue;
+        private int _restBurstCount;
+        private DateTime _restBlockedUntil = DateTime.MinValue;
+        private int _restLimitErrorCount;
+        private string _cachedAccessToken = string.Empty;
+        private DateTime _cachedAccessTokenExpiresAt = DateTime.MinValue;
 
+        public event Action<string>? RestLimitLog;
+
+        private const int RestMaxCallsPerSecond = 5;
+        private static readonly TimeSpan RestRateWindow = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan RestBurstInterval = TimeSpan.Zero;
+        private static readonly TimeSpan RestSustainedInterval = TimeSpan.FromMilliseconds(200);
+        private const bool RestUsePauseThenBurst = false;
+        private static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromHours(23);
+        private static readonly TimeSpan AccessTokenRefreshMargin = TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan RestCooldownOnLimit = TimeSpan.FromSeconds(60);
+        private static readonly TimeSpan RestMaxCooldownOnLimit = TimeSpan.FromSeconds(120);
         public KiwoomRestConditionService(KiwoomSettings settings, HttpClient? httpClient = null)
         {
             _settings = settings ?? new KiwoomSettings();
@@ -44,7 +67,7 @@ namespace TradingDashboard.Services
             string seq = ResolveConditionSeq(listRes.RootElement, _settings.ConditionSeq01);
             if (string.IsNullOrWhiteSpace(seq))
             {
-                throw new InvalidOperationException($"조건식 {(_settings.ConditionSeq01 ?? "1")}을(를) 찾지 못했습니다.");
+                throw new InvalidOperationException($"조건식 {(_settings.ConditionSeq01 ?? "1")}번을 찾지 못했습니다.");
             }
 
             await SendJsonAsync(ws, new
@@ -67,11 +90,13 @@ namespace TradingDashboard.Services
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
 
             List<(string Code, string Name)> baseItems = await GetConditionBaseItemsAsync(token, cancellationToken).ConfigureAwait(false);
+            Dictionary<string, StockMarketInfo> marketInfoByCode = await GetStockMarketInfoMapAsync(token, cancellationToken).ConfigureAwait(false);
             var result = new List<WatchStockItem>();
 
             foreach ((string code, string name) in baseItems)
             {
-                WatchStockItem item = await GetStockInfoAsync(token, code, name, cancellationToken).ConfigureAwait(false);
+                marketInfoByCode.TryGetValue(code, out StockMarketInfo? marketInfo);
+                WatchStockItem item = await GetStockInfoAsync(token, code, name, marketInfo, cancellationToken).ConfigureAwait(false);
                 result.Add(item);
             }
 
@@ -105,7 +130,7 @@ namespace TradingDashboard.Services
                 upd_stkpc_tp = "1"
             }), Encoding.UTF8, "application/json");
 
-            using HttpResponseMessage response = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await SendKiwoomRestAsync(req, "ka10081", cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
                 return new List<DailyCandle>();
 
@@ -162,7 +187,7 @@ namespace TradingDashboard.Services
                 upd_stkpc_tp = "1"
             }), Encoding.UTF8, "application/json");
 
-            using HttpResponseMessage response = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await SendKiwoomRestAsync(req, apiId, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
                 return new List<DailyCandle>();
 
@@ -205,7 +230,7 @@ namespace TradingDashboard.Services
                 req.Headers.TryAddWithoutValidation("next-key", "");
                 req.Content = new StringContent(JsonSerializer.Serialize(new { stk_cd = requestCode }), Encoding.UTF8, "application/json");
 
-                using HttpResponseMessage response = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                using HttpResponseMessage response = await SendKiwoomRestAsync(req, "ka10001-status", cancellationToken).ConfigureAwait(false);
                 string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                     continue;
@@ -222,10 +247,10 @@ namespace TradingDashboard.Services
                 bool tradingValueFromApi = tradingValue > 0;
                 long dayDiff = ParseLongSafe(ReadAnyDeep(root, "pred_pre", "predPre", "change", "chg_val", "11"));
                 string changeRate = ReadAnyDeep(root, "flu_rt", "fluRt", "chg_rt", "change_rate", "12");
-                string floatRatio = ReadAnyDeep(root, "distb_rt", "float_rt", "유통비율", "float_ratio");
-                string turnoverRate = ReadAnyDeep(root, "turnover_rt", "trde_rt", "turnoverRate", "회전율");
-                string volumeRatio = ReadAnyDeep(root, "vol_rt", "volume_rt", "거래량비율", "volRatio");
-                long listedShares = ParseLongSafe(ReadAnyDeep(root, "lst_stk_cnt", "lstStkCnt", "list_stkcnt", "listed_shares", "상장주식수"));
+                string floatRatio = ReadAnyDeep(root, "distb_rt", "float_rt", "float_ratio");
+                string turnoverRate = ReadAnyDeep(root, "turnover_rt", "trde_rt", "turnoverRate");
+                string volumeRatio = ReadAnyDeep(root, "vol_rt", "volume_rt", "volRatio");
+                long listedShares = ParseLongSafe(ReadAnyDeep(root, "lst_stk_cnt", "lstStkCnt", "list_stkcnt", "listed_shares"));
 
                 if (!string.IsNullOrWhiteSpace(changeRate) && !changeRate.Contains("%"))
                     changeRate += "%";
@@ -241,6 +266,9 @@ namespace TradingDashboard.Services
                 if (listedShares > 0 && listedShares < 100_000_000)
                     listedShares *= 1000;
                 long marketCap = (price > 0 && listedShares > 0) ? price * listedShares : 0;
+                string calculatedTurnoverRate = FormatTurnoverRate(volume, listedShares);
+                if (string.IsNullOrWhiteSpace(turnoverRate))
+                    turnoverRate = calculatedTurnoverRate;
 
                 return new StockStatusMetrics
                 {
@@ -252,6 +280,7 @@ namespace TradingDashboard.Services
                     VolumeText = volume > 0 ? volume.ToString("N0") : "-",
                     TradingValueText = tradingValueFromApi ? FormatMillionWonUnit(tradingValue) : FormatKoreanMoney(tradingValue),
                     MarketCapText = FormatKoreanMoney(marketCap),
+                    ListedSharesText = listedShares > 0 ? listedShares.ToString("N0") : "-",
                     FloatRatioText = string.IsNullOrWhiteSpace(floatRatio) ? "-" : floatRatio,
                     TurnoverRateText = string.IsNullOrWhiteSpace(turnoverRate) ? "-" : turnoverRate,
                     ChangeRateText = string.IsNullOrWhiteSpace(changeRate) ? "-" : changeRate,
@@ -295,14 +324,23 @@ namespace TradingDashboard.Services
             long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
             if (basePrice <= 0)
                 basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+            long previousClosePrice = ResolvePreviousClosePrice(root10007);
+            if (previousClosePrice <= 0)
+                previousClosePrice = ResolvePreviousClosePrice(root10100);
+            if (previousClosePrice > 0)
+                basePrice = previousClosePrice;
             if (basePrice <= 0 && price > 0 && dayDiff != 0)
                 basePrice = price - dayDiff;
+            if (basePrice > 0 && price > 0)
+                dayDiff = price - basePrice;
 
             string changeRate = ReadAnyDeep(root10007, "flu_rt", "fluRt", "chg_rt", "change_rate", "12");
             if (string.IsNullOrWhiteSpace(changeRate))
                 changeRate = ReadAnyDeep(root10100, "flu_rt", "fluRt", "chg_rt", "change_rate", "12");
             if (string.IsNullOrWhiteSpace(changeRate))
                 changeRate = ReadAnyDeep(atn, "flu_rt", "chg_rt", "change_rate", "12");
+            if (string.IsNullOrWhiteSpace(changeRate) && basePrice > 0 && price > 0)
+                changeRate = $"{(price - basePrice) / (decimal)basePrice * 100m:0.00}";
 
             long volume = ParseLongSafe(ReadAnyDeep(root10007, "trde_qty", "trdeQty", "acc_trde_qty", "acml_vol", "volume", "13"));
             if (volume <= 0)
@@ -328,6 +366,9 @@ namespace TradingDashboard.Services
                 tradingValue = price * volume;
             if (marketCap <= 0 && price > 0 && listedShares > 0)
                 marketCap = price * listedShares;
+            string calculatedTurnoverRate = FormatTurnoverRate(volume, listedShares);
+            if (string.IsNullOrWhiteSpace(turnoverRate))
+                turnoverRate = calculatedTurnoverRate;
 
             return new StockStatusMetrics
             {
@@ -347,7 +388,19 @@ namespace TradingDashboard.Services
             };
         }
 
-        public async Task<StockStatusMetrics> GetTodayExecutionSummaryAsync(string code, bool useNxtMarket = false, CancellationToken cancellationToken = default)
+        public async Task<long> GetKrxPreviousClosePriceAsync(string code, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            string baseCode = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(baseCode))
+                return 0;
+
+            JsonElement root = await PostApiRootAsync(token, "ka10007", "/api/dostk/mrkcond", new { stk_cd = baseCode }, cancellationToken).ConfigureAwait(false);
+            return ResolvePreviousClosePrice(root);
+        }
+
+        public async Task<StockStatusMetrics> GetTodayExecutionSummaryAsync(string code, bool useNxtMarket = false, string programMarketType = "", CancellationToken cancellationToken = default)
         {
             ValidateSettings();
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
@@ -356,35 +409,30 @@ namespace TradingDashboard.Services
                 return new StockStatusMetrics();
 
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
-            JsonElement root10055 = await PostApiRootAsync(token, "ka10055", "/api/dostk/stkinfo", new { stk_cd = requestCode, tdy_pred = "1" }, cancellationToken).ConfigureAwait(false);
-            JsonElement root90004 = await PostApiRootAsync(token, "ka90004", "/api/dostk/mrkcond", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
+            string today = DateTime.Now.ToString("yyyyMMdd");
 
-            JsonElement execArray = FindArrayByKeySafe(root10055, "tdy_pred_cntr_qty");
             long buyCum = 0;
             long sellCum = 0;
+            JsonElement root10003 = await PostApiRootAsync(token, "ka10003", "/api/dostk/stkinfo", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
+            AccumulateExecutionInfo(root10003, ref buyCum, ref sellCum, accumulateTotals: false);
 
-            if (execArray.ValueKind == JsonValueKind.Array)
-            {
-                foreach (JsonElement row in execArray.EnumerateArray())
-                {
-                    buyCum += Math.Max(0, ParseLongSafe(ReadAnyDeep(row, "msqty", "buy_exec_qty", "buy_qty", "1031")));
-                    sellCum += Math.Max(0, ParseLongSafe(ReadAnyDeep(row, "mdqty", "sell_exec_qty", "sell_qty", "1030")));
-                }
-            }
-
-            if (buyCum == 0 && sellCum == 0)
-            {
-                buyCum = Math.Max(0, ParseLongSafe(ReadAnyDeep(root10055, "msqty", "buy_exec_qty", "buy_qty", "1031")));
-                sellCum = Math.Max(0, ParseLongSafe(ReadAnyDeep(root10055, "mdqty", "sell_exec_qty", "sell_qty", "1030")));
-            }
-
-            long programBuy = Math.Max(0, ParseLongSafe(ReadAnyDeep(root90004, "prog_buy_qty", "prgm_buy_qty", "buy_qty", "net_buy_qty")));
+            JsonElement root10015 = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = requestCode, strt_dt = today }, cancellationToken).ConfigureAwait(false);
+            DailyTradeSummary dailyTrade = ReadDailyTradeSummary(root10015);
+            string programDate = string.IsNullOrWhiteSpace(dailyTrade.TradeDate) ? today : dailyTrade.TradeDate;
+            ProgramTradeSummary programTrade = await GetProgramTradeSummaryAsync(token, baseCode, useNxtMarket, programDate, programMarketType, cancellationToken).ConfigureAwait(false);
 
             return new StockStatusMetrics
             {
                 BuyExecCum = buyCum,
                 SellExecCum = sellCum,
-                ProgramBuyText = programBuy > 0 ? programBuy.ToString("N0") : "-"
+                DailyTradeQty = dailyTrade.TotalTradeQty,
+                BeforeMarketTradeQty = dailyTrade.BeforeMarketQty,
+                RegularMarketTradeQty = dailyTrade.RegularMarketQty,
+                AfterMarketTradeQty = dailyTrade.AfterMarketQty,
+                DailySectionTradeQty = dailyTrade.SectionTotalQty,
+                ProgramBuyText = programTrade.Found ? FormatSignedQuantity(programTrade.NetQuantity) : "-",
+                ProgramNetQuantity = programTrade.NetQuantity,
+                HasProgramTrade = programTrade.Found
             };
         }
 
@@ -400,7 +448,6 @@ namespace TradingDashboard.Services
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
             JsonElement quoteRoot = await PostApiRootAsync(token, "ka10007", "/api/dostk/mrkcond", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
             JsonElement hogaRoot = await PostApiRootAsync(token, "ka10004", "/api/dostk/mrkcond", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
-            JsonElement execRoot = await PostApiRootAsync(token, "ka10055", "/api/dostk/stkinfo", new { stk_cd = requestCode, tdy_pred = "1" }, cancellationToken).ConfigureAwait(false);
 
             snapshot.CurrentPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(quoteRoot, "cur_prc", "curPrc", "now_prc", "price", "10")));
             snapshot.DayChange = ParseLongSafe(ReadAnyDeep(quoteRoot, "pred_pre", "predPre", "change", "chg_val", "11"));
@@ -410,56 +457,113 @@ namespace TradingDashboard.Services
             snapshot.ChangeRateText = string.IsNullOrWhiteSpace(rate) ? "-" : rate;
 
             long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(quoteRoot, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+            long previousClosePrice = ResolvePreviousClosePrice(quoteRoot);
+            if (previousClosePrice > 0)
+                basePrice = previousClosePrice;
             if (basePrice <= 0 && snapshot.CurrentPrice > 0 && snapshot.DayChange != 0)
                 basePrice = snapshot.CurrentPrice - snapshot.DayChange;
             snapshot.BasePrice = Math.Max(0, basePrice);
+            if (snapshot.BasePrice > 0 && snapshot.CurrentPrice > 0)
+                snapshot.DayChange = snapshot.CurrentPrice - snapshot.BasePrice;
 
             for (int i = 0; i < 10; i++)
             {
                 int level = i + 1;
-                long sellPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (41 + i).ToString(), $"sel_{level}bid", $"sel_{level}th_pre_bid", $"sell_{level}_price", $"ask_{level}_price")));
-                long sellQty = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (61 + i).ToString(), $"sel_{level}bid_req", $"sel_{level}th_pre_req", $"sell_{level}_qty", $"ask_{level}_qty")));
-                if (sellPrice > 0 || sellQty > 0)
-                    snapshot.SellLevels.Add(new HogaQuoteLevel { Price = sellPrice, Quantity = sellQty });
+                long sellPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (41 + i).ToString(), level == 1 ? "sel_fpr_bid" : string.Empty, $"sel_{level}bid", $"sel_{level}_bid", $"sel_{level}th_pre_bid", $"sell_{level}_price", $"ask_{level}_price")));
+                long sellQty = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (61 + i).ToString(), level == 1 ? "sel_fpr_req" : string.Empty, $"sel_{level}bid_req", $"sel_{level}_req", $"sel_{level}th_pre_req", $"sell_{level}_qty", $"ask_{level}_qty")));
+                snapshot.SellLevels.Add(new HogaQuoteLevel { Price = sellPrice, Quantity = sellQty });
 
-                long buyPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (51 + i).ToString(), $"buy_{level}bid", $"buy_{level}th_pre_bid", $"buy_{level}_price", $"bid_{level}_price")));
-                long buyQty = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (71 + i).ToString(), $"buy_{level}bid_req", $"buy_{level}th_pre_req", $"buy_{level}_qty", $"bid_{level}_qty")));
-                if (buyPrice > 0 || buyQty > 0)
-                    snapshot.BuyLevels.Add(new HogaQuoteLevel { Price = buyPrice, Quantity = buyQty });
+                long buyPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (51 + i).ToString(), level == 1 ? "buy_fpr_bid" : string.Empty, $"buy_{level}bid", $"buy_{level}_bid", $"buy_{level}th_pre_bid", $"buy_{level}_price", $"bid_{level}_price")));
+                long buyQty = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (71 + i).ToString(), level == 1 ? "buy_fpr_req" : string.Empty, $"buy_{level}bid_req", $"buy_{level}_req", $"buy_{level}th_pre_req", $"buy_{level}_qty", $"bid_{level}_qty")));
+                snapshot.BuyLevels.Add(new HogaQuoteLevel { Price = buyPrice, Quantity = buyQty });
             }
 
-            JsonElement execArray = FindArrayByKeySafe(execRoot, "tdy_pred_cntr_qty");
-            if (execArray.ValueKind == JsonValueKind.Array)
+            JsonElement execInfoRoot = await PostApiRootAsync(token, "ka10003", "/api/dostk/stkinfo", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
+            long snapshotBuyCum = 0;
+            long snapshotSellCum = 0;
+            AccumulateExecutionInfo(execInfoRoot, ref snapshotBuyCum, ref snapshotSellCum, snapshot.RecentTrades, accumulateTotals: false);
+            snapshot.BuyExecCum = snapshotBuyCum;
+            snapshot.SellExecCum = snapshotSellCum;
+
+            string snapshotDate = DateTime.Now.ToString("yyyyMMdd");
+            JsonElement dailyDetailRoot = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = requestCode, strt_dt = snapshotDate }, cancellationToken).ConfigureAwait(false);
+            DailyTradeSummary snapshotDailyTrade = ReadDailyTradeSummary(dailyDetailRoot);
+            snapshot.DailyTradeQty = snapshotDailyTrade.TotalTradeQty;
+            snapshot.BeforeMarketTradeQty = snapshotDailyTrade.BeforeMarketQty;
+            snapshot.RegularMarketTradeQty = snapshotDailyTrade.RegularMarketQty;
+            snapshot.AfterMarketTradeQty = snapshotDailyTrade.AfterMarketQty;
+            snapshot.DailySectionTradeQty = snapshotDailyTrade.SectionTotalQty;
+
+            return snapshot;
+        }
+
+        private async Task<ProgramTradeSummary> GetProgramTradeSummaryAsync(string token, string baseCode, bool useNxtMarket, string date, string programMarketType, CancellationToken cancellationToken)
+        {
+            string mtsRequestCode = $"{baseCode}_AL";
+            JsonElement mtsRoot = await PostApiRootAsync(
+                token,
+                "ka90008",
+                "/api/dostk/mrkcond",
+                new { amt_qty_tp = "2", stk_cd = mtsRequestCode, date },
+                cancellationToken).ConfigureAwait(false);
+
+            ProgramTradeSummary mtsSummary = ReadProgramTimeSummary(mtsRoot, date);
+            if (mtsSummary.Found)
+                return mtsSummary;
+
+            return new ProgramTradeSummary(false, 0, string.Empty);
+
+        }
+        private static ProgramTradeSummary ReadProgramTimeSummary(JsonElement root, string date)
+        {
+            JsonElement rows = FindArrayByKeySafe(root, "stk_tm_prm_trde_trnsn");
+            if (rows.ValueKind != JsonValueKind.Array)
+                return new ProgramTradeSummary(false, 0, string.Empty);
+
+            foreach (JsonElement row in rows.EnumerateArray())
             {
-                foreach (JsonElement row in execArray.EnumerateArray())
-                {
-                    long signedQty = ParseLongSafe(ReadAnyDeep(row, "cntr_qty", "trade_qty", "15"));
-                    if (signedQty > 0)
-                        snapshot.BuyExecCum += signedQty;
-                    else if (signedQty < 0)
-                        snapshot.SellExecCum += Math.Abs(signedQty);
+                string rowDate = NormalizeDigits(ReadAnyDeep(row, "dt", "date"));
+                if (!string.IsNullOrWhiteSpace(rowDate) && !string.Equals(rowDate, date, StringComparison.Ordinal))
+                    continue;
 
-                    if (snapshot.RecentTrades.Count >= 10)
-                        continue;
-
-                    long tradePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "cntr_pric", "cntr_price", "trade_price", "10")));
-                    long qty = Math.Abs(signedQty);
-                    if (tradePrice > 0 || qty > 0)
-                    {
-                        snapshot.RecentTrades.Add(new ClosingTradePrint
-                        {
-                            Price = tradePrice,
-                            Quantity = qty,
-                            IsBuyAggressive = signedQty >= 0
-                        });
-                    }
-                }
+                return ReadProgramTradeRow(row);
             }
 
-            if (snapshot.BuyExecCum == 0 && snapshot.SellExecCum == 0)
+            return new ProgramTradeSummary(false, 0, string.Empty);
+        }
+        private static ProgramTradeSummary ReadProgramTradeRow(JsonElement row)
+        {
+            long sellQuantity = ParseLongSafe(ReadAnyDeep(row, "prm_sell_qty", "prmSellQty"));
+            long buyQuantity = ParseLongSafe(ReadAnyDeep(row, "prm_buy_qty", "prmBuyQty"));
+            long netQuantity = ParseLongSafe(ReadAnyDeep(row, "prm_netprps_amt", "prmNetprpsAmt"));
+            if (netQuantity == 0 && (buyQuantity != 0 || sellQuantity != 0))
+                netQuantity = ParseLongSafe(ReadAnyDeep(row, "prm_buy_amt", "prmBuyAmt")) - ParseLongSafe(ReadAnyDeep(row, "prm_sell_amt", "prmSellAmt"));
+
+            string logText = $"tm={ReadAnyDeep(row, "tm", "time")} stex={ReadAnyDeep(row, "stex_tp", "stexTp")} sellQty={sellQuantity:N0} buyQty={buyQuantity:N0} netQty={netQuantity:N0} sellAmt={ReadAnyDeep(row, "prm_sell_amt", "prmSellAmt")} buyAmt={ReadAnyDeep(row, "prm_buy_amt", "prmBuyAmt")} netAmt={ReadAnyDeep(row, "prm_netprps_amt", "prmNetprpsAmt")}";
+            return new ProgramTradeSummary(true, netQuantity, logText);
+        }
+        public async Task<KrxClosingSnapshot> GetOrderBookSnapshotAsync(string code, bool useNxtMarket = false, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            string baseCode = NormalizeStockCode(code);
+            var snapshot = new KrxClosingSnapshot { Code = baseCode };
+            if (string.IsNullOrWhiteSpace(baseCode))
+                return snapshot;
+
+            string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
+            JsonElement hogaRoot = await PostApiRootAsync(token, "ka10004", "/api/dostk/mrkcond", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
+
+            for (int i = 0; i < 10; i++)
             {
-                snapshot.BuyExecCum = Math.Max(0, ParseLongSafe(ReadAnyDeep(execRoot, "msqty", "buy_exec_qty", "buy_qty", "1031")));
-                snapshot.SellExecCum = Math.Max(0, ParseLongSafe(ReadAnyDeep(execRoot, "mdqty", "sell_exec_qty", "sell_qty", "1030")));
+                int level = i + 1;
+                long sellPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (41 + i).ToString(), level == 1 ? "sel_fpr_bid" : string.Empty, $"sel_{level}bid", $"sel_{level}_bid", $"sel_{level}th_pre_bid", $"sell_{level}_price", $"ask_{level}_price")));
+                long sellQty = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (61 + i).ToString(), level == 1 ? "sel_fpr_req" : string.Empty, $"sel_{level}bid_req", $"sel_{level}_req", $"sel_{level}th_pre_req", $"sell_{level}_qty", $"ask_{level}_qty")));
+                snapshot.SellLevels.Add(new HogaQuoteLevel { Price = sellPrice, Quantity = sellQty });
+
+                long buyPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (51 + i).ToString(), level == 1 ? "buy_fpr_bid" : string.Empty, $"buy_{level}bid", $"buy_{level}_bid", $"buy_{level}th_pre_bid", $"buy_{level}_price", $"bid_{level}_price")));
+                long buyQty = Math.Abs(ParseLongSafe(ReadAnyDeep(hogaRoot, (71 + i).ToString(), level == 1 ? "buy_fpr_req" : string.Empty, $"buy_{level}bid_req", $"buy_{level}_req", $"buy_{level}th_pre_req", $"buy_{level}_qty", $"bid_{level}_qty")));
+                snapshot.BuyLevels.Add(new HogaQuoteLevel { Price = buyPrice, Quantity = buyQty });
             }
 
             return snapshot;
@@ -474,7 +578,7 @@ namespace TradingDashboard.Services
             req.Headers.TryAddWithoutValidation("next-key", "");
             req.Content = new StringContent(JsonSerializer.Serialize(new { stk_cd = requestCode }), Encoding.UTF8, "application/json");
 
-            using HttpResponseMessage response = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await SendKiwoomRestAsync(req, apiId, cancellationToken).ConfigureAwait(false);
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(json))
                 return JsonDocument.Parse("{}").RootElement;
@@ -492,7 +596,7 @@ namespace TradingDashboard.Services
             req.Headers.TryAddWithoutValidation("next-key", "");
             req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-            using HttpResponseMessage response = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await SendKiwoomRestAsync(req, apiId, cancellationToken).ConfigureAwait(false);
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(json))
                 return JsonDocument.Parse("{}").RootElement;
@@ -500,6 +604,198 @@ namespace TradingDashboard.Services
             using JsonDocument doc = JsonDocument.Parse(json);
             return doc.RootElement.Clone();
         }
+
+        private async IAsyncEnumerable<JsonElement> PostApiRootPagesAsync(string token, string apiId, string endpoint, object body, int maxPages, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            string contYn = "N";
+            string nextKey = string.Empty;
+
+            for (int page = 0; page < maxPages; page++)
+            {
+                ApiPageResult result = await PostApiPageAsync(token, apiId, endpoint, body, contYn, nextKey, cancellationToken).ConfigureAwait(false);
+                yield return result.Root;
+
+                if (!IsContinuation(result.ContYn) || string.IsNullOrWhiteSpace(result.NextKey))
+                    yield break;
+
+                contYn = "Y";
+                nextKey = result.NextKey;
+            }
+        }
+
+        private async Task<ApiPageResult> PostApiPageAsync(string token, string apiId, string endpoint, object body, string contYn, string nextKey, CancellationToken cancellationToken)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"https://api.kiwoom.com{endpoint}");
+            req.Headers.TryAddWithoutValidation("authorization", $"Bearer {token}");
+            req.Headers.TryAddWithoutValidation("api-id", apiId);
+            req.Headers.TryAddWithoutValidation("cont-yn", contYn);
+            req.Headers.TryAddWithoutValidation("next-key", nextKey);
+            req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+            using HttpResponseMessage response = await SendKiwoomRestAsync(req, apiId, cancellationToken).ConfigureAwait(false);
+            string responseContYn = ReadHeader(response, "cont-yn");
+            string responseNextKey = ReadHeader(response, "next-key");
+            string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(json))
+                return new ApiPageResult(JsonDocument.Parse("{}").RootElement.Clone(), responseContYn, responseNextKey);
+
+            using JsonDocument doc = JsonDocument.Parse(json);
+            return new ApiPageResult(doc.RootElement.Clone(), responseContYn, responseNextKey);
+        }
+
+        private static void AccumulateExecutionInfo(JsonElement root, ref long buyCum, ref long sellCum, List<ClosingTradePrint>? recentTrades = null, bool accumulateTotals = true)
+        {
+            JsonElement execArray = FindArrayByKeySafe(root, "cntr_infr");
+            if (execArray.ValueKind != JsonValueKind.Array)
+                execArray = FindArrayByKeySafe(root, "cntr_info");
+            if (execArray.ValueKind != JsonValueKind.Array)
+                execArray = FindArrayByKeySafe(root, "execution_info");
+
+            if (execArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement row in execArray.EnumerateArray())
+                    AccumulateExecutionRow(row, ref buyCum, ref sellCum, recentTrades, accumulateTotals);
+                return;
+            }
+
+            AccumulateExecutionRow(root, ref buyCum, ref sellCum, recentTrades, accumulateTotals);
+        }
+
+        private static void AccumulateExecutionRow(JsonElement row, ref long buyCum, ref long sellCum, List<ClosingTradePrint>? recentTrades, bool accumulateTotals)
+        {
+            string qtyText = ReadAnyDeep(row, "cntr_trde_qty", "cntr_qty", "trade_qty", "trde_qty", "15");
+            long signedQty = ParseLongSafe(qtyText);
+            long qty = Math.Abs(signedQty);
+            if (qty <= 0)
+                return;
+
+            int side = ResolveExecutionSide(row, qtyText);
+            if (side == 0)
+                return;
+
+            if (accumulateTotals)
+            {
+                if (side > 0)
+                    buyCum += qty;
+                else
+                    sellCum += qty;
+            }
+
+            if (recentTrades == null || recentTrades.Count >= 10)
+                return;
+
+            long tradePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "cntr_pric", "cntr_price", "cur_prc", "trade_price", "10")));
+            recentTrades.Add(new ClosingTradePrint
+            {
+                Price = tradePrice,
+                Quantity = qty,
+                IsBuyAggressive = side > 0
+            });
+        }
+
+        private static int ResolveExecutionSide(JsonElement row, string qtyText)
+        {
+            string quantity = (qtyText ?? string.Empty).Trim();
+            if (quantity.StartsWith("+", StringComparison.Ordinal))
+                return 1;
+            if (quantity.StartsWith("-", StringComparison.Ordinal))
+                return -1;
+
+            string sideText = ReadAnyDeep(row, "cntr_sign", "trade_sign", "cntr_tp", "trade_tp", "ms_md_tp", "buy_sell_tp", "매수매도구분");
+            if (string.IsNullOrWhiteSpace(sideText))
+                return 0;
+
+            string normalized = sideText.Trim().ToUpperInvariant();
+            if (normalized.Contains("BUY") || normalized.Contains("매수") || normalized == "+" || normalized == "B")
+                return 1;
+            if (normalized.Contains("SELL") || normalized.Contains("매도") || normalized == "-" || normalized == "S")
+                return -1;
+
+            return 0;
+        }
+
+        private static DailyTradeSummary ReadDailyTradeSummary(JsonElement root)
+        {
+            var summary = new DailyTradeSummary();
+            JsonElement dailyArray = FindArrayByKeySafe(root, "daly_trde_dtl");
+            if (dailyArray.ValueKind != JsonValueKind.Array)
+                dailyArray = FindArrayByKeySafe(root, "daily_trade_detail");
+            if (dailyArray.ValueKind != JsonValueKind.Array)
+                dailyArray = FindArrayByKeySafe(root, "daily_transaction_detail");
+
+            if (dailyArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement row in dailyArray.EnumerateArray())
+                {
+                    ReadDailyTransactionRow(row, ref summary);
+                    if (!string.IsNullOrWhiteSpace(summary.TradeDate) || summary.TotalTradeQty > 0 || summary.SectionTotalQty > 0)
+                        return summary;
+                }
+                return summary;
+            }
+
+            ReadDailyTransactionRow(root, ref summary);
+            return summary;
+        }
+
+        private static void ReadDailyTransactionRow(JsonElement row, ref DailyTradeSummary summary)
+        {
+            summary.TradeDate = NormalizeDigits(ReadAnyDeep(row, "dt", "date", "trde_dt", "base_dt"));
+            summary.TotalTradeQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "trde_qty", "total_trde_qty", "trade_qty", "volume")));
+            summary.BeforeMarketQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "bf_mkrt_trde_qty", "before_market_qty")));
+            summary.RegularMarketQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "opmr_trde_qty", "regular_market_qty", "open_market_qty")));
+            summary.AfterMarketQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "af_mkrt_trde_qty", "after_market_qty")));
+            summary.SectionTotalQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "tot_3", "section_total_qty")));
+            summary.PeriodTradeQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "prid_trde_qty", "period_trade_qty")));
+        }
+
+        private struct DailyTradeSummary
+        {
+            public string TradeDate;
+            public long TotalTradeQty;
+            public long BeforeMarketQty;
+            public long RegularMarketQty;
+            public long AfterMarketQty;
+            public long SectionTotalQty;
+            public long PeriodTradeQty;
+        }
+
+        private readonly record struct ProgramTradeSummary(bool Found, long NetQuantity, string LogText);
+
+        private static string FormatSignedQuantity(long value)
+        {
+            if (value == 0)
+                return "0";
+            return value > 0 ? $"+{value:N0}" : value.ToString("N0");
+        }
+
+        private static string FormatTurnoverRate(long volume, long listedShares)
+        {
+            if (volume <= 0 || listedShares <= 0)
+                return string.Empty;
+
+            decimal rate = volume / (decimal)listedShares * 100m;
+            decimal displayRate = Math.Truncate(rate * 100m) / 100m;
+            return $"{displayRate:0.00}%";
+        }
+
+        private static bool IsContinuation(string value)
+        {
+            return string.Equals(value, "Y", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "y", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ReadHeader(HttpResponseMessage response, string name)
+        {
+            if (response.Headers.TryGetValues(name, out IEnumerable<string>? values))
+                return values.FirstOrDefault() ?? string.Empty;
+            if (response.Content.Headers.TryGetValues(name, out IEnumerable<string>? contentValues))
+                return contentValues.FirstOrDefault() ?? string.Empty;
+            return string.Empty;
+        }
+
+        private readonly record struct ApiPageResult(JsonElement Root, string ContYn, string NextKey);
 
         private static JsonElement FindArrayByKeySafe(JsonElement root, string key)
         {
@@ -542,6 +838,30 @@ namespace TradingDashboard.Services
 
         private async Task<string> IssueTokenAsync(CancellationToken cancellationToken)
         {
+            DateTime now = DateTime.UtcNow;
+            if (!string.IsNullOrWhiteSpace(_cachedAccessToken) && now < _cachedAccessTokenExpiresAt - AccessTokenRefreshMargin)
+                return _cachedAccessToken;
+
+            await _tokenGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                now = DateTime.UtcNow;
+                if (!string.IsNullOrWhiteSpace(_cachedAccessToken) && now < _cachedAccessTokenExpiresAt - AccessTokenRefreshMargin)
+                    return _cachedAccessToken;
+
+                string token = await RequestNewTokenAsync(cancellationToken).ConfigureAwait(false);
+                _cachedAccessToken = token;
+                _cachedAccessTokenExpiresAt = DateTime.UtcNow.Add(AccessTokenLifetime);
+                return token;
+            }
+            finally
+            {
+                _tokenGate.Release();
+            }
+        }
+
+        private async Task<string> RequestNewTokenAsync(CancellationToken cancellationToken)
+        {
             using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/oauth2/token");
             string payload = JsonSerializer.Serialize(new
             {
@@ -551,7 +871,7 @@ namespace TradingDashboard.Services
             });
             req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-            using HttpResponseMessage response = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await SendKiwoomRestAsync(req, "oauth2-token", cancellationToken).ConfigureAwait(false);
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
@@ -561,6 +881,146 @@ namespace TradingDashboard.Services
                 throw new InvalidOperationException("키움 토큰 응답에 token 값이 없습니다.");
 
             return token;
+        }
+
+        private async Task WaitRestRateLimitAsync(CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                TimeSpan wait;
+                await _restRequestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    DateTime now = DateTime.UtcNow;
+                    bool sustainedMode = now < _restSustainedUntilUtc;
+                    TimeSpan minInterval = sustainedMode ? RestSustainedInterval : RestBurstInterval;
+                    TimeSpan intervalWait = TimeSpan.Zero;
+                    if (_lastRestRequestAtUtc != DateTime.MinValue && now - _lastRestRequestAtUtc < minInterval)
+                        intervalWait = minInterval - (now - _lastRestRequestAtUtc);
+
+                    if (sustainedMode)
+                    {
+                        DateTime scheduledAt = now + intervalWait;
+                        _lastRestRequestAtUtc = scheduledAt;
+                        wait = intervalWait;
+                    }
+                    else if (_restBurstWindowStartUtc == DateTime.MinValue
+                        || now - _restBurstWindowStartUtc >= RestRateWindow)
+                    {
+                        _restBurstWindowStartUtc = now;
+                        _restBurstCount = 1;
+
+                        DateTime scheduledAt = now + intervalWait;
+                        _lastRestRequestAtUtc = scheduledAt;
+                        wait = intervalWait;
+                    }
+                    else if (_restBurstCount < RestMaxCallsPerSecond)
+                    {
+                        _restBurstCount++;
+
+                        DateTime scheduledAt = now + intervalWait;
+                        _lastRestRequestAtUtc = scheduledAt;
+                        wait = intervalWait;
+                    }
+                    else
+                    {
+                        TimeSpan windowWait = RestRateWindow - (now - _restBurstWindowStartUtc);
+                        wait = windowWait > intervalWait ? windowWait : intervalWait;
+                        _restSustainedUntilUtc = RestUsePauseThenBurst ? DateTime.MinValue : now + wait + RestRateWindow;
+                        _restBurstWindowStartUtc = RestUsePauseThenBurst ? DateTime.MinValue : _restSustainedUntilUtc;
+                        _restBurstCount = 0;
+                    }
+                }
+                finally
+                {
+                    _restRequestGate.Release();
+                }
+
+                if (wait.TotalMilliseconds <= 0)
+                    return;
+
+                await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        private TimeSpan ApplyRestLimitCooldown()
+        {
+            _restLimitErrorCount++;
+            double cooldownSeconds = Math.Min(
+                RestCooldownOnLimit.TotalSeconds * Math.Max(1, _restLimitErrorCount),
+                RestMaxCooldownOnLimit.TotalSeconds);
+            _restBlockedUntil = DateTime.Now.AddSeconds(cooldownSeconds);
+            return TimeSpan.FromSeconds(cooldownSeconds);
+        }
+
+        private static bool IsKiwoomLimitReturnCode(string code)
+        {
+            return code == "1700" || code == "1701" || code == "1702" || code == "1687";
+        }
+
+        private async Task<HttpResponseMessage> SendKiwoomRestAsync(HttpRequestMessage request, string tag, CancellationToken cancellationToken)
+        {
+            DateTime now = DateTime.Now;
+            if (now < _restBlockedUntil)
+            {
+                TimeSpan wait = _restBlockedUntil - now;
+                if (wait.TotalMilliseconds > 0)
+                    await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+            }
+
+            await WaitRestRateLimitAsync(cancellationToken).ConfigureAwait(false);
+            await _restConcurrencyGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                string body = string.Empty;
+
+                try
+                {
+                    body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    response.Content?.Dispose();
+                    response.Content = new StringContent(body ?? string.Empty, Encoding.UTF8, "application/json");
+                }
+                catch
+                {
+                    body = string.Empty;
+                }
+
+                if (response.StatusCode == (HttpStatusCode)429)
+                {
+                    TimeSpan cooldown = ApplyRestLimitCooldown();
+                    RestLimitLog?.Invoke($"Kiwoom REST 429: {tag} / wait {cooldown.TotalSeconds:0}s");
+                    return response;
+                }
+
+                if (!string.IsNullOrWhiteSpace(body) && body.TrimStart().StartsWith("{", StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        using JsonDocument doc = JsonDocument.Parse(body);
+                        string returnCode = ReadAny(doc.RootElement, "return_code", "rt_cd", "returnCode");
+                        if (IsKiwoomLimitReturnCode(returnCode))
+                            ApplyRestLimitCooldown();
+                        else if (response.IsSuccessStatusCode && _restLimitErrorCount > 0)
+                            _restLimitErrorCount = 0;
+                    }
+                    catch
+                    {
+                        if (response.IsSuccessStatusCode && _restLimitErrorCount > 0)
+                            _restLimitErrorCount = 0;
+                    }
+                }
+                else if (response.IsSuccessStatusCode && _restLimitErrorCount > 0)
+                {
+                    _restLimitErrorCount = 0;
+                }
+
+                return response;
+            }
+            finally
+            {
+                _restConcurrencyGate.Release();
+            }
         }
 
         private static async Task SendJsonAsync(ClientWebSocket ws, object payload, CancellationToken cancellationToken)
@@ -628,14 +1088,14 @@ namespace TradingDashboard.Services
             using JsonDocument listRes = await ReceiveByTrNameAsync(ws, "CNSRLST", TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
             string seq = ResolveConditionSeq(listRes.RootElement, _settings.ConditionSeq01);
             if (string.IsNullOrWhiteSpace(seq))
-                throw new InvalidOperationException($"조건식 {(_settings.ConditionSeq01 ?? "1")}을(를) 찾지 못했습니다.");
+                throw new InvalidOperationException($"조건식 {(_settings.ConditionSeq01 ?? "1")}번을 찾지 못했습니다.");
 
             await SendJsonAsync(ws, new { trnm = "CNSRREQ", seq, search_type = "1", stex_tp = "K", cont_yn = "N", next_key = "" }, cancellationToken).ConfigureAwait(false);
             using JsonDocument condRes = await ReceiveByTrNameAsync(ws, "CNSRREQ", TimeSpan.FromSeconds(20), cancellationToken).ConfigureAwait(false);
             return ParseConditionBaseItems(condRes.RootElement);
         }
 
-        private async Task<WatchStockItem> GetStockInfoAsync(string token, string code, string name, CancellationToken cancellationToken)
+        private async Task<WatchStockItem> GetStockInfoAsync(string token, string code, string name, StockMarketInfo? marketInfo, CancellationToken cancellationToken)
         {
             var fallback = new WatchStockItem
             {
@@ -643,6 +1103,14 @@ namespace TradingDashboard.Services
                 Name = string.IsNullOrWhiteSpace(name) ? code : name,
                 VolumeText = "-",
                 ChangeRateText = "-",
+                MarketTypeCode = marketInfo?.MarketTypeCode ?? string.Empty,
+                MarketName = marketInfo?.MarketName ?? string.Empty,
+                ProgramMarketType = marketInfo?.ProgramMarketType ?? string.Empty,
+                LastPrice = marketInfo?.LastPrice ?? 0,
+                OrderWarning = marketInfo?.OrderWarning ?? string.Empty,
+                AuditInfo = marketInfo?.AuditInfo ?? string.Empty,
+                StockState = marketInfo?.StockState ?? string.Empty,
+                SectorName = marketInfo?.SectorName ?? string.Empty,
                 SupportsNxt = false
             };
 
@@ -650,9 +1118,9 @@ namespace TradingDashboard.Services
                 return fallback;
 
             WatchStockItem? krxItem = null;
-            WatchStockItem? sorItem = null;
+            WatchStockItem? nxtItem = null;
 
-            foreach (string requestCode in new[] { code, $"{code}_AL" })
+            foreach (string requestCode in new[] { code, $"{code}_NX" })
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/stkinfo");
                 req.Headers.TryAddWithoutValidation("authorization", $"Bearer {token}");
@@ -661,7 +1129,7 @@ namespace TradingDashboard.Services
                 req.Headers.TryAddWithoutValidation("next-key", "");
                 req.Content = new StringContent(JsonSerializer.Serialize(new { stk_cd = requestCode }), Encoding.UTF8, "application/json");
 
-                using HttpResponseMessage response = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                using HttpResponseMessage response = await SendKiwoomRestAsync(req, "ka10001-watch", cancellationToken).ConfigureAwait(false);
                 string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                     continue;
@@ -687,6 +1155,8 @@ namespace TradingDashboard.Services
                 if (change == 0 && prev > 0 && price > 0)
                     change = price - prev;
 
+                bool isNxtRequest = requestCode.EndsWith("_NX", StringComparison.OrdinalIgnoreCase);
+
                 var parsed = new WatchStockItem
                 {
                     Code = code,
@@ -695,23 +1165,92 @@ namespace TradingDashboard.Services
                     ChangeAmount = change,
                     ChangeRateText = rateText,
                     VolumeText = volume > 0 ? volume.ToString("N0") : "-",
-                    SupportsNxt = requestCode.EndsWith("_AL", StringComparison.OrdinalIgnoreCase)
+                    MarketTypeCode = marketInfo?.MarketTypeCode ?? string.Empty,
+                    MarketName = marketInfo?.MarketName ?? string.Empty,
+                    ProgramMarketType = marketInfo?.ProgramMarketType ?? string.Empty,
+                    LastPrice = marketInfo?.LastPrice ?? 0,
+                    OrderWarning = marketInfo?.OrderWarning ?? string.Empty,
+                    AuditInfo = marketInfo?.AuditInfo ?? string.Empty,
+                    StockState = marketInfo?.StockState ?? string.Empty,
+                    SectorName = marketInfo?.SectorName ?? string.Empty,
+                    SupportsNxt = isNxtRequest
                 };
 
-                if (requestCode.EndsWith("_AL", StringComparison.OrdinalIgnoreCase))
-                    sorItem = parsed;
+                if (isNxtRequest)
+                    nxtItem = parsed;
                 else
                     krxItem = parsed;
             }
 
-            if (krxItem != null || sorItem != null)
+            if (krxItem != null || nxtItem != null)
             {
-                WatchStockItem chosen = krxItem ?? sorItem!;
-                chosen.SupportsNxt = sorItem != null;
+                WatchStockItem chosen = krxItem ?? nxtItem!;
+                chosen.SupportsNxt = marketInfo?.SupportsNxt ?? nxtItem != null;
                 return chosen;
             }
 
             return fallback;
+        }
+
+        private async Task<Dictionary<string, StockMarketInfo>> GetStockMarketInfoMapAsync(string token, CancellationToken cancellationToken)
+        {
+            var map = new Dictionary<string, StockMarketInfo>(StringComparer.Ordinal);
+            foreach ((string RequestMarketType, string ProgramMarketType, string DefaultName) market in new[]
+            {
+                ("0", "P00101", "KOSPI"),
+                ("10", "P10102", "KOSDAQ")
+            })
+            {
+                JsonElement root = await PostApiRootAsync(
+                    token,
+                    "ka10099",
+                    "/api/dostk/stkinfo",
+                    new { mrkt_tp = market.RequestMarketType },
+                    cancellationToken).ConfigureAwait(false);
+
+                JsonElement rows = FindArrayByKeySafe(root, "list");
+                if (rows.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (JsonElement row in rows.EnumerateArray())
+                {
+                    string code = NormalizeStockCode(ReadAnyDeep(row, "code", "stk_cd", "stkCd"));
+                    if (string.IsNullOrWhiteSpace(code) || map.ContainsKey(code))
+                        continue;
+
+                    string marketCode = ReadAnyDeep(row, "marketCode", "market_code", "mrkt_tp");
+                    string marketName = ReadAnyDeep(row, "marketName", "market_name");
+                    string nxtEnable = ReadAnyDeep(row, "nxtEnable", "nxt_enable");
+                    long lastPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "lastPrice", "last_price", "base_pric")));
+                    map[code] = new StockMarketInfo
+                    {
+                        MarketTypeCode = string.IsNullOrWhiteSpace(marketCode) ? market.RequestMarketType : marketCode,
+                        MarketName = string.IsNullOrWhiteSpace(marketName) ? market.DefaultName : marketName,
+                        ProgramMarketType = market.ProgramMarketType,
+                        LastPrice = lastPrice,
+                        OrderWarning = ReadAnyDeep(row, "orderWarning", "order_warning"),
+                        AuditInfo = ReadAnyDeep(row, "auditInfo", "audit_info"),
+                        StockState = ReadAnyDeep(row, "state"),
+                        SectorName = ReadAnyDeep(row, "upName", "up_name"),
+                        SupportsNxt = string.Equals(nxtEnable, "Y", StringComparison.OrdinalIgnoreCase)
+                    };
+                }
+            }
+
+            return map;
+        }
+
+        private sealed class StockMarketInfo
+        {
+            public string MarketTypeCode { get; set; } = string.Empty;
+            public string MarketName { get; set; } = string.Empty;
+            public string ProgramMarketType { get; set; } = string.Empty;
+            public long LastPrice { get; set; }
+            public string OrderWarning { get; set; } = string.Empty;
+            public string AuditInfo { get; set; } = string.Empty;
+            public string StockState { get; set; } = string.Empty;
+            public string SectorName { get; set; } = string.Empty;
+            public bool SupportsNxt { get; set; }
         }
 
         private static string ResolveConditionSeq(JsonElement root, string targetSeq)
@@ -755,7 +1294,7 @@ namespace TradingDashboard.Services
         {
             if (item.ValueKind == JsonValueKind.Object)
             {
-                string[] keys = { "stk_nm", "stkNm", "name", "jm_name", "jmname", "종목명" };
+                string[] keys = { "stk_nm", "stkNm", "name", "jm_name", "jmname" };
                 foreach (string key in keys)
                 {
                     string value = ReadString(item, key);
@@ -926,7 +1465,25 @@ namespace TradingDashboard.Services
                 return 0;
 
             string clean = value.Replace(",", "").Replace("+", "").Trim();
+            while (clean.StartsWith("--", StringComparison.Ordinal))
+                clean = "-" + clean.Substring(2);
             return long.TryParse(clean, out long parsed) ? parsed : 0;
+        }
+
+        private static long ResolvePreviousClosePrice(JsonElement root)
+        {
+            return Math.Abs(ParseLongSafe(ReadAnyDeep(
+                root,
+                "pred_close_pric",
+                "predClosePric",
+                "pred_close_price",
+                "prev_close",
+                "prev_close_pric",
+                "base_prc",
+                "basePrc",
+                "std_prc",
+                "yday_prc",
+                "기준가")));
         }
 
         private static JsonElement FindFirstArray(JsonElement root)
@@ -955,18 +1512,18 @@ namespace TradingDashboard.Services
 
         private static DailyCandle? ParseDailyCandle(JsonElement item)
         {
-            string date = ReadAnyDeep(item, "dt", "date", "d", "stk_dt", "일자");
+            string date = ReadAnyDeep(item, "dt", "date", "d", "stk_dt", "?쇱옄");
             if (string.IsNullOrWhiteSpace(date) && item.ValueKind == JsonValueKind.Array && item.GetArrayLength() > 0)
                 date = item[0].ToString();
 
             date = new string((date ?? string.Empty).Where(char.IsDigit).ToArray());
             if (date.Length >= 8) date = date.Substring(0, 8);
 
-            long open = ParseLongSafe(ReadAnyDeep(item, "open_pric", "open", "stck_oprc", "시가"));
-            long high = ParseLongSafe(ReadAnyDeep(item, "high_pric", "high", "stck_hgpr", "고가"));
-            long low = ParseLongSafe(ReadAnyDeep(item, "low_pric", "low", "stck_lwpr", "저가"));
-            long close = ParseLongSafe(ReadAnyDeep(item, "clos_pric", "close", "stck_clpr", "cur_prc", "종가", "현재가"));
-            long volume = ParseLongSafe(ReadAnyDeep(item, "acml_vol", "acc_trde_qty", "trde_qty", "volume", "거래량"));
+            long open = ParseLongSafe(ReadAnyDeep(item, "open_pric", "open", "stck_oprc"));
+            long high = ParseLongSafe(ReadAnyDeep(item, "high_pric", "high", "stck_hgpr"));
+            long low = ParseLongSafe(ReadAnyDeep(item, "low_pric", "low", "stck_lwpr"));
+            long close = ParseLongSafe(ReadAnyDeep(item, "clos_pric", "close", "stck_clpr", "cur_prc"));
+            long volume = ParseLongSafe(ReadAnyDeep(item, "acml_vol", "acc_trde_qty", "trde_qty", "volume"));
 
             if (close == 0 && item.ValueKind == JsonValueKind.Array)
             {
@@ -999,16 +1556,16 @@ namespace TradingDashboard.Services
         private static string FormatKoreanMoney(long value)
         {
             if (value <= 0) return "-";
-            if (value >= 1_0000_0000_0000) return $"{value / 1_0000_0000_0000.0:0.0}조";
-            if (value >= 100_000_000) return $"{value / 100_000_000.0:0.0}억";
-            if (value >= 10_000) return $"{value / 10_000.0:0.0}만";
+            if (value >= 1_0000_0000_0000) return $"{value / 1_0000_0000_0000.0:0.0}\uC870";
+            if (value >= 100_000_000) return $"{value / 100_000_000.0:0.0}\uC5B5";
+            if (value >= 10_000) return $"{value / 10_000.0:0.0}\uB9CC";
             return value.ToString("N0");
         }
 
         private static string FormatHundredMillionWonUnit(long value)
         {
             if (value <= 0) return "-";
-            return $"{value:N0}억";
+            return $"{value:N0}\uC5B5";
         }
 
         private static string FormatMillionWonUnit(long value)
@@ -1017,9 +1574,10 @@ namespace TradingDashboard.Services
 
             decimal hundredMillion = value / 100m;
             if (hundredMillion >= 10m)
-                return $"{hundredMillion:N1}억";
+                return $"{hundredMillion:N1}\uC5B5";
 
-            return $"{value:N0}백만";
+            return $"{value:N0}\uBC31\uB9CC";
         }
     }
 }
+

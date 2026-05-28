@@ -11,6 +11,11 @@ namespace TradingDashboard.Models
         public string ChangeRateText { get; set; } = "-";
         public long BuyExecCum { get; set; }
         public long SellExecCum { get; set; }
+        public long DailyTradeQty { get; set; }
+        public long BeforeMarketTradeQty { get; set; }
+        public long RegularMarketTradeQty { get; set; }
+        public long AfterMarketTradeQty { get; set; }
+        public long DailySectionTradeQty { get; set; }
         public List<HogaQuoteLevel> SellLevels { get; } = new List<HogaQuoteLevel>();
         public List<HogaQuoteLevel> BuyLevels { get; } = new List<HogaQuoteLevel>();
         public List<ClosingTradePrint> RecentTrades { get; } = new List<ClosingTradePrint>();

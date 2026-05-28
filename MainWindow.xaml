@@ -1,4 +1,4 @@
-<Window x:Class="TradingDashboard.MainWindow"
+﻿<Window x:Class="TradingDashboard.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="TradingDashboard"
@@ -6,13 +6,14 @@
         Height="1080"
         MinWidth="1200"
         MinHeight="700"
+        WindowState="Maximized"
         Background="#121212"
         Foreground="#E0E0E0"
         FontFamily="Malgun Gothic">
 
     <Window.Resources>
         <!-- 기존 프로그램 색상 팔레트 -->
-        <!-- 중앙 팔레트(한 곳에서 색상 관리) -->
+        <!-- 중앙 팔레트 한곳에서 색상 관리 -->
         <SolidColorBrush x:Key="PaletteGreen" Color="#16A34A"/>
         <SolidColorBrush x:Key="PaletteLightGreen" Color="#86EFAC"/>
         <SolidColorBrush x:Key="PaletteBlue" Color="#1261C4"/>
@@ -26,7 +27,7 @@
         <SolidColorBrush x:Key="PaletteOrange" Color="#F97316"/>
         <SolidColorBrush x:Key="PaletteViolet" Color="#8B5CF6"/>
 
-        <!-- 레거시 키 호환 -->
+        <!-- ?덇굅?????명솚 -->
         <SolidColorBrush x:Key="UpBrush" Color="#D92121"/>
         <SolidColorBrush x:Key="DownBrush" Color="#1261C4"/>
         <SolidColorBrush x:Key="FlatBrush" Color="#FFFFFF"/>
@@ -44,7 +45,7 @@
         <SolidColorBrush x:Key="Ma20Brush" Color="#FACC15"/>
         <SolidColorBrush x:Key="Ma60Brush" Color="#22C55E"/>
 
-        <!-- 다크 테마 팔레트 -->
+        <!-- ?ㅽ겕 ?뚮쭏 ?붾젅??-->
         <SolidColorBrush x:Key="BgMainBrush" Color="#121212"/>
         <SolidColorBrush x:Key="BgPanelBrush" Color="#181818"/>
         <SolidColorBrush x:Key="BgHeaderBrush" Color="#252525"/>
@@ -125,7 +126,7 @@
             <RowDefinition Height="30"/>
         </Grid.RowDefinitions>
 
-        <!-- 상단 헤더 -->
+        <!-- ?곷떒 ?ㅻ뜑 -->
         <Border Grid.Row="0"
                 Background="{StaticResource BgPanelBrush}"
                 BorderBrush="{StaticResource LineBrush}"
@@ -175,7 +176,7 @@
                 <ColumnDefinition Width="2*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 좌측 종목 리스트 -->
+            <!-- 왼쪽 종목 리스트 -->
             <Border Grid.Column="0"
                     Background="{StaticResource BgPanelBrush}"
                     BorderBrush="{StaticResource LineBrush}"
@@ -212,7 +213,7 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="120"/>
                                         </Grid.ColumnDefinitions>
 
                                         <Grid.RowDefinitions>
@@ -220,44 +221,169 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <TextBlock Grid.Row="0"
-                                                   Grid.Column="0"
-                                                   Text="{Binding Name}"
-                                                   FontSize="15"
-                                                   FontWeight="Bold"
-                                                   Foreground="{StaticResource WhiteValueBrush}"/>
+                                         <Grid Grid.Row="0"
+                                               Grid.Column="0">
+                                             <Grid.ColumnDefinitions>
+                                                 <ColumnDefinition Width="*"/>
+                                                 <ColumnDefinition Width="Auto"/>
+                                                 <ColumnDefinition Width="Auto"/>
+                                                 <ColumnDefinition Width="Auto"/>
+                                             </Grid.ColumnDefinitions>
 
-                                        <TextBlock Grid.Row="1"
-                                                   Grid.Column="0"
-                                                   Text="{Binding VolumeText}"
-                                                   FontSize="12"
-                                                   Foreground="#A0A0A0"
-                                                   Margin="0,3,0,0"/>
+                                             <TextBlock Grid.Column="0"
+                                                        Text="{Binding Name}"
+                                                        FontSize="15"
+                                                        FontWeight="Bold"
+                                                        Foreground="{StaticResource WhiteValueBrush}"
+                                                        TextTrimming="CharacterEllipsis"/>
 
-                                        <TextBlock Grid.Row="0"
-                                                   Grid.Column="1"
-                                                   Text="{Binding CurrentPriceText}"
-                                                   FontSize="15"
-                                                   FontWeight="Bold"
-                                                   Foreground="{Binding PriceBrush}"
-                                                   HorizontalAlignment="Right"/>
+                                             <Border Grid.Column="1"
+                                                     Margin="6,2,0,0"
+                                                     Padding="4,0"
+                                                     MinWidth="34"
+                                                     Height="14"
+                                                     CornerRadius="3"
+                                                     BorderBrush="{StaticResource PaletteBlueGray}"
+                                                     BorderThickness="1"
+                                                     Background="#1C232B"
+                                                     VerticalAlignment="Center">
+                                                 <Border.Style>
+                                                     <Style TargetType="Border">
+                                                         <Setter Property="Visibility" Value="Visible"/>
+                                                         <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding MarketBadgeText}" Value="">
+                                                                 <Setter Property="Visibility" Value="Collapsed"/>
+                                                             </DataTrigger>
+                                                         </Style.Triggers>
+                                                     </Style>
+                                                 </Border.Style>
+                                                 <TextBlock Text="{Binding MarketBadgeText}"
+                                                            FontSize="8"
+                                                            FontWeight="Bold"
+                                                            Foreground="{StaticResource PaletteBlueGray}"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            TextAlignment="Center"/>
+                                             </Border>
 
-                                        <StackPanel Grid.Row="1"
+                                             <Border Grid.Column="2"
+                                                     Margin="6,2,0,0"
+                                                     Padding="0"
+                                                     Width="26"
+                                                     Height="14"
+                                                     CornerRadius="3"
+                                                     BorderBrush="{StaticResource PaletteSkyBlue}"
+                                                     BorderThickness="1"
+                                                     Background="#152A36"
+                                                     VerticalAlignment="Center">
+                                                 <Border.Style>
+                                                     <Style TargetType="Border">
+                                                         <Setter Property="Visibility" Value="Collapsed"/>
+                                                         <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding SupportsNxt}" Value="True">
+                                                                 <Setter Property="Visibility" Value="Visible"/>
+                                                             </DataTrigger>
+                                                         </Style.Triggers>
+                                                     </Style>
+                                                 </Border.Style>
+                                                 <TextBlock Text="NX"
+                                                            FontSize="8"
+                                                            FontWeight="Bold"
+                                                            Foreground="{StaticResource PaletteSkyBlue}"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            TextAlignment="Center"/>
+                                             </Border>
+
+                                             <Border Grid.Column="3"
+                                                     Margin="6,2,0,0"
+                                                     Padding="4,0"
+                                                     MinWidth="34"
+                                                     Height="14"
+                                                     CornerRadius="3"
+                                                     BorderBrush="{StaticResource PaletteOrange}"
+                                                     BorderThickness="1"
+                                                     Background="#302315"
+                                                     VerticalAlignment="Center">
+                                                 <Border.Style>
+                                                     <Style TargetType="Border">
+                                                         <Setter Property="Visibility" Value="Visible"/>
+                                                         <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding AlertListBadgeText}" Value="">
+                                                                 <Setter Property="Visibility" Value="Collapsed"/>
+                                                             </DataTrigger>
+                                                             <DataTrigger Binding="{Binding OrderWarning}" Value="5">
+                                                                 <Setter Property="MinWidth" Value="16"/>
+                                                                 <Setter Property="BorderBrush" Value="{StaticResource UpBrush}"/>
+                                                                 <Setter Property="Background" Value="#351818"/>
+                                                             </DataTrigger>
+                                                         </Style.Triggers>
+                                                     </Style>
+                                                 </Border.Style>
+                                                 <TextBlock Text="{Binding AlertListBadgeText}"
+                                                            FontSize="8"
+                                                            FontWeight="Bold"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center"
+                                                             TextAlignment="Center">
+                                                     <TextBlock.Style>
+                                                         <Style TargetType="TextBlock">
+                                                             <Setter Property="Foreground" Value="{StaticResource PaletteOrange}"/>
+                                                             <Style.Triggers>
+                                                                 <DataTrigger Binding="{Binding OrderWarning}" Value="5">
+                                                                     <Setter Property="Foreground" Value="{StaticResource UpBrush}"/>
+                                                                 </DataTrigger>
+                                                             </Style.Triggers>
+                                                         </Style>
+                                                     </TextBlock.Style>
+                                                 </TextBlock>
+                                             </Border>
+                                         </Grid>
+
+                                         <TextBlock Grid.Row="1"
+                                                    Grid.Column="0"
+                                                    Text="{Binding VolumeText}"
+                                                    FontSize="12"
+                                                    Foreground="#A0A0A0"
+                                                    Margin="0,3,0,0"
+                                                    TextTrimming="CharacterEllipsis"/>
+
+                                         <TextBlock Grid.Row="0"
                                                     Grid.Column="1"
-                                                    Orientation="Horizontal"
+                                                    Text="{Binding CurrentPriceText}"
+                                                    FontSize="15"
+                                                    FontWeight="Bold"
+                                                    Foreground="{Binding PriceBrush}"
                                                     HorizontalAlignment="Right"
-                                                    Margin="0,3,0,0">
-                                            <TextBlock Text="{Binding DirectionText}"
-                                                       FontSize="11"
-                                                       Foreground="{Binding PriceBrush}"/>
-                                            <TextBlock Text="{Binding ChangeAmountText}"
-                                                       FontSize="12"
-                                                       Foreground="{Binding PriceBrush}"
-                                                       Margin="0,0,6,0"/>
-                                            <TextBlock Text="{Binding ChangeRateText}"
-                                                       FontSize="12"
-                                                       Foreground="{Binding PriceBrush}"/>
-                                        </StackPanel>
+                                                    MinWidth="70"
+                                                    TextAlignment="Right"/>
+
+                                         <Grid Grid.Row="1"
+                                               Grid.Column="1"
+                                               HorizontalAlignment="Right"
+                                               Margin="0,3,0,0">
+                                             <Grid.ColumnDefinitions>
+                                                 <ColumnDefinition Width="14"/>
+                                                 <ColumnDefinition Width="54"/>
+                                                 <ColumnDefinition Width="50"/>
+                                             </Grid.ColumnDefinitions>
+                                             <TextBlock Text="{Binding DirectionText}"
+                                                        Grid.Column="0"
+                                                        FontSize="11"
+                                                        Foreground="{Binding PriceBrush}"
+                                                        TextAlignment="Right"/>
+                                             <TextBlock Text="{Binding ChangeAmountText}"
+                                                        Grid.Column="1"
+                                                        FontSize="12"
+                                                        Foreground="{Binding PriceBrush}"
+                                                        TextAlignment="Right"
+                                                        Margin="0,0,6,0"/>
+                                             <TextBlock Text="{Binding ChangeRateText}"
+                                                        Grid.Column="2"
+                                                        FontSize="12"
+                                                        Foreground="{Binding PriceBrush}"
+                                                        TextAlignment="Right"/>
+                                         </Grid>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -325,12 +451,12 @@
 
                             <TextBlock Grid.Column="0"
                                        x:Name="SelectedStockTitle"
-                                       Text="삼성전자"
+                                       Text="일성아이에스"
                                        Style="{StaticResource PanelHeaderTextStyle}"/>
 
                             <TextBlock Grid.Column="1"
                                        x:Name="SelectedStockSubInfo"
-                                       Text="거래량 - · 거래대금 - · 시가총액 - · 유통주식수 - · 회전율 - · 주가등락률 - · 전일거래량대비 금일거래량 비율 -"
+                                       Text="거래량 - · 거래대금 - · 시가총액 - · 유통주식수 - · 회전율 - · 전일거래량비 -"
                                        Foreground="{StaticResource TextMutedBrush}"
                                        FontSize="12"
                                        VerticalAlignment="Center"
@@ -378,15 +504,15 @@
                 </Grid>
             </Border>
 
-            <!-- 우측 호가 / 체결 / 뉴스 -->
+            <!-- 오른쪽 호가 / 체결 / 뉴스 -->
             <Border Grid.Column="2"
                     Background="{StaticResource BgPanelBrush}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="35"/>
-                        <RowDefinition Height="4.4*"/>
-                        <RowDefinition Height="2.4*"/>
-                        <RowDefinition Height="3.2*"/>
+                        <RowDefinition Height="4.7*"/>
+                        <RowDefinition Height="2.15*"/>
+                        <RowDefinition Height="3.15*"/>
                     </Grid.RowDefinitions>
 
                     <Border Grid.Row="0"
@@ -397,7 +523,7 @@
                                    Style="{StaticResource PanelHeaderTextStyle}"/>
                     </Border>
 
-                    <!-- 10호가 -->
+                    <!-- 10?멸? -->
                     <Border Grid.Row="1"
                             BorderBrush="{StaticResource LineBrush}"
                             BorderThickness="0,0,0,1"
@@ -606,6 +732,9 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock x:Name="HogaStatusText" Grid.Column="0"
@@ -613,15 +742,32 @@
                                            Foreground="{StaticResource TextMainBrush}"
                                            FontSize="11"
                                            VerticalAlignment="Center"
-                                           Margin="8,0,0,0"/>
+                                           Margin="8,0,0,0"
+                                           Visibility="Collapsed"/>
 
-                                <TextBlock x:Name="HogaSummaryText" Grid.Column="1"
-                                           Text="총매도 0 · 총매수 0 · 차이 0"
-                                           Foreground="{StaticResource UpBrush}"
+                                <TextBlock x:Name="HogaTotalSellText" Grid.Column="1"
+                                           Text="0"
+                                           Foreground="{StaticResource PaletteBlueGray}"
                                            FontSize="11"
                                            VerticalAlignment="Center"
                                            HorizontalAlignment="Right"
-                                           Margin="0,0,8,0"/>
+                                           Margin="0,0,10,0"/>
+
+                                <TextBlock x:Name="HogaDiffText" Grid.Column="2"
+                                           Text="0"
+                                           Foreground="{StaticResource PaletteBlueGray}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+
+                                <TextBlock x:Name="HogaTotalBuyText" Grid.Column="3"
+                                           Text="0"
+                                           Foreground="{StaticResource PaletteBlueGray}"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Left"
+                                           Margin="10,0,0,0"/>
                             </Grid>
                         </Grid>
                     </Border>
@@ -638,7 +784,7 @@
                                 <ColumnDefinition Width="1*"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- 최근 체결 -->
+                            <!-- 理쒓렐 泥닿껐 -->
                             <Border Grid.Column="0"
                                     BorderBrush="{StaticResource LineBrush}"
                                     BorderThickness="0,0,1,0"
@@ -651,7 +797,7 @@
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0"
-                                               Text="최근 체결"
+                                                Text="최근 체결"
                                                Foreground="{StaticResource TextMainBrush}"
                                                FontSize="12"
                                                FontWeight="Bold"
@@ -815,7 +961,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="28"/>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="54"/>
+                                <RowDefinition Height="98"/>
                             </Grid.RowDefinitions>
 
                             <Grid Grid.Row="0"
@@ -834,7 +980,7 @@
                                            Margin="8,0,0,0"/>
 
                                 <TextBlock Grid.Column="1"
-                                           Text="뉴스 5개 / 공시 2개"
+                                           Text="뉴스 10개 / 공시 7개"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            FontSize="11"
                                            VerticalAlignment="Center"
@@ -847,7 +993,8 @@
                                      BorderThickness="0"
                                      Foreground="{StaticResource TextMainBrush}"
                                      ItemContainerStyle="{StaticResource NewsListBoxItemStyle}"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Hidden">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Border BorderBrush="{StaticResource LineSoftBrush}"
@@ -876,55 +1023,52 @@
                                 </ListBox.ItemTemplate>
                             </ListBox>
 
-                            <Border Grid.Row="2"
-                                    Background="{StaticResource BgPanelBrush}"
-                                    BorderBrush="{StaticResource LineBrush}"
-                                    BorderThickness="0,1,0,0"
-                                    Padding="8,4">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
+                            <ListBox Grid.Row="2"
+                                     x:Name="StockDisclosureListBox"
+                                     Background="{StaticResource BgPanelBrush}"
+                                     BorderBrush="{StaticResource LineBrush}"
+                                     BorderThickness="0,1,0,0"
+                                     Foreground="{StaticResource TextMainBrush}"
+                                     ItemContainerStyle="{StaticResource NewsListBoxItemStyle}"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Hidden">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource LineSoftBrush}"
+                                                BorderThickness="0,0,0,1"
+                                                Padding="8,5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
 
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="공시"
+                                                           Foreground="{StaticResource TextSubBrush}"
+                                                           FontSize="11"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,8,0"/>
 
-                                    <TextBlock Grid.Row="0"
-                                               Grid.Column="0"
-                                               Text="공시"
-                                               Foreground="{StaticResource TextSubBrush}"
-                                               FontSize="10"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Title}"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"/>
 
-                                    <TextBlock Grid.Row="0"
-                                               Grid.Column="1"
-                                               Text="최근 공시 1"
-                                               Foreground="{StaticResource TextMainBrush}"
-                                               FontSize="10"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"/>
-
-                                    <TextBlock Grid.Row="1"
-                                               Grid.Column="0"
-                                               Text="공시"
-                                               Foreground="{StaticResource TextSubBrush}"
-                                               FontSize="10"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0"/>
-
-                                    <TextBlock Grid.Row="1"
-                                               Grid.Column="1"
-                                               Text="최근 공시 2"
-                                               Foreground="{StaticResource TextMainBrush}"
-                                               FontSize="10"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </Grid>
-                            </Border>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding DateText}"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="10"
+                                                           VerticalAlignment="Center"
+                                                           Margin="8,0,0,0"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
                         </Grid>
                     </Border>
                 </Grid>
@@ -952,7 +1096,7 @@
 
                 <TextBlock Grid.Column="1"
                            x:Name="MarketTickerText"
-                           Text="KOSPI · KOSDAQ · 선물 · 환율 · 유가 표시 영역"
+                            Text="KOSPI · KOSDAQ · 선물 · 환율 · 신호 표시 영역"
                            FontSize="12"
                            Foreground="{StaticResource TextSubBrush}"
                            VerticalAlignment="Center"/>
@@ -968,3 +1112,4 @@
         </Border>
     </Grid>
 </Window>
+

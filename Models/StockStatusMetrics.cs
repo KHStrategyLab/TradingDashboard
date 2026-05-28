@@ -18,6 +18,13 @@ namespace TradingDashboard.Models
         public string VolumeRatioText { get; set; } = "-";
         public long BuyExecCum { get; set; }
         public long SellExecCum { get; set; }
+        public long DailyTradeQty { get; set; }
+        public long BeforeMarketTradeQty { get; set; }
+        public long RegularMarketTradeQty { get; set; }
+        public long AfterMarketTradeQty { get; set; }
+        public long DailySectionTradeQty { get; set; }
         public string ProgramBuyText { get; set; } = "-";
+        public long ProgramNetQuantity { get; set; }
+        public bool HasProgramTrade { get; set; }
     }
 }

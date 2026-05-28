@@ -2,8 +2,15 @@
   "NaverNews": {
     "ClientId": "네이버_개발자센터_Client_ID",
     "ClientSecret": "네이버_개발자센터_Client_Secret",
-    "DisplayCount": 5,
+    "DisplayCount": 10,
     "Sort": "date"
+  },
+
+  "Dart": {
+    "Enabled": true,
+    "ApiKey": "DART_OPENAPI_인증키",
+    "DisplayCount": 7,
+    "LookbackDays": 180
   },
 
   "Kiwoom": {
@@ -29,8 +36,8 @@
   },
 
   "Dashboard": {
-    "NewsCount": 5,
-    "DisclosureCount": 2,
+    "NewsCount": 10,
+    "DisclosureCount": 7,
     "OrderBookDepth": 10,
     "RecentTradeCount": 10,
     "RefreshIntervalMs": 500

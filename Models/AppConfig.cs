@@ -5,6 +5,7 @@ namespace TradingDashboard.Models
     public class AppConfig
     {
         public NaverNewsSettings NaverNews { get; set; } = new NaverNewsSettings();
+        public DartSettings Dart { get; set; } = new DartSettings();
         public KiwoomSettings Kiwoom { get; set; } = new KiwoomSettings();
         public TelegramSettings Telegram { get; set; } = new TelegramSettings();
         public DashboardSettings Dashboard { get; set; } = new DashboardSettings();
@@ -14,8 +15,16 @@ namespace TradingDashboard.Models
     {
         public string ClientId { get; set; } = string.Empty;
         public string ClientSecret { get; set; } = string.Empty;
-        public int DisplayCount { get; set; } = 5;
+        public int DisplayCount { get; set; } = 10;
         public string Sort { get; set; } = "date";
+    }
+
+    public class DartSettings
+    {
+        public bool Enabled { get; set; } = true;
+        public string ApiKey { get; set; } = string.Empty;
+        public int DisplayCount { get; set; } = 2;
+        public int LookbackDays { get; set; } = 30;
     }
 
     public class KiwoomSettings
@@ -41,7 +50,7 @@ namespace TradingDashboard.Models
 
     public class DashboardSettings
     {
-        public int NewsCount { get; set; } = 5;
+        public int NewsCount { get; set; } = 10;
         public int DisclosureCount { get; set; } = 2;
         public int OrderBookDepth { get; set; } = 10;
         public int RecentTradeCount { get; set; } = 10;
