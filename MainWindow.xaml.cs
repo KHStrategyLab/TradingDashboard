@@ -752,13 +752,18 @@ namespace TradingDashboard
                     long verifiedVolume = exec.DailyTradeQty > 0 ? exec.DailyTradeQty : exec.DailySectionTradeQty;
                     InfoVolumeText.Text = verifiedVolume.ToString("N0");
                     m.VolumeText = InfoVolumeText.Text;
+                    if (exec.DailyTradeValueMillion > 0)
+                    {
+                        m.TradingValueText = FormatMillionWonUnit(exec.DailyTradeValueMillion);
+                        InfoTradingValueText.Text = m.TradingValueText;
+                    }
                     m.TurnoverRateText = FormatTurnoverRate(verifiedVolume, ParseLongAbs(m.ListedSharesText));
                     InfoTurnoverRateText.Text = m.TurnoverRateText;
                     (string verifiedVolumeRatioText, Brush verifiedVolumeRatioBrush) = FormatDailyVolumeRatio(verifiedVolume);
                     m.VolumeRatioText = verifiedVolumeRatioText;
                     InfoPrevTimeVolumeRatioText.Text = verifiedVolumeRatioText;
                     InfoPrevTimeVolumeRatioText.Foreground = verifiedVolumeRatioBrush;
-                    AppendLog($"일별거래상세 합계: 총 {verifiedVolume:N0} / 장전 {exec.BeforeMarketTradeQty:N0} / 장중 {exec.RegularMarketTradeQty:N0} / 장후 {exec.AfterMarketTradeQty:N0}");
+                    AppendLog($"일별거래상세 통합 합계: 총 {verifiedVolume:N0} / 장전 {exec.BeforeMarketTradeQty:N0} / 장중 {exec.RegularMarketTradeQty:N0} / 장후 {exec.AfterMarketTradeQty:N0}");
                 }
                 else if (exec.DailyTradeQty > 0 || exec.DailySectionTradeQty > 0)
                 {
@@ -782,16 +787,13 @@ namespace TradingDashboard
             if (todayVolume <= 0)
                 return ("-", _whiteBrush);
 
-            List<DailyCandle> candles = await _kiwoomConditionService.GetDailyCandlesAsync(stockCode, useNxtMarket, 5, cancellationToken);
-            List<DailyCandle> orderedCandles = candles
-                .Where(c => !string.IsNullOrWhiteSpace(c.Date))
-                .OrderByDescending(c => c.Date)
+            IReadOnlyList<(string Date, long Volume)> volumes = await _kiwoomConditionService.GetUnifiedDailyTradeVolumesAsync(stockCode, 5, cancellationToken);
+            List<(string Date, long Volume)> orderedVolumes = volumes
+                .Where(v => !string.IsNullOrWhiteSpace(v.Date) && v.Volume > 0)
+                .OrderByDescending(v => v.Date)
                 .ToList();
 
-            DailyCandle? latestCandle = orderedCandles.FirstOrDefault();
-            DailyCandle? previousTradingDay = ResolvePreviousVolumeCandle(orderedCandles);
-
-            long previousVolume = previousTradingDay?.Volume ?? 0;
+            long previousVolume = orderedVolumes.Count > 1 ? orderedVolumes[1].Volume : 0;
             _selectedPreviousVolume = previousVolume;
             if (previousVolume <= 0)
                 return ("-", _whiteBrush);
@@ -990,13 +992,18 @@ namespace TradingDashboard
             {
                 long verifiedVolume = snapshot.DailyTradeQty > 0 ? snapshot.DailyTradeQty : snapshot.DailySectionTradeQty;
                 InfoVolumeText.Text = verifiedVolume.ToString("N0");
+                if (snapshot.DailyTradeValueMillion > 0)
+                {
+                    _currentStatusMetrics.TradingValueText = FormatMillionWonUnit(snapshot.DailyTradeValueMillion);
+                    InfoTradingValueText.Text = _currentStatusMetrics.TradingValueText;
+                }
                 (string verifiedVolumeRatioText, Brush verifiedVolumeRatioBrush) = FormatDailyVolumeRatio(verifiedVolume);
                 InfoPrevTimeVolumeRatioText.Text = verifiedVolumeRatioText;
                 InfoPrevTimeVolumeRatioText.Foreground = verifiedVolumeRatioBrush;
                 _currentStatusMetrics.VolumeRatioText = verifiedVolumeRatioText;
                 if (_watchStockByCode.TryGetValue(snapshot.Code, out WatchStockItem? stockForVolume))
                     stockForVolume.VolumeText = InfoVolumeText.Text;
-                AppendLog($"{source} 일별거래상세 합계: 총 {verifiedVolume:N0} / 장전 {snapshot.BeforeMarketTradeQty:N0} / 장중 {snapshot.RegularMarketTradeQty:N0} / 장후 {snapshot.AfterMarketTradeQty:N0}");
+                AppendLog($"{source} 일별거래상세 통합 합계: 총 {verifiedVolume:N0} / 장전 {snapshot.BeforeMarketTradeQty:N0} / 장중 {snapshot.RegularMarketTradeQty:N0} / 장후 {snapshot.AfterMarketTradeQty:N0}");
             }
 
             ResetTradeSummaryInfo();
@@ -1038,6 +1045,7 @@ namespace TradingDashboard
                 BuyExecCum = source.BuyExecCum,
                 SellExecCum = source.SellExecCum,
                 DailyTradeQty = source.DailyTradeQty,
+                DailyTradeValueMillion = source.DailyTradeValueMillion,
                 BeforeMarketTradeQty = source.BeforeMarketTradeQty,
                 RegularMarketTradeQty = source.RegularMarketTradeQty,
                 AfterMarketTradeQty = source.AfterMarketTradeQty,
@@ -2509,6 +2517,18 @@ namespace TradingDashboard
             if (value >= 10_000)
                 return $"{value / 10_000d:0.#}만";
             return value.ToString("N0");
+        }
+
+        private static string FormatMillionWonUnit(long value)
+        {
+            if (value <= 0)
+                return "-";
+
+            decimal hundredMillion = value / 100m;
+            if (hundredMillion >= 10m)
+                return $"{hundredMillion:N1}억";
+
+            return $"{value:N0}백만";
         }
 
         private enum ChartPeriod

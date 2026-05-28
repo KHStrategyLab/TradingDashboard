@@ -1,8 +1,8 @@
 [
   {
     "Code": "001820",
-    "Name": "\uC0BC\uD654\uCF58\uB374\uC11C",
-    "Market": "KRX,NXT",
+    "Name": "001820",
+    "Market": "KRX",
     "MarketTypeCode": "0",
     "MarketName": "\uAC70\uB798\uC18C",
     "ProgramMarketType": "P00101",
@@ -11,16 +11,16 @@
     "AuditInfo": "\uC815\uC0C1",
     "StockState": "\uC99D\uAC70\uAE0830%|\uB2F4\uBCF4\uB300\uCD9C",
     "SectorName": "\uC804\uAE30/\uC804\uC790",
-    "SupportsNxt": true,
+    "SupportsNxt": false,
     "BasePrice": 125900,
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8074416+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7548613+09:00"
   },
   {
     "Code": "006660",
-    "Name": "\uC0BC\uC131\uACF5\uC870",
+    "Name": "006660",
     "Market": "KRX",
     "MarketTypeCode": "0",
     "MarketName": "\uAC70\uB798\uC18C",
@@ -35,12 +35,12 @@
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8074951+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549136+09:00"
   },
   {
     "Code": "009420",
-    "Name": "\uD55C\uC62C\uBC14\uC774\uC624\uD30C\uB9C8",
-    "Market": "KRX,NXT",
+    "Name": "009420",
+    "Market": "KRX",
     "MarketTypeCode": "0",
     "MarketName": "\uAC70\uB798\uC18C",
     "ProgramMarketType": "P00101",
@@ -49,16 +49,16 @@
     "AuditInfo": "\uD22C\uC790\uC8FC\uC758",
     "StockState": "\uC99D\uAC70\uAE0830%|\uB2F4\uBCF4\uB300\uCD9C",
     "SectorName": "\uC81C\uC57D",
-    "SupportsNxt": true,
+    "SupportsNxt": false,
     "BasePrice": 70700,
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8074962+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549146+09:00"
   },
   {
     "Code": "017900",
-    "Name": "\uAD11\uC804\uC790",
+    "Name": "017900",
     "Market": "KRX",
     "MarketTypeCode": "0",
     "MarketName": "\uAC70\uB798\uC18C",
@@ -73,12 +73,12 @@
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8074969+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549156+09:00"
   },
   {
     "Code": "018260",
-    "Name": "\uC0BC\uC131\uC5D0\uC2A4\uB514\uC5D0\uC2A4",
-    "Market": "KRX,NXT",
+    "Name": "018260",
+    "Market": "KRX",
     "MarketTypeCode": "0",
     "MarketName": "\uAC70\uB798\uC18C",
     "ProgramMarketType": "P00101",
@@ -87,16 +87,16 @@
     "AuditInfo": "\uC815\uC0C1",
     "StockState": "\uC99D\uAC70\uAE0820%|\uB2F4\uBCF4\uB300\uCD9C|\uC2E0\uC6A9\uAC00\uB2A5",
     "SectorName": "IT \uC11C\uBE44\uC2A4",
-    "SupportsNxt": true,
+    "SupportsNxt": false,
     "BasePrice": 261500,
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8074974+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549161+09:00"
   },
   {
     "Code": "125020",
-    "Name": "\uD2F0\uC528\uBA38\uD2F0\uB9AC\uC5BC\uC988",
+    "Name": "125020",
     "Market": "KRX",
     "MarketTypeCode": "10",
     "MarketName": "\uCF54\uC2A4\uB2E5",
@@ -111,11 +111,11 @@
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8074984+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549169+09:00"
   },
   {
     "Code": "126730",
-    "Name": "\uCF54\uCE69",
+    "Name": "126730",
     "Market": "KRX",
     "MarketTypeCode": "10",
     "MarketName": "\uCF54\uC2A4\uB2E5",
@@ -130,11 +130,11 @@
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8074998+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549174+09:00"
   },
   {
     "Code": "330860",
-    "Name": "\uB124\uD328\uC2A4\uC544\uD06C",
+    "Name": "330860",
     "Market": "KRX",
     "MarketTypeCode": "10",
     "MarketName": "\uCF54\uC2A4\uB2E5",
@@ -149,12 +149,12 @@
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8075006+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549179+09:00"
   },
   {
     "Code": "356680",
-    "Name": "\uC5D1\uC2A4\uAC8C\uC774\uD2B8",
-    "Market": "KRX,NXT",
+    "Name": "356680",
+    "Market": "KRX",
     "MarketTypeCode": "10",
     "MarketName": "\uCF54\uC2A4\uB2E5",
     "ProgramMarketType": "P10102",
@@ -163,16 +163,16 @@
     "AuditInfo": "\uC815\uC0C1",
     "StockState": "\uC99D\uAC70\uAE0840%|\uB2F4\uBCF4\uB300\uCD9C",
     "SectorName": "IT \uC11C\uBE44\uC2A4",
-    "SupportsNxt": true,
+    "SupportsNxt": false,
     "BasePrice": 25750,
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8075013+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549184+09:00"
   },
   {
     "Code": "457370",
-    "Name": "\uD55C\uCF10",
+    "Name": "457370",
     "Market": "KRX",
     "MarketTypeCode": "10",
     "MarketName": "\uCF54\uC2A4\uB2E5",
@@ -187,6 +187,6 @@
     "BasePriceDate": "20260529",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T04:25:04.8075026+09:00"
+    "LastUsedAt": "2026-05-29T05:07:31.7549192+09:00"
   }
 ]

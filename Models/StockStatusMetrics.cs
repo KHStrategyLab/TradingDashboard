@@ -19,6 +19,7 @@ namespace TradingDashboard.Models
         public long BuyExecCum { get; set; }
         public long SellExecCum { get; set; }
         public long DailyTradeQty { get; set; }
+        public long DailyTradeValueMillion { get; set; }
         public long BeforeMarketTradeQty { get; set; }
         public long RegularMarketTradeQty { get; set; }
         public long AfterMarketTradeQty { get; set; }

@@ -250,7 +250,9 @@ namespace TradingDashboard.Services
                 string floatRatio = ReadAnyDeep(root, "distb_rt", "float_rt", "float_ratio");
                 string turnoverRate = ReadAnyDeep(root, "turnover_rt", "trde_rt", "turnoverRate");
                 string volumeRatio = ReadAnyDeep(root, "vol_rt", "volume_rt", "volRatio");
-                long listedShares = ParseLongSafe(ReadAnyDeep(root, "lst_stk_cnt", "lstStkCnt", "list_stkcnt", "listed_shares"));
+                long totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root, "lst_stk_cnt", "lstStkCnt", "list_stkcnt", "listed_shares", "listCount")));
+                long floatShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root, "flo_stkcnt", "float_stkcnt", "floating_shares", "distb_stkcnt")));
+                long displayShares = floatShares > 0 ? floatShares : totalShares;
 
                 if (!string.IsNullOrWhiteSpace(changeRate) && !changeRate.Contains("%"))
                     changeRate += "%";
@@ -263,10 +265,8 @@ namespace TradingDashboard.Services
 
                 if (tradingValue <= 0 && price > 0 && volume > 0)
                     tradingValue = price * volume;
-                if (listedShares > 0 && listedShares < 100_000_000)
-                    listedShares *= 1000;
-                long marketCap = (price > 0 && listedShares > 0) ? price * listedShares : 0;
-                string calculatedTurnoverRate = FormatTurnoverRate(volume, listedShares);
+                long marketCap = (price > 0 && totalShares > 0) ? price * totalShares : 0;
+                string calculatedTurnoverRate = FormatTurnoverRate(volume, displayShares);
                 if (string.IsNullOrWhiteSpace(turnoverRate))
                     turnoverRate = calculatedTurnoverRate;
 
@@ -280,7 +280,7 @@ namespace TradingDashboard.Services
                     VolumeText = volume > 0 ? volume.ToString("N0") : "-",
                     TradingValueText = tradingValueFromApi ? FormatMillionWonUnit(tradingValue) : FormatKoreanMoney(tradingValue),
                     MarketCapText = FormatKoreanMoney(marketCap),
-                    ListedSharesText = listedShares > 0 ? listedShares.ToString("N0") : "-",
+                    ListedSharesText = displayShares > 0 ? displayShares.ToString("N0") : "-",
                     FloatRatioText = string.IsNullOrWhiteSpace(floatRatio) ? "-" : floatRatio,
                     TurnoverRateText = string.IsNullOrWhiteSpace(turnoverRate) ? "-" : turnoverRate,
                     ChangeRateText = string.IsNullOrWhiteSpace(changeRate) ? "-" : changeRate,
@@ -351,9 +351,13 @@ namespace TradingDashboard.Services
             bool tradingValueFromApi = tradingValue > 0;
             long marketCap = ParseLongSafe(ReadAnyDeep(atn, "mac", "market_cap"));
             bool marketCapFromApi = marketCap > 0;
-            long listedShares = ParseLongSafe(ReadAnyDeep(root10100, "listCount", "stkcnt", "lst_stk_cnt", "list_stkcnt", "listed_shares"));
-            if (listedShares <= 0)
-                listedShares = ParseLongSafe(ReadAnyDeep(atn, "stkcnt", "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares"));
+            long totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root10100, "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
+            if (totalShares <= 0)
+                totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(atn, "stkcnt", "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
+            long floatShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root10007, "flo_stkcnt", "float_stkcnt", "floating_shares", "distb_stkcnt")));
+            if (floatShares <= 0)
+                floatShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(atn, "flo_stkcnt", "float_stkcnt", "floating_shares", "distb_stkcnt")));
+            long displayShares = floatShares > 0 ? floatShares : totalShares;
 
             string turnoverRate = ReadAnyDeep(atn, "turnover_rt", "trde_rt", "turnoverRate");
             string volumeRatio = ReadAnyDeep(atn, "vol_rt", "volume_rt", "volRatio");
@@ -364,9 +368,9 @@ namespace TradingDashboard.Services
 
             if (tradingValue <= 0 && price > 0 && volume > 0)
                 tradingValue = price * volume;
-            if (marketCap <= 0 && price > 0 && listedShares > 0)
-                marketCap = price * listedShares;
-            string calculatedTurnoverRate = FormatTurnoverRate(volume, listedShares);
+            if (marketCap <= 0 && price > 0 && totalShares > 0)
+                marketCap = price * totalShares;
+            string calculatedTurnoverRate = FormatTurnoverRate(volume, displayShares);
             if (string.IsNullOrWhiteSpace(turnoverRate))
                 turnoverRate = calculatedTurnoverRate;
 
@@ -380,7 +384,7 @@ namespace TradingDashboard.Services
                 VolumeText = volume > 0 ? volume.ToString("N0") : "-",
                 TradingValueText = tradingValueFromApi ? FormatMillionWonUnit(tradingValue) : FormatKoreanMoney(tradingValue),
                 MarketCapText = marketCapFromApi ? FormatHundredMillionWonUnit(marketCap) : FormatKoreanMoney(marketCap),
-                ListedSharesText = listedShares > 0 ? listedShares.ToString("N0") : "-",
+                ListedSharesText = displayShares > 0 ? displayShares.ToString("N0") : "-",
                 TurnoverRateText = string.IsNullOrWhiteSpace(turnoverRate) ? "-" : turnoverRate,
                 ChangeRateText = string.IsNullOrWhiteSpace(changeRate) ? "-" : changeRate,
                 PrevDiffText = dayDiff == 0 ? "0" : (dayDiff > 0 ? $"+{dayDiff:N0}" : $"{dayDiff:N0}"),
@@ -416,8 +420,7 @@ namespace TradingDashboard.Services
             JsonElement root10003 = await PostApiRootAsync(token, "ka10003", "/api/dostk/stkinfo", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
             AccumulateExecutionInfo(root10003, ref buyCum, ref sellCum, accumulateTotals: false);
 
-            JsonElement root10015 = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = requestCode, strt_dt = today }, cancellationToken).ConfigureAwait(false);
-            DailyTradeSummary dailyTrade = ReadDailyTradeSummary(root10015);
+            DailyTradeSummary dailyTrade = await GetUnifiedDailyTradeSummaryAsync(token, baseCode, requestCode, today, cancellationToken).ConfigureAwait(false);
             string programDate = string.IsNullOrWhiteSpace(dailyTrade.TradeDate) ? today : dailyTrade.TradeDate;
             ProgramTradeSummary programTrade = await GetProgramTradeSummaryAsync(token, baseCode, useNxtMarket, programDate, programMarketType, cancellationToken).ConfigureAwait(false);
 
@@ -426,6 +429,8 @@ namespace TradingDashboard.Services
                 BuyExecCum = buyCum,
                 SellExecCum = sellCum,
                 DailyTradeQty = dailyTrade.TotalTradeQty,
+                DailyTradeValueMillion = dailyTrade.TotalTradeValueMillion,
+                TradingValueText = dailyTrade.TotalTradeValueMillion > 0 ? FormatMillionWonUnit(dailyTrade.TotalTradeValueMillion) : "-",
                 BeforeMarketTradeQty = dailyTrade.BeforeMarketQty,
                 RegularMarketTradeQty = dailyTrade.RegularMarketQty,
                 AfterMarketTradeQty = dailyTrade.AfterMarketQty,
@@ -434,6 +439,23 @@ namespace TradingDashboard.Services
                 ProgramNetQuantity = programTrade.NetQuantity,
                 HasProgramTrade = programTrade.Found
             };
+        }
+
+        public async Task<IReadOnlyList<(string Date, long Volume)>> GetUnifiedDailyTradeVolumesAsync(string code, int takeCount = 5, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            string baseCode = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(baseCode))
+                return Array.Empty<(string Date, long Volume)>();
+
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            JsonElement root = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = $"{baseCode}_AL", strt_dt = today }, cancellationToken).ConfigureAwait(false);
+            return ReadDailyTradeVolumeRows(root)
+                .Where(r => r.Volume > 0)
+                .OrderByDescending(r => r.Date)
+                .Take(Math.Max(1, takeCount))
+                .ToList();
         }
 
         public async Task<KrxClosingSnapshot> GetKrxClosingSnapshotAsync(string code, bool useNxtMarket = false, CancellationToken cancellationToken = default)
@@ -486,9 +508,9 @@ namespace TradingDashboard.Services
             snapshot.SellExecCum = snapshotSellCum;
 
             string snapshotDate = DateTime.Now.ToString("yyyyMMdd");
-            JsonElement dailyDetailRoot = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = requestCode, strt_dt = snapshotDate }, cancellationToken).ConfigureAwait(false);
-            DailyTradeSummary snapshotDailyTrade = ReadDailyTradeSummary(dailyDetailRoot);
+            DailyTradeSummary snapshotDailyTrade = await GetUnifiedDailyTradeSummaryAsync(token, baseCode, requestCode, snapshotDate, cancellationToken).ConfigureAwait(false);
             snapshot.DailyTradeQty = snapshotDailyTrade.TotalTradeQty;
+            snapshot.DailyTradeValueMillion = snapshotDailyTrade.TotalTradeValueMillion;
             snapshot.BeforeMarketTradeQty = snapshotDailyTrade.BeforeMarketQty;
             snapshot.RegularMarketTradeQty = snapshotDailyTrade.RegularMarketQty;
             snapshot.AfterMarketTradeQty = snapshotDailyTrade.AfterMarketQty;
@@ -513,6 +535,21 @@ namespace TradingDashboard.Services
 
             return new ProgramTradeSummary(false, 0, string.Empty);
 
+        }
+
+        private async Task<DailyTradeSummary> GetUnifiedDailyTradeSummaryAsync(string token, string baseCode, string fallbackRequestCode, string date, CancellationToken cancellationToken)
+        {
+            string unifiedCode = $"{baseCode}_AL";
+            if (!string.Equals(unifiedCode, fallbackRequestCode, StringComparison.OrdinalIgnoreCase))
+            {
+                JsonElement unifiedRoot = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = unifiedCode, strt_dt = date }, cancellationToken).ConfigureAwait(false);
+                DailyTradeSummary unified = ReadDailyTradeSummary(unifiedRoot);
+                if (unified.TotalTradeQty > 0 || unified.SectionTotalQty > 0 || unified.TotalTradeValueMillion > 0)
+                    return unified;
+            }
+
+            JsonElement fallbackRoot = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = fallbackRequestCode, strt_dt = date }, cancellationToken).ConfigureAwait(false);
+            return ReadDailyTradeSummary(fallbackRoot);
         }
         private static ProgramTradeSummary ReadProgramTimeSummary(JsonElement root, string date)
         {
@@ -738,24 +775,66 @@ namespace TradingDashboard.Services
             return summary;
         }
 
+        private static List<(string Date, long Volume)> ReadDailyTradeVolumeRows(JsonElement root)
+        {
+            var rows = new List<(string Date, long Volume)>();
+            JsonElement dailyArray = FindArrayByKeySafe(root, "daly_trde_dtl");
+            if (dailyArray.ValueKind != JsonValueKind.Array)
+                dailyArray = FindArrayByKeySafe(root, "daily_trade_detail");
+            if (dailyArray.ValueKind != JsonValueKind.Array)
+                dailyArray = FindArrayByKeySafe(root, "daily_transaction_detail");
+
+            if (dailyArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement row in dailyArray.EnumerateArray())
+                    AddDailyTradeVolumeRow(row, rows);
+            }
+            else
+            {
+                AddDailyTradeVolumeRow(root, rows);
+            }
+
+            return rows;
+        }
+
+        private static void AddDailyTradeVolumeRow(JsonElement row, List<(string Date, long Volume)> rows)
+        {
+            string date = NormalizeDigits(ReadAnyDeep(row, "dt", "date", "trde_dt", "base_dt"));
+            long volume = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "trde_qty", "total_trde_qty", "trade_qty", "volume")));
+            if (volume <= 0)
+                volume = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "tot_3", "section_total_qty")));
+            if (!string.IsNullOrWhiteSpace(date) && volume > 0)
+                rows.Add((date, volume));
+        }
+
         private static void ReadDailyTransactionRow(JsonElement row, ref DailyTradeSummary summary)
         {
             summary.TradeDate = NormalizeDigits(ReadAnyDeep(row, "dt", "date", "trde_dt", "base_dt"));
             summary.TotalTradeQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "trde_qty", "total_trde_qty", "trade_qty", "volume")));
+            summary.TotalTradeValueMillion = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "trde_prica", "total_trde_prica", "trade_value", "trading_value")));
             summary.BeforeMarketQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "bf_mkrt_trde_qty", "before_market_qty")));
             summary.RegularMarketQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "opmr_trde_qty", "regular_market_qty", "open_market_qty")));
             summary.AfterMarketQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "af_mkrt_trde_qty", "after_market_qty")));
+            summary.BeforeMarketValueMillion = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "bf_mkrt_trde_prica", "before_market_trde_prica")));
+            summary.RegularMarketValueMillion = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "opmr_trde_prica", "regular_market_trde_prica", "open_market_trde_prica")));
+            summary.AfterMarketValueMillion = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "af_mkrt_trde_prica", "after_market_trde_prica")));
             summary.SectionTotalQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "tot_3", "section_total_qty")));
             summary.PeriodTradeQty = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "prid_trde_qty", "period_trade_qty")));
+            if (summary.TotalTradeValueMillion <= 0)
+                summary.TotalTradeValueMillion = summary.BeforeMarketValueMillion + summary.RegularMarketValueMillion + summary.AfterMarketValueMillion;
         }
 
         private struct DailyTradeSummary
         {
             public string TradeDate;
             public long TotalTradeQty;
+            public long TotalTradeValueMillion;
             public long BeforeMarketQty;
             public long RegularMarketQty;
             public long AfterMarketQty;
+            public long BeforeMarketValueMillion;
+            public long RegularMarketValueMillion;
+            public long AfterMarketValueMillion;
             public long SectionTotalQty;
             public long PeriodTradeQty;
         }
@@ -777,6 +856,16 @@ namespace TradingDashboard.Services
             decimal rate = volume / (decimal)listedShares * 100m;
             decimal displayRate = Math.Truncate(rate * 100m) / 100m;
             return $"{displayRate:0.00}%";
+        }
+
+        private static long NormalizeListedShares(long value)
+        {
+            if (value <= 0)
+                return 0;
+
+            // Some Kiwoom TRs return listed shares in 1,000-share units while ka10099 listCount is 1-share based.
+            // Very small raw values like 10,395 for Samhwa Capacitor should be shown as 10,395,000 shares.
+            return value < 1_000_000 ? value * 1000 : value;
         }
 
         private static bool IsContinuation(string value)

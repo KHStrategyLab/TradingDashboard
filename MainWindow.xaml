@@ -456,7 +456,7 @@
 
                             <TextBlock Grid.Column="1"
                                        x:Name="SelectedStockSubInfo"
-                                       Text="거래량 - · 거래대금 - · 시가총액 - · 유통주식수 - · 회전율 - · 전일거래량비 -"
+                                       Text="시가 - · 고가 - · 저가 - · 기준가 - · 거래대금 - · 회전율 - · 전일동시 -"
                                        Foreground="{StaticResource TextMutedBrush}"
                                        FontSize="12"
                                        VerticalAlignment="Center"
@@ -780,8 +780,8 @@
                         <Grid x:Name="TradeTickHost"
                               Background="{StaticResource BgInnerBrush}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1*"/>
-                                <ColumnDefinition Width="1*"/>
+                                <ColumnDefinition Width="4*"/>
+                                <ColumnDefinition Width="6*"/>
                             </Grid.ColumnDefinitions>
 
                             <!-- 理쒓렐 泥닿껐 -->
@@ -791,19 +791,11 @@
                                     Padding="8">
                                 <Grid>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="22"/>
                                         <RowDefinition Height="18"/>
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0"
-                                                Text="최근 체결"
-                                               Foreground="{StaticResource TextMainBrush}"
-                                               FontSize="12"
-                                               FontWeight="Bold"
-                                               VerticalAlignment="Center"/>
-
-                                    <Grid Grid.Row="1">
+                                    <Grid Grid.Row="0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
@@ -823,7 +815,7 @@
                                                    HorizontalAlignment="Right"/>
                                     </Grid>
 
-                                    <ListBox Grid.Row="2"
+                                    <ListBox Grid.Row="1"
                                              x:Name="RecentTradeListBox"
                                              Background="{StaticResource BgInnerBrush}"
                                              BorderThickness="0"
@@ -869,85 +861,58 @@
                                     Padding="8">
                                 <Grid>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="24"/>
-                                        <RowDefinition Height="58"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0"
-                                               Text="종목 정보"
-                                               Foreground="{StaticResource TextMainBrush}"
-                                               FontSize="12"
-                                               FontWeight="Bold"
-                                               VerticalAlignment="Center"/>
-
-                                    <Grid Grid.Row="1">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                        </Grid.RowDefinitions>
-
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="시가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoOpenPriceText" Grid.Row="0" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="6,0,10,0"/>
-
-                                        <TextBlock Grid.Row="0" Grid.Column="2" Text="고가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoHighPriceText" Grid.Row="0" Grid.Column="3" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="6,0,0,0"/>
-
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="저가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoLowPriceText" Grid.Row="1" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="6,0,10,0"/>
-
-                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="기준가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoBasePriceText" Grid.Row="1" Grid.Column="3" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="6,0,0,0"/>
-                                    </Grid>
-
-                                    <Grid Grid.Row="2">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="*"/>
-                                        </Grid.RowDefinitions>
-
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="거래대금" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoTradingValueText" Grid.Row="0" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="시가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoOpenPriceText" Grid.Row="0" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="거래량" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoVolumeText" Grid.Row="1" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="고가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoHighPriceText" Grid.Row="1" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="전일거래량비" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoPrevTimeVolumeRatioText" Grid.Row="2" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="저가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoLowPriceText" Grid.Row="2" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="회전율" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoTurnoverRateText" Grid.Row="3" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="기준가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoBasePriceText" Grid.Row="3" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="매도체결량" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoSellTradeVolumeText" Grid.Row="4" Grid.Column="1" Text="-" Foreground="{StaticResource DownBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="거래대금" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoTradingValueText" Grid.Row="4" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="매수체결량" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoBuyTradeVolumeText" Grid.Row="5" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock x:Name="InfoVolumeText" Grid.Row="4" Grid.Column="1" Text="-" Visibility="Collapsed"/>
 
-                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="매수비율" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoBuyRatioText" Grid.Row="6" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="회전율" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoTurnoverRateText" Grid.Row="5" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="프로그램" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="InfoProgramText" Grid.Row="7" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="전일동시" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoPrevTimeVolumeRatioText" Grid.Row="6" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="매수체결" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoBuyTradeVolumeText" Grid.Row="7" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="매도체결" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoSellTradeVolumeText" Grid.Row="8" Grid.Column="1" Text="-" Foreground="{StaticResource DownBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
+                                    <TextBlock Grid.Row="9" Grid.Column="0" Text="매수비율" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoBuyRatioText" Grid.Row="9" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
+                                    <TextBlock Grid.Row="10" Grid.Column="0" Text="프로그램" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoProgramText" Grid.Row="10" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                 </Grid>
                             </Border>
                         </Grid>
@@ -959,35 +924,11 @@
                         <Grid x:Name="StockInfoHost"
                               Background="{StaticResource BgInnerBrush}">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="28"/>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="98"/>
                             </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0"
-                                  Background="{StaticResource BgPanelBrush}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock Grid.Column="0"
-                                           Text="종목 뉴스 클리핑"
-                                           Foreground="{StaticResource TextMainBrush}"
-                                           FontSize="12"
-                                           FontWeight="Bold"
-                                           VerticalAlignment="Center"
-                                           Margin="8,0,0,0"/>
-
-                                <TextBlock Grid.Column="1"
-                                           Text="뉴스 10개 / 공시 7개"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="11"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,8,0"/>
-                            </Grid>
-
-                            <ListBox Grid.Row="1"
+                            <ListBox Grid.Row="0"
                                      x:Name="StockNewsListBox"
                                      Background="{StaticResource BgInnerBrush}"
                                      BorderThickness="0"
@@ -1023,7 +964,7 @@
                                 </ListBox.ItemTemplate>
                             </ListBox>
 
-                            <ListBox Grid.Row="2"
+                            <ListBox Grid.Row="1"
                                      x:Name="StockDisclosureListBox"
                                      Background="{StaticResource BgPanelBrush}"
                                      BorderBrush="{StaticResource LineBrush}"
