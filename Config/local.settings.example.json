@@ -1,14 +1,14 @@
 {
   "NaverNews": {
-    "ClientId": "네이버_개발자센터_Client_ID",
-    "ClientSecret": "네이버_개발자센터_Client_Secret",
+    "ClientId": "NAVER_CLIENT_ID",
+    "ClientSecret": "NAVER_CLIENT_SECRET",
     "DisplayCount": 10,
     "Sort": "date"
   },
 
   "Dart": {
     "Enabled": true,
-    "ApiKey": "DART_OPENAPI_인증키",
+    "ApiKey": "DART_OPENAPI_KEY",
     "DisplayCount": 7,
     "LookbackDays": 180
   },
@@ -16,21 +16,21 @@
   "Kiwoom": {
     "UseRestApi": false,
     "UseOpenApiPlus": true,
-    "AppKey": "키움_APP_KEY",
-    "SecretKey": "키움_SECRET_KEY",
+    "AppKey": "KIWOOM_APP_KEY",
+    "SecretKey": "KIWOOM_SECRET_KEY",
     "ConditionSeq01": "1",
-    "AccountNo": "키움_계좌번호_필요시_입력",
+    "AccountNo": "KIWOOM_ACCOUNT_NO",
     "AutoLogin": false,
     "MockMode": false,
     "RealMode": true
   },
 
   "Telegram": {
-    "BotToken": "텔레그램_봇토큰",
-    "DefaultChatId": "기본_채팅방_ID",
+    "BotToken": "TELEGRAM_BOT_TOKEN",
+    "DefaultChatId": "TELEGRAM_DEFAULT_CHAT_ID",
     "ChatIds": [
-      "채팅방_ID_1",
-      "채팅방_ID_2"
+      "TELEGRAM_CHAT_ID_1",
+      "TELEGRAM_CHAT_ID_2"
     ],
     "Enabled": true
   },

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using TradingDashboard.Models;
@@ -22,6 +24,8 @@ namespace TradingDashboard
     {
         private const int MaxLogLines = 500;
         private const int MaxWatchlistMemoryCacheCount = 200;
+        private const string KrxPreviousCloseBasePriceSource = "KRX_PREV_CLOSE";
+        private const double ChartRightPadding = 25d;
         private readonly AppConfig _config;
         private readonly NaverNewsService _newsService;
         private readonly DartDisclosureService _disclosureService;
@@ -44,7 +48,34 @@ namespace TradingDashboard
         private readonly Dictionary<string, long> _lastTickPriceByCode = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new Dictionary<string, long>(StringComparer.Ordinal);
+        private const int MinuteChartCandleCount = 700;
+        private const int DailyChartRealtimeDrawIntervalMs = 350;
+        private const int MinuteChartRealtimeDrawIntervalMs = 1500;
+        private const int MaxChartMemoryCacheEntries = 200;
+        private const int MaxChartMemoryCacheCandles = 100_000;
+        private const int MinChartDragCandleCount = 10;
+        private readonly List<ChartCandle> _currentChartCandles = new List<ChartCandle>();
+        private readonly Dictionary<ChartCacheKey, ChartCacheEntry> _chartMemoryCache = new Dictionary<ChartCacheKey, ChartCacheEntry>();
+        private long _chartCacheAccessSequence;
+        private int _chartRenderVersion;
         private ChartPeriod _currentChartPeriod = ChartPeriod.Daily;
+        private ChartPeriod _currentChartDataPeriod = ChartPeriod.Daily;
+        private string _currentChartCode = string.Empty;
+        private DateTime _lastRealtimeChartDrawAt = DateTime.MinValue;
+        private ChartRenderState? _priceChartRenderState;
+        private ChartRenderState? _volumeChartRenderState;
+        private Line? _lastCandleWick;
+        private Rectangle? _lastCandleBody;
+        private Rectangle? _lastVolumeBar;
+        private Line? _currentPriceMarkerLine;
+        private Border? _currentPriceMarkerLabel;
+        private TextBlock? _currentPriceMarkerText;
+        private Canvas? _priceChartCanvas;
+        private Rectangle? _chartDragSelectionRect;
+        private bool _isChartDragSelecting;
+        private Point _chartDragStartPoint;
+        private int _chartViewStartIndex;
+        private int _chartViewCount;
         private string _selectedStockCode = string.Empty;
         private long _buyTradeVolume;
         private long _sellTradeVolume;
@@ -63,6 +94,7 @@ namespace TradingDashboard
         private ClientWebSocket? _realtimeWs;
         private CancellationTokenSource? _realtimeCts;
         private CancellationTokenSource? _selectedRequestCts;
+        private CancellationTokenSource? _chartRequestCts;
         private CancellationTokenSource? _watchlistCacheRefreshCts;
         private static readonly string[] MarketStatusTypes = { "0s" };
         private static readonly string[] SellPriceKeys = { "41", "42", "43", "44", "45", "46", "47", "48", "49", "50" };
@@ -345,14 +377,9 @@ namespace TradingDashboard
                         stock.AuditInfo,
                         stock.StockState,
                         stock.SectorName,
-                        null,
-                        null,
                         saveFile: false);
-                    if (entry.BasePrice <= 0 && stock.LastPrice > 0)
-                    {
-                        entry.BasePrice = stock.LastPrice;
-                        entry.BasePriceDate = today;
-                    }
+                    if (!IsTrustedKrxBasePrice(entry, today))
+                        ClearCachedBasePrice(entry);
 
                     entry.SnapshotDate = today;
                     entry.LastSeenConditionDate = today;
@@ -418,7 +445,7 @@ namespace TradingDashboard
             {
                 if (!_watchlistMemoryCache.TryGetValue(code, out WatchlistStockCacheEntry? entry))
                     continue;
-                if (entry.BasePrice > 0 && entry.BasePriceDate == today)
+                if (IsTrustedKrxBasePrice(entry, today))
                     continue;
 
                 try
@@ -429,6 +456,7 @@ namespace TradingDashboard
 
                     entry.BasePrice = basePrice;
                     entry.BasePriceDate = today;
+                    entry.BasePriceSource = KrxPreviousCloseBasePriceSource;
                     entry.LastUsedAt = DateTime.Now;
                     changed = true;
                 }
@@ -493,7 +521,32 @@ namespace TradingDashboard
             return entry;
         }
 
-        private WatchlistStockCacheEntry UpsertWatchlistMemoryCache(string code, string name, bool? supportsNxt, string? marketTypeCode, string? marketName, string? programMarketType, long? lastPrice, string? orderWarning, string? auditInfo, string? stockState, string? sectorName, long? basePrice, string? basePriceDate, bool saveFile)
+        private static bool IsTrustedKrxBasePrice(WatchlistStockCacheEntry? entry, string date)
+        {
+            // 기준가 변경금지: 화면 기준가는 반드시 KRX 전일종가만 사용한다.
+            // NXT 종가, 현재가, LastPrice, 출처 없는 캐시값은 기준가를 덮을 수 없다.
+            return entry != null &&
+                entry.BasePrice > 0 &&
+                string.Equals(entry.BasePriceDate, date, StringComparison.Ordinal) &&
+                string.Equals(entry.BasePriceSource, KrxPreviousCloseBasePriceSource, StringComparison.Ordinal);
+        }
+
+        private static void SetCachedKrxBasePrice(WatchlistStockCacheEntry entry, long basePrice, string date)
+        {
+            // KRX 전일종가만 이 함수를 통해 기준가로 확정한다.
+            entry.BasePrice = basePrice;
+            entry.BasePriceDate = date;
+            entry.BasePriceSource = KrxPreviousCloseBasePriceSource;
+        }
+
+        private static void ClearCachedBasePrice(WatchlistStockCacheEntry entry)
+        {
+            entry.BasePrice = 0;
+            entry.BasePriceDate = string.Empty;
+            entry.BasePriceSource = string.Empty;
+        }
+
+        private WatchlistStockCacheEntry UpsertWatchlistMemoryCache(string code, string name, bool? supportsNxt, string? marketTypeCode, string? marketName, string? programMarketType, long? lastPrice, string? orderWarning, string? auditInfo, string? stockState, string? sectorName, bool saveFile)
         {
             if (!_watchlistMemoryCache.TryGetValue(code, out WatchlistStockCacheEntry? entry))
             {
@@ -521,10 +574,6 @@ namespace TradingDashboard
                 entry.StockState = stockState.Trim();
             if (!string.IsNullOrWhiteSpace(sectorName))
                 entry.SectorName = sectorName.Trim();
-            if (basePrice.HasValue && basePrice.Value > 0)
-                entry.BasePrice = basePrice.Value;
-            if (!string.IsNullOrWhiteSpace(basePriceDate))
-                entry.BasePriceDate = basePriceDate;
             entry.LastUsedAt = DateTime.Now;
 
             TrimWatchlistMemoryCache();
@@ -568,7 +617,9 @@ namespace TradingDashboard
                 return;
 
             int selectionVersion = ++_selectionVersion;
-            _selectedRequestCts?.Cancel();
+            CancellationTokenSource? previousRequestCts = _selectedRequestCts;
+            previousRequestCts?.Cancel();
+            DisposeCanceledRequestLater(previousRequestCts);
             if (_watchStocks.Count > 0)
                 ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
             _selectedRequestCts = new CancellationTokenSource();
@@ -581,6 +632,10 @@ namespace TradingDashboard
             _selectedPreviousVolume = 0;
             _krxPrevClosePrice = 0;
             _lastTickPriceByCode.Clear();
+            _currentChartCandles.Clear();
+            _currentChartCode = string.Empty;
+            _lastRealtimeChartDrawAt = DateTime.MinValue;
+            ClearSelectedChartVisuals();
             HogaStatusText.Text = "현재가 - / 등락률 - / 0D -";
             UpdateHogaSummary(0, 0);
             ResetTradeSummaryInfo();
@@ -593,9 +648,46 @@ namespace TradingDashboard
             await LoadSelectedBasePriceAsync(stockCode, selectionVersion, requestToken);
             await LoadSelectedOrderBookSnapshotAsync(stockCode, selectionVersion, requestToken);
             _ = RegisterSelectedRealtime0DIfReadyAsync();
-            await RenderSelectedChartAsync(selectionVersion, stockCode, requestToken);
+            StartSelectedChartRender();
             _ = LoadSelectedStockStatusAsync(stockCode, selectionVersion, requestToken);
             _ = LoadKrxClosingSnapshotIfNeededAsync(stockCode, selectionVersion, requestToken);
+        }
+
+        private static void DisposeCanceledRequestLater(CancellationTokenSource? cts)
+        {
+            if (cts == null)
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    cts.Dispose();
+                }
+            });
+        }
+
+        private void ClearSelectedChartVisuals()
+        {
+            MainChartHost?.Children.Clear();
+            VolumeChartHost?.Children.Clear();
+            _priceChartRenderState = null;
+            _volumeChartRenderState = null;
+            _lastCandleWick = null;
+            _lastCandleBody = null;
+            _lastVolumeBar = null;
+            _currentPriceMarkerLine = null;
+            _currentPriceMarkerLabel = null;
+            _currentPriceMarkerText = null;
+            _priceChartCanvas = null;
+            _chartDragSelectionRect = null;
+            _isChartDragSelecting = false;
+            _chartViewStartIndex = 0;
+            _chartViewCount = 0;
         }
 
         private async Task LoadSelectedBasePriceAsync(string stockCode, int selectionVersion, CancellationToken cancellationToken = default)
@@ -607,14 +699,17 @@ namespace TradingDashboard
 
                 string today = DateTime.Now.ToString("yyyyMMdd");
                 WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stockCode);
-                long basePrice = cache != null && cache.BasePrice > 0 && cache.BasePriceDate == today
-                    ? cache.BasePrice
+                // 기준가 변경금지: 검증된 KRX 전일종가 캐시가 없을 때만 KRX 기준가를 조회한다.
+                // 다른 시장/실시간/종목정보 값으로 대체하지 않는다.
+                long basePrice = IsTrustedKrxBasePrice(cache, today)
+                    ? cache!.BasePrice
                     : await _kiwoomConditionService.GetKrxPreviousClosePriceAsync(stockCode, cancellationToken);
                 if (selectionVersion != _selectionVersion)
                     return;
 
                 if (basePrice > 0)
-                    UpsertWatchlistMemoryCache(
+                {
+                    WatchlistStockCacheEntry entry = UpsertWatchlistMemoryCache(
                         stockCode,
                         _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? stock) ? stock.Name : stockCode,
                         null,
@@ -626,15 +721,15 @@ namespace TradingDashboard
                         stock?.AuditInfo,
                         stock?.StockState,
                         stock?.SectorName,
-                        basePrice,
-                        today,
                         saveFile: false);
+                    SetCachedKrxBasePrice(entry, basePrice, today);
+                }
                 _krxPrevClosePrice = basePrice;
                 InfoBasePriceText.Text = basePrice > 0 ? basePrice.ToString("N0") : "-";
                 InfoBasePriceText.Foreground = _whiteBrush;
                 AppendLog(basePrice > 0
-                    ? $"기준가 선조회(ka10007 전일종가): {basePrice:N0}"
-                    : "기준가 선조회 실패(ka10007 전일종가)");
+                    ? $"기준가 잠금(KRX 전일종가{(IsTrustedKrxBasePrice(cache, today) ? " 캐시" : "")}): {basePrice:N0}"
+                    : "기준가 잠금 실패(KRX 전일종가, NXT 값 대체 금지)");
             }
             catch (OperationCanceledException)
             {
@@ -954,7 +1049,7 @@ namespace TradingDashboard
                 && stock.MetaBadgeText != "-")
             {
                 SelectedStockSubInfo.Inlines.Add(new Run($"{stock.MetaBadgeText} · "));
-                SelectedStockSubInfo.Inlines.Add(new Run($"전일종가 {stock.LastPriceText} · "));
+                SelectedStockSubInfo.Inlines.Add(new Run($"전일종가 {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} · "));
             }
 
             SelectedStockSubInfo.Inlines.Add(new Run(
@@ -1027,8 +1122,7 @@ namespace TradingDashboard
                 stock.ChangeAmount = stock.CurrentPrice > 0 && _krxPrevClosePrice > 0
                     ? stock.CurrentPrice - _krxPrevClosePrice
                     : snapshot.DayChange;
-                if (!string.IsNullOrWhiteSpace(snapshot.ChangeRateText) && snapshot.ChangeRateText != "-")
-                    stock.ChangeRateText = snapshot.ChangeRateText;
+                stock.ChangeRateText = FormatKrxPreviousCloseRate(stock.CurrentPrice);
                 stock.PriceBrush = ResolveHogaBrushByKrxPrevClose(stock.CurrentPrice);
             }
 
@@ -1202,15 +1296,12 @@ namespace TradingDashboard
                 : ParseLongSigned(metrics.PrevDiffText);
 
             stock.ChangeAmount = changeAmount;
-            if (!string.IsNullOrWhiteSpace(metrics.ChangeRateText) && metrics.ChangeRateText != "-")
-                stock.ChangeRateText = metrics.ChangeRateText;
+            stock.ChangeRateText = FormatKrxPreviousCloseRate(currentPrice);
             stock.PriceBrush = currentPrice > 0
                 ? ResolveHogaBrushByKrxPrevClose(currentPrice)
                 : changeAmount > 0 ? _upColorBrush : changeAmount < 0 ? _downColorBrush : _whiteBrush;
 
-            string rateText = !string.IsNullOrWhiteSpace(metrics.ChangeRateText) && metrics.ChangeRateText != "-"
-                ? metrics.ChangeRateText
-                : stock.ChangeRateText;
+            string rateText = stock.ChangeRateText;
             HogaStatusText.Text = $"현재가 {(currentPrice > 0 ? currentPrice.ToString("N0") : stock.CurrentPrice > 0 ? stock.CurrentPrice.ToString("N0") : "-")} / 등락률 {rateText} / 기준가 {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
         }
 
@@ -1240,6 +1331,8 @@ namespace TradingDashboard
             {
                 _selectedRequestCts?.Cancel();
                 _selectedRequestCts?.Dispose();
+                _chartRequestCts?.Cancel();
+                _chartRequestCts?.Dispose();
                 _watchlistCacheRefreshCts?.Cancel();
                 _watchlistCacheRefreshCts?.Dispose();
                 _realtimeCts?.Cancel();
@@ -1566,7 +1659,7 @@ namespace TradingDashboard
                 if (!string.IsNullOrWhiteSpace(selectedCode))
                 {
                     await LoadSelectedOrderBookSnapshotAsync(selectedCode, selectionVersion);
-                    _ = RenderSelectedChartAsync(selectionVersion, selectedCode);
+                    StartSelectedChartRender();
                 }
             }
             catch (Exception ex)
@@ -1670,17 +1763,17 @@ namespace TradingDashboard
                 return;
 
             string cur = ReadAnyRealtime(item, "10", "cur_prc", "curPrc", "price", "now_prc");
-            string rate = ReadAnyRealtime(item, "12", "flu_rt", "chg_rt", "change_rate");
-            if (!string.IsNullOrWhiteSpace(rate) && !rate.Contains("%"))
-                rate += "%";
             long curNum = ParseLongAbs(cur);
 
             Dispatcher.Invoke(() =>
             {
                 if (curNum > 0 && _watchStockByCode.TryGetValue(code, out WatchStockItem? stock))
+                {
                     stock.CurrentPrice = curNum;
+                    stock.ChangeRateText = FormatKrxPreviousCloseRate(curNum);
+                }
 
-                HogaStatusText.Text = $"현재가 {(curNum > 0 ? curNum.ToString("N0") : "-")} / 등락률 {(string.IsNullOrWhiteSpace(rate) ? "-" : rate)} / 0D {(_last0DReceivedAt == DateTime.MinValue ? "-" : _last0DReceivedAt.ToString("HH:mm:ss"))}";
+                HogaStatusText.Text = $"현재가 {(curNum > 0 ? curNum.ToString("N0") : "-")} / 등락률 {FormatKrxPreviousCloseRate(curNum)} / 0D {(_last0DReceivedAt == DateTime.MinValue ? "-" : _last0DReceivedAt.ToString("HH:mm:ss"))}";
                 HighlightCenterPriceInHoga();
             });
         }
@@ -1804,6 +1897,7 @@ namespace TradingDashboard
 
             long price = ParseLongAbs(ReadAnyRealtime(item, "cur_prc", "curPrc", "now_prc", "price", "10"));
             long volume = ParseLongAbs(ReadAnyRealtime(values, "acc_trde_qty", "volume", "13"));
+            string tradeTimeText = ReadAnyRealtime(values, "cntr_tm", "time", "20");
             string tradeQtyRaw = ReadAnyRealtime(values, "cntr_qty", "trade_qty", "15");
             long tradeQty = ParseLongAbs(tradeQtyRaw);
             int realtimeSide = ResolveRealtimeTradeSide(values, tradeQtyRaw);
@@ -1831,7 +1925,9 @@ namespace TradingDashboard
                     ? stock.CurrentPrice - _krxPrevClosePrice
                     : dayChange != 0 ? dayChange : ResolveChangeByRate(rate);
                 stock.ChangeAmount = change;
-                stock.ChangeRateText = rate;
+                stock.ChangeRateText = code == _selectedStockCode
+                    ? FormatKrxPreviousCloseRate(stock.CurrentPrice)
+                    : rate;
                 stock.PriceBrush = code == _selectedStockCode && stock.CurrentPrice > 0
                     ? ResolveHogaBrushByKrxPrevClose(stock.CurrentPrice)
                     : change > 0 ? _upColorBrush : change < 0 ? _downColorBrush : _whiteBrush;
@@ -1919,6 +2015,7 @@ namespace TradingDashboard
                     SetSelectedStockSubInfo(_currentStatusMetrics, dailyVolumeRatioText, dailyVolumeRatioBrush);
                     InfoTurnoverRateText.Text = _currentStatusMetrics.TurnoverRateText;
                     InfoTradingValueText.Text = _currentStatusMetrics.TradingValueText;
+                    ApplyRealtimeChartTick(code, stock.CurrentPrice, volume > 0 ? currentVolume : 0, effectiveTradeQty, tradeTimeText);
 
                 }
             });
@@ -1980,6 +2077,16 @@ namespace TradingDashboard
             if (price < _krxPrevClosePrice)
                 return _downColorBrush;
             return _whiteBrush;
+        }
+
+        private string FormatKrxPreviousCloseRate(long price)
+        {
+            if (price <= 0 || _krxPrevClosePrice <= 0)
+                return "-";
+
+            decimal rate = (price - _krxPrevClosePrice) / (decimal)_krxPrevClosePrice * 100m;
+            decimal displayRate = Math.Truncate(rate * 100m) / 100m;
+            return $"{displayRate:+0.00;-0.00;0.00}%";
         }
 
         private async Task RegisterSelectedRealtime0DIfReadyAsync()
@@ -2210,33 +2317,66 @@ namespace TradingDashboard
         private void DayChartButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChartPeriod = ChartPeriod.Daily;
-            _ = RenderSelectedChartAsync(_selectionVersion, _selectedStockCode, _selectedRequestCts?.Token ?? CancellationToken.None);
+            ResetMinuteChartComboSelection();
+            StartSelectedChartRender();
+        }
+
+        private void MinuteChartComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (MinuteChartComboBox?.SelectedValue is not string selected || string.IsNullOrWhiteSpace(selected))
+                return;
+
+            if (Enum.TryParse(selected, out ChartPeriod period) && IsMinuteChartPeriod(period))
+            {
+                _currentChartPeriod = period;
+                StartSelectedChartRender();
+            }
+        }
+
+        private void ResetMinuteChartComboSelection()
+        {
+            if (MinuteChartComboBox != null && !IsMinuteChartPeriod(_currentChartPeriod))
+                MinuteChartComboBox.SelectedIndex = 0;
         }
 
         private void WeekChartButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChartPeriod = ChartPeriod.Weekly;
-            _ = RenderSelectedChartAsync(_selectionVersion, _selectedStockCode, _selectedRequestCts?.Token ?? CancellationToken.None);
+            ResetMinuteChartComboSelection();
+            StartSelectedChartRender();
         }
 
         private void MonthChartButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChartPeriod = ChartPeriod.Monthly;
-            _ = RenderSelectedChartAsync(_selectionVersion, _selectedStockCode, _selectedRequestCts?.Token ?? CancellationToken.None);
+            ResetMinuteChartComboSelection();
+            StartSelectedChartRender();
         }
 
-        private async Task RenderSelectedChartAsync(int selectionVersion, string selectedStockCode, CancellationToken cancellationToken = default)
+        private void StartSelectedChartRender()
+        {
+            if (string.IsNullOrWhiteSpace(_selectedStockCode))
+                return;
+
+            int selectionVersion = _selectionVersion;
+            int chartVersion = ++_chartRenderVersion;
+            CancellationTokenSource? previousChartCts = _chartRequestCts;
+            previousChartCts?.Cancel();
+            DisposeCanceledRequestLater(previousChartCts);
+
+            _chartRequestCts = _selectedRequestCts != null
+                ? CancellationTokenSource.CreateLinkedTokenSource(_selectedRequestCts.Token)
+                : new CancellationTokenSource();
+
+            _ = RenderSelectedChartAsync(selectionVersion, chartVersion, _selectedStockCode, _chartRequestCts.Token);
+        }
+
+        private async Task RenderSelectedChartAsync(int selectionVersion, int chartVersion, string selectedStockCode, CancellationToken cancellationToken = default)
         {
             if (MainChartHost == null || VolumeChartHost == null)
                 return;
 
-            int count = _currentChartPeriod switch
-            {
-                ChartPeriod.Daily => 120,
-                ChartPeriod.Weekly => 100,
-                ChartPeriod.Monthly => 60,
-                _ => 120
-            };
+            int count = ResolveChartCandleCount(_currentChartPeriod);
 
             if (string.IsNullOrWhiteSpace(selectedStockCode))
                 return;
@@ -2244,31 +2384,52 @@ namespace TradingDashboard
             try
             {
                 ChartPeriod requestedPeriod = _currentChartPeriod;
-                bool useNxtMarket = IsNxtSupportedStock(selectedStockCode);
-
-                List<ChartCandle> candles = requestedPeriod switch
+                bool useNxtMarket = ShouldUseNxtDataForStock(selectedStockCode);
+                ChartCacheKey cacheKey = CreateChartCacheKey(selectedStockCode, useNxtMarket, requestedPeriod);
+                bool showedCachedChart = false;
+                if (TryGetChartMemoryCache(cacheKey, count, out List<ChartCandle> cachedCandles))
                 {
-                    ChartPeriod.Daily => (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
+                    if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
+                        return;
+
+                    ApplyChartCandles(cachedCandles, selectedStockCode, requestedPeriod, "캐시");
+                    showedCachedChart = true;
+                }
+
+                List<ChartCandle> candles;
+                if (IsMinuteChartPeriod(requestedPeriod))
+                {
+                    candles = (await _kiwoomConditionService.GetMinuteCandlesAsync(selectedStockCode, ResolveMinuteChartInterval(requestedPeriod), useNxtMarket, count, cancellationToken))
                         .TakeLast(count)
                         .Select(ToChartCandle)
-                        .ToList(),
-                    ChartPeriod.Weekly => (await _kiwoomConditionService.GetWeeklyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken))
-                        .Select(ToChartCandle).ToList(),
-                    ChartPeriod.Monthly => (await _kiwoomConditionService.GetMonthlyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken))
-                        .Select(ToChartCandle).ToList(),
-                    _ => (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
-                        .TakeLast(count)
-                        .Select(ToChartCandle)
-                        .ToList()
-                };
-                if (selectionVersion != _selectionVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
+                        .ToList();
+                }
+                else
+                {
+                    candles = requestedPeriod switch
+                    {
+                        ChartPeriod.Daily => (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
+                            .TakeLast(count)
+                            .Select(ToChartCandle)
+                            .ToList(),
+                        ChartPeriod.Weekly => (await _kiwoomConditionService.GetWeeklyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken))
+                            .Select(ToChartCandle).ToList(),
+                        ChartPeriod.Monthly => (await _kiwoomConditionService.GetMonthlyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken))
+                            .Select(ToChartCandle).ToList(),
+                        _ => (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
+                            .TakeLast(count)
+                            .Select(ToChartCandle)
+                            .ToList()
+                    };
+                }
+                if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
                     return;
 
                 if (candles.Count == 0)
                     return;
 
-                DrawPriceChart(candles);
-                DrawVolumeChart(candles);
+                SetChartMemoryCache(cacheKey, candles);
+                ApplyChartCandles(candles, selectedStockCode, requestedPeriod, showedCachedChart ? "최신갱신" : "초기");
             }
             catch (OperationCanceledException)
             {
@@ -2280,11 +2441,105 @@ namespace TradingDashboard
             }
         }
 
+        private void ApplyChartCandles(List<ChartCandle> candles, string selectedStockCode, ChartPeriod period, string reason)
+        {
+            _currentChartCandles.Clear();
+            _currentChartCandles.AddRange(CloneChartCandles(candles));
+            _currentChartCode = selectedStockCode;
+            _currentChartDataPeriod = period;
+            _lastRealtimeChartDrawAt = DateTime.MinValue;
+            ResetChartViewport();
+
+            DrawFullChart(reason);
+        }
+
+        private ChartCacheKey CreateChartCacheKey(string stockCode, bool useNxtMarket, ChartPeriod period)
+        {
+            return new ChartCacheKey(NormalizeStockCode(stockCode), useNxtMarket, period);
+        }
+
+        private bool TryGetChartMemoryCache(ChartCacheKey key, int count, out List<ChartCandle> candles)
+        {
+            if (_chartMemoryCache.TryGetValue(key, out ChartCacheEntry? entry) && entry.Candles.Count > 0)
+            {
+                entry.LastAccess = ++_chartCacheAccessSequence;
+                candles = CloneChartCandles(entry.Candles.TakeLast(count));
+                return candles.Count > 0;
+            }
+
+            candles = new List<ChartCandle>();
+            return false;
+        }
+
+        private void SetChartMemoryCache(ChartCacheKey key, IEnumerable<ChartCandle> candles)
+        {
+            List<ChartCandle> snapshot = CloneChartCandles(candles.TakeLast(ResolveChartCandleCount(key.Period)));
+            if (snapshot.Count == 0)
+                return;
+
+            _chartMemoryCache[key] = new ChartCacheEntry
+            {
+                Candles = snapshot,
+                CachedAt = DateTime.Now,
+                LastAccess = ++_chartCacheAccessSequence
+            };
+            TrimChartMemoryCache();
+        }
+
+        private void TrimChartMemoryCache()
+        {
+            while (_chartMemoryCache.Count > MaxChartMemoryCacheEntries || _chartMemoryCache.Values.Sum(e => e.Candles.Count) > MaxChartMemoryCacheCandles)
+            {
+                ChartCacheKey oldestKey = _chartMemoryCache
+                    .OrderBy(kv => kv.Value.LastAccess)
+                    .Select(kv => kv.Key)
+                    .FirstOrDefault();
+
+                if (!_chartMemoryCache.Remove(oldestKey))
+                    break;
+            }
+        }
+
+        private static List<ChartCandle> CloneChartCandles(IEnumerable<ChartCandle> candles)
+        {
+            return candles
+                .Where(c => c != null)
+                .Select(CloneChartCandle)
+                .ToList();
+        }
+
+        private static ChartCandle CloneChartCandle(ChartCandle c)
+        {
+            return new ChartCandle
+            {
+                Date = c.Date,
+                Open = c.Open,
+                High = c.High,
+                Low = c.Low,
+                Close = c.Close,
+                Volume = c.Volume
+            };
+        }
+
         private void DrawPriceChart(List<ChartCandle> candles)
         {
+            if (candles.Count == 0)
+            {
+                ClearSelectedChartVisuals();
+                return;
+            }
+
             MainChartHost.Children.Clear();
-            var canvas = new Canvas();
+            var canvas = new Canvas { Background = Brushes.Transparent };
             MainChartHost.Children.Add(canvas);
+            _priceChartCanvas = canvas;
+            AttachChartDragHandlers(canvas);
+            _priceChartRenderState = null;
+            _lastCandleWick = null;
+            _lastCandleBody = null;
+            _currentPriceMarkerLine = null;
+            _currentPriceMarkerLabel = null;
+            _currentPriceMarkerText = null;
 
             MainChartHost.UpdateLayout();
             double w = Math.Max(100, MainChartHost.ActualWidth - 2);
@@ -2292,7 +2547,7 @@ namespace TradingDashboard
             canvas.Width = w;
             canvas.Height = h;
             const double axisWidth = 68;
-            double chartW = Math.Max(40, w - axisWidth);
+            double chartW = Math.Max(40, w - axisWidth - ChartRightPadding);
             double currentPrice = ResolveSelectedCurrentPrice(candles.Last().Close);
 
             double max = candles.Max(c => c.High);
@@ -2347,15 +2602,27 @@ namespace TradingDashboard
                 Canvas.SetLeft(body, x);
                 Canvas.SetTop(body, Math.Min(yOpen, yClose));
                 canvas.Children.Add(body);
+
+                if (i == candles.Count - 1)
+                {
+                    _lastCandleWick = wick;
+                    _lastCandleBody = body;
+                }
             }
 
             DrawMovingAverage(canvas, candles, 5, (Brush)FindResource("Ma5Brush"), chartW, h, min, max);
             DrawMovingAverage(canvas, candles, 10, (Brush)FindResource("Ma10Brush"), chartW, h, min, max);
             DrawMovingAverage(canvas, candles, 20, (Brush)FindResource("Ma20Brush"), chartW, h, min, max);
             DrawMovingAverage(canvas, candles, 60, (Brush)FindResource("Ma60Brush"), chartW, h, min, max);
+            if (IsMinuteChartPeriod(_currentChartDataPeriod))
+            {
+                DrawMovingAverage(canvas, candles, 240, (Brush)FindResource("Ma240Brush"), chartW, h, min, max);
+                DrawMovingAverage(canvas, candles, 480, (Brush)FindResource("Ma480Brush"), chartW, h, min, max);
+            }
 
-            DrawRightPriceAxis(canvas, chartW, axisWidth, h, min, max, tick);
-            DrawCurrentPriceMarker(canvas, chartW, axisWidth, h, min, max, currentPrice);
+            DrawRightPriceAxis(canvas, chartW + ChartRightPadding, axisWidth, h, min, max, tick);
+            DrawCurrentPriceMarker(canvas, chartW, ChartRightPadding, axisWidth, h, min, max, currentPrice);
+            _priceChartRenderState = new ChartRenderState(candles.Count, GetVisibleChartStartIndex(), chartW, h, min, max, gap, candleW, 0, 0);
         }
 
         private double ResolveSelectedCurrentPrice(double fallback)
@@ -2368,6 +2635,486 @@ namespace TradingDashboard
             }
 
             return fallback;
+        }
+
+        private void ApplyRealtimeCalendarChartTick(string code, long price, long cumulativeVolume, long tradeVolume)
+        {
+            ChartPeriod period = _currentChartDataPeriod;
+            if (!IsCalendarChartPeriod(period) ||
+                string.IsNullOrWhiteSpace(code) ||
+                !string.Equals(code, _currentChartCode, StringComparison.Ordinal) ||
+                price <= 0 ||
+                _currentChartCandles.Count == 0)
+            {
+                return;
+            }
+
+            DateTime now = DateTime.Now;
+            ChartCandle last = _currentChartCandles[_currentChartCandles.Count - 1];
+            if (!IsSameCalendarChartBucket(last.Date, period, now))
+            {
+                last = new ChartCandle
+                {
+                    Date = BuildCalendarChartBucketDate(period, now),
+                    Open = price,
+                    High = price,
+                    Low = price,
+                    Close = price,
+                    Volume = Math.Max(0, period == ChartPeriod.Daily && cumulativeVolume > 0 ? cumulativeVolume : tradeVolume)
+                };
+
+                _currentChartCandles.Add(last);
+                if (_currentChartCandles.Count > ResolveChartCandleCount(period))
+                {
+                    _currentChartCandles.RemoveAt(0);
+                    _chartViewStartIndex = Math.Max(0, _chartViewStartIndex - 1);
+                }
+            }
+            else
+            {
+                if (last.Open <= 0)
+                    last.Open = price;
+                last.Close = price;
+                last.High = Math.Max(last.High > 0 ? last.High : price, price);
+                last.Low = Math.Min(last.Low > 0 ? last.Low : price, price);
+
+                if (cumulativeVolume > 0)
+                {
+                    if (period == ChartPeriod.Daily)
+                        last.Volume = cumulativeVolume;
+                    else if (tradeVolume > 0)
+                        last.Volume += tradeVolume;
+                }
+                else if (tradeVolume > 0)
+                {
+                    last.Volume += tradeVolume;
+                }
+            }
+
+            if ((DateTime.Now - _lastRealtimeChartDrawAt).TotalMilliseconds < DailyChartRealtimeDrawIntervalMs)
+            {
+                if (TryUpdateLastChartVisual(last))
+                    return;
+            }
+
+            if (TryUpdateLastChartVisual(last))
+                return;
+
+            _lastRealtimeChartDrawAt = DateTime.Now;
+            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(period)} 실시간");
+        }
+
+        private void ApplyRealtimeChartTick(string code, long price, long cumulativeVolume, long tradeVolume, string tradeTimeText)
+        {
+            if (IsMinuteChartPeriod(_currentChartPeriod))
+            {
+                ApplyRealtimeMinuteChartTick(code, price, tradeVolume, tradeTimeText, ResolveMinuteChartInterval(_currentChartPeriod));
+                return;
+            }
+
+            ApplyRealtimeCalendarChartTick(code, price, cumulativeVolume, tradeVolume);
+        }
+
+        private void ApplyRealtimeMinuteChartTick(string code, long price, long tradeVolume, string tradeTimeText, int minute)
+        {
+            if (!IsMinuteChartPeriod(_currentChartDataPeriod) ||
+                string.IsNullOrWhiteSpace(code) ||
+                !string.Equals(code, _currentChartCode, StringComparison.Ordinal) ||
+                price <= 0 ||
+                _currentChartCandles.Count == 0)
+            {
+                return;
+            }
+
+            string bucketTime = BuildMinuteBucketTime(tradeTimeText, minute);
+            ChartCandle last = _currentChartCandles[_currentChartCandles.Count - 1];
+            bool isNewCandle = false;
+            if (!IsSameChartDate(last.Date, bucketTime))
+            {
+                isNewCandle = true;
+                last = new ChartCandle
+                {
+                    Date = bucketTime,
+                    Open = price,
+                    High = price,
+                    Low = price,
+                    Close = price,
+                    Volume = Math.Max(0, tradeVolume)
+                };
+
+                _currentChartCandles.Add(last);
+                if (_currentChartCandles.Count > MinuteChartCandleCount)
+                {
+                    _currentChartCandles.RemoveAt(0);
+                    _chartViewStartIndex = Math.Max(0, _chartViewStartIndex - 1);
+                }
+            }
+            else
+            {
+                if (last.Open <= 0)
+                    last.Open = price;
+                last.Close = price;
+                last.High = Math.Max(last.High > 0 ? last.High : price, price);
+                last.Low = Math.Min(last.Low > 0 ? last.Low : price, price);
+                if (tradeVolume > 0)
+                    last.Volume += tradeVolume;
+            }
+
+            if (!isNewCandle && (DateTime.Now - _lastRealtimeChartDrawAt).TotalMilliseconds < MinuteChartRealtimeDrawIntervalMs)
+            {
+                if (TryUpdateLastChartVisual(last))
+                    return;
+            }
+
+            if (!isNewCandle && TryUpdateLastChartVisual(last))
+                return;
+
+            _lastRealtimeChartDrawAt = DateTime.Now;
+            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} 축재계산");
+        }
+
+        private void DrawFullChart(List<ChartCandle> candles, string reason)
+        {
+            DrawFullChart(reason);
+        }
+
+        private void DrawFullChart(string reason)
+        {
+            List<ChartCandle> candles = GetVisibleChartCandles();
+            var sw = Stopwatch.StartNew();
+            DrawPriceChart(candles);
+            DrawVolumeChart(candles);
+            sw.Stop();
+
+            AppendLog($"차트 전체그리기({FormatChartPeriodLabel(_currentChartDataPeriod)} / {reason}): {candles.Count}봉 / {sw.ElapsedMilliseconds:N0}ms");
+        }
+
+        private void ResetChartViewport()
+        {
+            _chartViewStartIndex = 0;
+            _chartViewCount = 0;
+        }
+
+        private List<ChartCandle> GetVisibleChartCandles()
+        {
+            if (_currentChartCandles.Count == 0)
+                return new List<ChartCandle>();
+
+            int start = _chartViewCount > 0
+                ? Math.Clamp(_chartViewStartIndex, 0, Math.Max(0, _currentChartCandles.Count - 1))
+                : 0;
+            int count = _chartViewCount > 0
+                ? Math.Clamp(_chartViewCount, 1, _currentChartCandles.Count - start)
+                : _currentChartCandles.Count;
+
+            return _currentChartCandles.Skip(start).Take(count).ToList();
+        }
+
+        private int GetVisibleChartStartIndex()
+        {
+            if (_currentChartCandles.Count == 0)
+                return 0;
+
+            return _chartViewCount > 0
+                ? Math.Clamp(_chartViewStartIndex, 0, Math.Max(0, _currentChartCandles.Count - 1))
+                : 0;
+        }
+
+        private void AttachChartDragHandlers(Canvas canvas)
+        {
+            canvas.MouseLeftButtonDown += ChartCanvas_MouseLeftButtonDown;
+            canvas.MouseMove += ChartCanvas_MouseMove;
+            canvas.MouseLeftButtonUp += ChartCanvas_MouseLeftButtonUp;
+        }
+
+        private void ChartCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ClickCount >= 2)
+            {
+                ResetChartViewport();
+                DrawFullChart("전체복귀");
+                e.Handled = true;
+                return;
+            }
+
+            if (_priceChartRenderState == null || sender is not Canvas canvas)
+                return;
+
+            _isChartDragSelecting = true;
+            _chartDragStartPoint = e.GetPosition(canvas);
+            _chartDragSelectionRect = new Rectangle
+            {
+                Fill = (Brush)FindResource("PaletteSkyBlue"),
+                Stroke = (Brush)FindResource("PaletteSkyBlue"),
+                StrokeThickness = 1,
+                Opacity = 0.22,
+                Height = Math.Max(0, canvas.Height)
+            };
+            Canvas.SetLeft(_chartDragSelectionRect, Math.Min(_chartDragStartPoint.X, _priceChartRenderState.ChartWidth));
+            Canvas.SetTop(_chartDragSelectionRect, 0);
+            Panel.SetZIndex(_chartDragSelectionRect, 1000);
+            canvas.Children.Add(_chartDragSelectionRect);
+            canvas.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void ChartCanvas_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isChartDragSelecting || _chartDragSelectionRect == null || _priceChartRenderState == null || sender is not Canvas canvas)
+                return;
+
+            Point p = e.GetPosition(canvas);
+            double startX = Math.Clamp(_chartDragStartPoint.X, 0, _priceChartRenderState.ChartWidth);
+            double currentX = Math.Clamp(p.X, 0, _priceChartRenderState.ChartWidth);
+            double left = Math.Min(startX, currentX);
+            double width = Math.Abs(currentX - startX);
+
+            Canvas.SetLeft(_chartDragSelectionRect, left);
+            _chartDragSelectionRect.Width = width;
+            _chartDragSelectionRect.Height = Math.Max(0, canvas.Height);
+        }
+
+        private void ChartCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isChartDragSelecting || _priceChartRenderState == null || sender is not Canvas canvas)
+                return;
+
+            Point endPoint = e.GetPosition(canvas);
+            double startX = Math.Clamp(_chartDragStartPoint.X, 0, _priceChartRenderState.ChartWidth);
+            double endX = Math.Clamp(endPoint.X, 0, _priceChartRenderState.ChartWidth);
+
+            if (_chartDragSelectionRect != null)
+                canvas.Children.Remove(_chartDragSelectionRect);
+
+            _chartDragSelectionRect = null;
+            _isChartDragSelecting = false;
+            canvas.ReleaseMouseCapture();
+
+            double width = Math.Abs(endX - startX);
+            if (width < 8 || _priceChartRenderState.CandleCount <= 1)
+                return;
+
+            int visibleStart = _priceChartRenderState.SourceStartIndex;
+            int visibleCount = _priceChartRenderState.CandleCount;
+            int first = Math.Clamp((int)Math.Floor(Math.Min(startX, endX) / Math.Max(1, _priceChartRenderState.Gap)), 0, visibleCount - 1);
+            int last = Math.Clamp((int)Math.Floor(Math.Max(startX, endX) / Math.Max(1, _priceChartRenderState.Gap)), 0, visibleCount - 1);
+            int selectedCount = last - first + 1;
+            if (selectedCount < MinChartDragCandleCount)
+                selectedCount = Math.Min(MinChartDragCandleCount, visibleCount);
+
+            _chartViewStartIndex = visibleStart + first;
+            _chartViewCount = Math.Clamp(selectedCount, 1, _currentChartCandles.Count - _chartViewStartIndex);
+            DrawFullChart($"구간선택 {_chartViewCount}봉");
+            e.Handled = true;
+        }
+
+        private bool TryUpdateLastChartVisual(ChartCandle candle)
+        {
+            if (_priceChartRenderState == null ||
+                _volumeChartRenderState == null ||
+                _lastCandleWick == null ||
+                _lastCandleBody == null ||
+                _lastVolumeBar == null ||
+                _currentChartCandles.Count == 0)
+            {
+                return false;
+            }
+
+            ChartRenderState priceState = _priceChartRenderState;
+            int renderedLastIndex = priceState.SourceStartIndex + priceState.CandleCount - 1;
+            if (renderedLastIndex != _currentChartCandles.Count - 1)
+                return true;
+
+            if (candle.High > priceState.Max || candle.Low < priceState.Min)
+                return false;
+
+            ChartRenderState volumeState = _volumeChartRenderState;
+
+            double priceRange = Math.Max(1, priceState.Max - priceState.Min);
+            double x = (priceState.CandleCount - 1) * priceState.Gap + (priceState.Gap - priceState.ItemWidth) / 2.0;
+            double centerX = x + priceState.ItemWidth / 2;
+            double yHigh = (priceState.Max - candle.High) / priceRange * (priceState.Height - 4) + 2;
+            double yLow = (priceState.Max - candle.Low) / priceRange * (priceState.Height - 4) + 2;
+            double yOpen = (priceState.Max - candle.Open) / priceRange * (priceState.Height - 4) + 2;
+            double yClose = (priceState.Max - candle.Close) / priceRange * (priceState.Height - 4) + 2;
+            Brush upDown = candle.Close >= candle.Open ? _upColorBrush : _downColorBrush;
+
+            _lastCandleWick.X1 = centerX;
+            _lastCandleWick.X2 = centerX;
+            _lastCandleWick.Y1 = yHigh;
+            _lastCandleWick.Y2 = yLow;
+            _lastCandleWick.Stroke = upDown;
+
+            _lastCandleBody.Width = priceState.ItemWidth;
+            _lastCandleBody.Height = Math.Max(1, Math.Abs(yClose - yOpen));
+            _lastCandleBody.Fill = upDown;
+            Canvas.SetLeft(_lastCandleBody, x);
+            Canvas.SetTop(_lastCandleBody, Math.Min(yOpen, yClose));
+
+            if (_currentPriceMarkerLine != null && _currentPriceMarkerLabel != null && _currentPriceMarkerText != null)
+            {
+                double markerY = Math.Max(1, Math.Min(priceState.Height - 1, yClose));
+                Brush markerBrush = ResolveHogaBrushByKrxPrevClose((long)Math.Round(candle.Close));
+                _currentPriceMarkerLine.Y1 = markerY;
+                _currentPriceMarkerLine.Y2 = markerY;
+                _currentPriceMarkerLine.Stroke = markerBrush;
+                _currentPriceMarkerLabel.BorderBrush = markerBrush;
+                Canvas.SetTop(_currentPriceMarkerLabel, Math.Max(0, Math.Min(priceState.Height - 18, markerY - 9)));
+                _currentPriceMarkerText.Text = candle.Close.ToString("N0");
+                _currentPriceMarkerText.Foreground = markerBrush;
+            }
+
+            double volumeScale = Math.Max(1, Math.Max(volumeState.MaxVolume, candle.Volume));
+            double volumeBarH = (double)candle.Volume / volumeScale * (volumeState.Height - 2);
+            double volumeX = (volumeState.CandleCount - 1) * volumeState.Gap + (volumeState.Gap - volumeState.ItemWidth) / 2.0;
+            _lastVolumeBar.Width = volumeState.ItemWidth;
+            _lastVolumeBar.Height = Math.Max(1, volumeBarH);
+            _lastVolumeBar.Fill = upDown;
+            Canvas.SetLeft(_lastVolumeBar, volumeX);
+            Canvas.SetTop(_lastVolumeBar, volumeState.Height - _lastVolumeBar.Height);
+
+            return true;
+        }
+
+        private static string BuildMinuteBucketTime(string tradeTimeText, int minute)
+        {
+            DateTime now = DateTime.Now;
+            string digits = new string((tradeTimeText ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (digits.Length >= 14)
+            {
+                string full = digits.Substring(0, 14);
+                if (DateTime.TryParseExact(full, "yyyyMMddHHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime parsed))
+                    now = parsed;
+            }
+            else if (digits.Length >= 6)
+            {
+                string hms = digits.Substring(0, 6);
+                if (int.TryParse(hms.Substring(0, 2), out int hour) &&
+                    int.TryParse(hms.Substring(2, 2), out int minuteValue) &&
+                    int.TryParse(hms.Substring(4, 2), out int second) &&
+                    hour >= 0 && hour < 24 &&
+                    minuteValue >= 0 && minuteValue < 60 &&
+                    second >= 0 && second < 60)
+                {
+                    now = now.Date.Add(new TimeSpan(hour, minuteValue, second));
+                }
+            }
+
+            int bucketMinute = now.Minute - (now.Minute % Math.Max(1, minute));
+            DateTime bucket = new DateTime(now.Year, now.Month, now.Day, now.Hour, bucketMinute, 0);
+            return bucket.ToString("yyyyMMddHHmmss");
+        }
+
+        private static bool IsMinuteChartPeriod(ChartPeriod period)
+        {
+            return period == ChartPeriod.Minute1 ||
+                period == ChartPeriod.Minute3 ||
+                period == ChartPeriod.Minute5 ||
+                period == ChartPeriod.Minute10 ||
+                period == ChartPeriod.Minute15 ||
+                period == ChartPeriod.Minute30;
+        }
+
+        private static bool IsCalendarChartPeriod(ChartPeriod period)
+        {
+            return period == ChartPeriod.Daily ||
+                period == ChartPeriod.Weekly ||
+                period == ChartPeriod.Monthly;
+        }
+
+        private static int ResolveMinuteChartInterval(ChartPeriod period)
+        {
+            return period switch
+            {
+                ChartPeriod.Minute1 => 1,
+                ChartPeriod.Minute3 => 3,
+                ChartPeriod.Minute5 => 5,
+                ChartPeriod.Minute10 => 10,
+                ChartPeriod.Minute15 => 15,
+                ChartPeriod.Minute30 => 30,
+                _ => 0
+            };
+        }
+
+        private static int ResolveChartCandleCount(ChartPeriod period)
+        {
+            return period switch
+            {
+                ChartPeriod.Daily => 120,
+                ChartPeriod.Weekly => 100,
+                ChartPeriod.Monthly => 60,
+                _ when IsMinuteChartPeriod(period) => MinuteChartCandleCount,
+                _ => 120
+            };
+        }
+
+        private static string FormatChartPeriodLabel(ChartPeriod period)
+        {
+            return period switch
+            {
+                ChartPeriod.Minute1 => "1분봉",
+                ChartPeriod.Minute3 => "3분봉",
+                ChartPeriod.Minute5 => "5분봉",
+                ChartPeriod.Minute10 => "10분봉",
+                ChartPeriod.Minute15 => "15분봉",
+                ChartPeriod.Minute30 => "30분봉",
+                ChartPeriod.Daily => "일봉",
+                ChartPeriod.Weekly => "주봉",
+                ChartPeriod.Monthly => "월봉",
+                _ => period.ToString()
+            };
+        }
+
+        private static string BuildCalendarChartBucketDate(ChartPeriod period, DateTime now)
+        {
+            return period switch
+            {
+                ChartPeriod.Weekly => GetWeekStart(now).ToString("yyyyMMdd"),
+                ChartPeriod.Monthly => new DateTime(now.Year, now.Month, 1).ToString("yyyyMMdd"),
+                _ => now.ToString("yyyyMMdd")
+            };
+        }
+
+        private static bool IsSameCalendarChartBucket(string chartDate, ChartPeriod period, DateTime now)
+        {
+            if (!TryParseChartDate(chartDate, out DateTime parsed))
+                return IsSameChartDate(chartDate, BuildCalendarChartBucketDate(period, now));
+
+            return period switch
+            {
+                ChartPeriod.Weekly => GetWeekStart(parsed) == GetWeekStart(now),
+                ChartPeriod.Monthly => parsed.Year == now.Year && parsed.Month == now.Month,
+                _ => parsed.Date == now.Date
+            };
+        }
+
+        private static DateTime GetWeekStart(DateTime date)
+        {
+            int diff = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+            return date.Date.AddDays(-diff);
+        }
+
+        private static bool TryParseChartDate(string chartDate, out DateTime date)
+        {
+            string digits = new string((chartDate ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (digits.Length >= 8)
+                return DateTime.TryParseExact(digits.Substring(0, 8), "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out date);
+
+            date = default;
+            return false;
+        }
+
+        private static bool IsSameChartDate(string chartDate, string yyyymmdd)
+        {
+            string normalized = new string((chartDate ?? string.Empty).Where(char.IsDigit).ToArray());
+            string target = new string((yyyymmdd ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (target.Length >= 14 && normalized.Length >= 12)
+                return string.Equals(normalized.Substring(0, Math.Min(12, normalized.Length)), target.Substring(0, 12), StringComparison.Ordinal);
+            if (normalized.Length >= 8)
+                normalized = normalized.Substring(0, 8);
+            if (target.Length >= 8)
+                target = target.Substring(0, 8);
+            return string.Equals(normalized, target, StringComparison.Ordinal);
         }
 
         private void DrawRightPriceAxis(Canvas canvas, double chartW, double axisWidth, double h, double min, double max, double tick)
@@ -2415,7 +3162,7 @@ namespace TradingDashboard
             }
         }
 
-        private void DrawCurrentPriceMarker(Canvas canvas, double chartW, double axisWidth, double h, double min, double max, double currentPrice)
+        private void DrawCurrentPriceMarker(Canvas canvas, double chartW, double rightPadding, double axisWidth, double h, double min, double max, double currentPrice)
         {
             if (currentPrice <= 0)
                 return;
@@ -2425,35 +3172,40 @@ namespace TradingDashboard
             y = Math.Max(1, Math.Min(h - 1, y));
             Brush markerBrush = ResolveHogaBrushByKrxPrevClose((long)Math.Round(currentPrice));
 
-            canvas.Children.Add(new Line
+            var markerLine = new Line
             {
                 X1 = 0,
-                X2 = chartW + 10,
+                X2 = chartW + rightPadding + 10,
                 Y1 = y,
                 Y2 = y,
                 Stroke = markerBrush,
                 StrokeThickness = 1,
                 Opacity = 0.75
-            });
+            };
+            canvas.Children.Add(markerLine);
+            _currentPriceMarkerLine = markerLine;
 
+            var markerText = new TextBlock
+            {
+                Text = currentPrice.ToString("N0"),
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                Foreground = markerBrush
+            };
             var label = new Border
             {
                 Background = (Brush)FindResource("BgPanelBrush"),
                 BorderBrush = markerBrush,
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(4, 1, 4, 1),
-                Child = new TextBlock
-                {
-                    Text = currentPrice.ToString("N0"),
-                    FontSize = 11,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = markerBrush
-                }
+                Child = markerText
             };
 
-            Canvas.SetLeft(label, chartW + 12);
+            Canvas.SetLeft(label, chartW + rightPadding + 12);
             Canvas.SetTop(label, Math.Max(0, Math.Min(h - 18, y - 9)));
             canvas.Children.Add(label);
+            _currentPriceMarkerLabel = label;
+            _currentPriceMarkerText = markerText;
         }
 
         private void DrawMovingAverage(Canvas canvas, List<ChartCandle> candles, int period, Brush color, double w, double h, double min, double max)
@@ -2463,10 +3215,17 @@ namespace TradingDashboard
             double range = Math.Max(1, max - min);
             double gap = w / candles.Count;
             var points = new PointCollection();
+            double sum = 0;
 
-            for (int i = period - 1; i < candles.Count; i++)
+            for (int i = 0; i < candles.Count; i++)
             {
-                double avg = candles.Skip(i - period + 1).Take(period).Average(c => c.Close);
+                sum += candles[i].Close;
+                if (i >= period)
+                    sum -= candles[i - period].Close;
+                if (i < period - 1)
+                    continue;
+
+                double avg = sum / period;
                 double x = i * gap + gap / 2;
                 double y = (max - avg) / range * (h - 4) + 2;
                 points.Add(new Point(x, y));
@@ -2483,9 +3242,19 @@ namespace TradingDashboard
 
         private void DrawVolumeChart(List<ChartCandle> candles)
         {
+            if (candles.Count == 0)
+            {
+                VolumeChartHost.Children.Clear();
+                _volumeChartRenderState = null;
+                _lastVolumeBar = null;
+                return;
+            }
+
             VolumeChartHost.Children.Clear();
             var canvas = new Canvas();
             VolumeChartHost.Children.Add(canvas);
+            _volumeChartRenderState = null;
+            _lastVolumeBar = null;
 
             VolumeChartHost.UpdateLayout();
             double w = Math.Max(100, VolumeChartHost.ActualWidth - 2);
@@ -2493,7 +3262,7 @@ namespace TradingDashboard
             canvas.Width = w;
             canvas.Height = h;
             const double axisWidth = 68;
-            double chartW = Math.Max(40, w - axisWidth);
+            double chartW = Math.Max(40, w - axisWidth - ChartRightPadding);
 
             long maxVol = Math.Max(1, candles.Max(c => c.Volume));
             double barW = Math.Max(1, chartW / candles.Count * 0.62);
@@ -2514,9 +3283,13 @@ namespace TradingDashboard
                 Canvas.SetLeft(bar, x);
                 Canvas.SetTop(bar, h - bar.Height);
                 canvas.Children.Add(bar);
+
+                if (i == candles.Count - 1)
+                    _lastVolumeBar = bar;
             }
 
-            DrawRightVolumeAxis(canvas, chartW, axisWidth, h, maxVol);
+            DrawRightVolumeAxis(canvas, chartW + ChartRightPadding, axisWidth, h, maxVol);
+            _volumeChartRenderState = new ChartRenderState(candles.Count, GetVisibleChartStartIndex(), chartW, h, 0, 0, gap, barW, maxVol, 0);
         }
 
         private void DrawRightVolumeAxis(Canvas canvas, double chartW, double axisWidth, double h, long maxVol)
@@ -2586,6 +3359,12 @@ namespace TradingDashboard
 
         private enum ChartPeriod
         {
+            Minute1,
+            Minute3,
+            Minute5,
+            Minute10,
+            Minute15,
+            Minute30,
             Daily,
             Weekly,
             Monthly
@@ -2593,6 +3372,7 @@ namespace TradingDashboard
 
         private sealed class ChartCandle
         {
+            public string Date { get; set; } = string.Empty;
             public double Open { get; set; }
             public double High { get; set; }
             public double Low { get; set; }
@@ -2600,8 +3380,30 @@ namespace TradingDashboard
             public long Volume { get; set; }
         }
 
+        private sealed record ChartRenderState(
+            int CandleCount,
+            int SourceStartIndex,
+            double ChartWidth,
+            double Height,
+            double Min,
+            double Max,
+            double Gap,
+            double ItemWidth,
+            long MaxVolume,
+            double AxisWidth);
+
+        private readonly record struct ChartCacheKey(string Code, bool UseNxtMarket, ChartPeriod Period);
+
+        private sealed class ChartCacheEntry
+        {
+            public List<ChartCandle> Candles { get; set; } = new List<ChartCandle>();
+            public DateTime CachedAt { get; set; }
+            public long LastAccess { get; set; }
+        }
+
         private static ChartCandle ToChartCandle(DailyCandle c) => new ChartCandle
         {
+            Date = c.Date,
             Open = c.Open,
             High = c.High,
             Low = c.Low,
@@ -2612,4 +3414,5 @@ namespace TradingDashboard
 
     }
 }
+
 

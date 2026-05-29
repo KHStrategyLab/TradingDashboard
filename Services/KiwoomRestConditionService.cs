@@ -161,6 +161,57 @@ namespace TradingDashboard.Services
             return await GetChartCandlesByApiIdAsync(code, useNxtMarket, "ka10082", takeCount, cancellationToken).ConfigureAwait(false);
         }
 
+        public async Task<List<DailyCandle>> GetMinuteCandlesAsync(string code, int minute, bool useNxtMarket = false, int takeCount = 240, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            string baseCode = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(baseCode))
+                return new List<DailyCandle>();
+
+            string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/chart");
+            req.Headers.TryAddWithoutValidation("authorization", $"Bearer {token}");
+            req.Headers.TryAddWithoutValidation("api-id", "ka10080");
+            req.Headers.TryAddWithoutValidation("cont-yn", "N");
+            req.Headers.TryAddWithoutValidation("next-key", "");
+            req.Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                stk_cd = requestCode,
+                tic_scope = minute.ToString(),
+                upd_stkpc_tp = "1",
+                base_dt = System.DateTime.Now.ToString("yyyyMMdd")
+            }), Encoding.UTF8, "application/json");
+
+            using HttpResponseMessage response = await SendKiwoomRestAsync(req, "ka10080", cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return new List<DailyCandle>();
+
+            string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            using JsonDocument doc = JsonDocument.Parse(json);
+            JsonElement array = FindArrayByKeySafe(doc.RootElement, "stk_min_pole_chart_qry");
+            if (array.ValueKind != JsonValueKind.Array)
+                array = FindFirstArray(doc.RootElement);
+            if (array.ValueKind != JsonValueKind.Array)
+                return new List<DailyCandle>();
+
+            var candles = new List<DailyCandle>();
+            foreach (JsonElement item in array.EnumerateArray())
+            {
+                DailyCandle? candle = ParseDailyCandle(item);
+                if (candle != null && candle.Close > 0 && !string.IsNullOrWhiteSpace(candle.Date))
+                    candles.Add(candle);
+            }
+
+            return candles
+                .GroupBy(c => c.Date, System.StringComparer.Ordinal)
+                .Select(g => g.First())
+                .OrderBy(c => c.Date)
+                .TakeLast(takeCount)
+                .ToList();
+        }
+
         public async Task<List<DailyCandle>> GetMonthlyCandlesAsync(string code, bool useNxtMarket = false, int takeCount = 80, CancellationToken cancellationToken = default)
         {
             return await GetChartCandlesByApiIdAsync(code, useNxtMarket, "ka10083", takeCount, cancellationToken).ConfigureAwait(false);
@@ -1601,31 +1652,34 @@ namespace TradingDashboard.Services
 
         private static DailyCandle? ParseDailyCandle(JsonElement item)
         {
-            string date = ReadAnyDeep(item, "dt", "date", "d", "stk_dt", "?쇱옄");
+            string date = ReadAnyDeep(item, "cntr_tm", "time", "tm", "dt", "date", "d", "stk_dt", "?쇱옄");
             if (string.IsNullOrWhiteSpace(date) && item.ValueKind == JsonValueKind.Array && item.GetArrayLength() > 0)
                 date = item[0].ToString();
 
             date = new string((date ?? string.Empty).Where(char.IsDigit).ToArray());
-            if (date.Length >= 8) date = date.Substring(0, 8);
+            if (date.Length >= 14)
+                date = date.Substring(0, 14);
+            else if (date.Length >= 8)
+                date = date.Substring(0, 8);
 
-            long open = ParseLongSafe(ReadAnyDeep(item, "open_pric", "open", "stck_oprc"));
-            long high = ParseLongSafe(ReadAnyDeep(item, "high_pric", "high", "stck_hgpr"));
-            long low = ParseLongSafe(ReadAnyDeep(item, "low_pric", "low", "stck_lwpr"));
-            long close = ParseLongSafe(ReadAnyDeep(item, "clos_pric", "close", "stck_clpr", "cur_prc"));
-            long volume = ParseLongSafe(ReadAnyDeep(item, "acml_vol", "acc_trde_qty", "trde_qty", "volume"));
+            long open = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "open_pric", "open", "stck_oprc")));
+            long high = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "high_pric", "high", "stck_hgpr")));
+            long low = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "low_pric", "low", "stck_lwpr")));
+            long close = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "clos_pric", "close", "stck_clpr", "cur_prc")));
+            long volume = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "trde_qty", "cntg_vol", "volume", "acml_vol", "acc_trde_qty")));
 
             if (close == 0 && item.ValueKind == JsonValueKind.Array)
             {
                 if (item.GetArrayLength() > 4)
                 {
-                    open = open == 0 ? ParseLongSafe(item[1].ToString()) : open;
-                    high = high == 0 ? ParseLongSafe(item[2].ToString()) : high;
-                    low = low == 0 ? ParseLongSafe(item[3].ToString()) : low;
-                    close = close == 0 ? ParseLongSafe(item[4].ToString()) : close;
+                    open = open == 0 ? Math.Abs(ParseLongSafe(item[1].ToString())) : open;
+                    high = high == 0 ? Math.Abs(ParseLongSafe(item[2].ToString())) : high;
+                    low = low == 0 ? Math.Abs(ParseLongSafe(item[3].ToString())) : low;
+                    close = close == 0 ? Math.Abs(ParseLongSafe(item[4].ToString())) : close;
                 }
 
                 if (item.GetArrayLength() > 5)
-                    volume = volume == 0 ? ParseLongSafe(item[5].ToString()) : volume;
+                    volume = volume == 0 ? Math.Abs(ParseLongSafe(item[5].ToString())) : volume;
             }
 
             if (close <= 0 || string.IsNullOrWhiteSpace(date))

@@ -16,6 +16,7 @@ namespace TradingDashboard.Models
         public bool SupportsNxt { get; set; }
         public long BasePrice { get; set; }
         public string BasePriceDate { get; set; } = string.Empty;
+        public string BasePriceSource { get; set; } = string.Empty;
         public string SnapshotDate { get; set; } = string.Empty;
         public string LastSeenConditionDate { get; set; } = string.Empty;
         public DateTime LastUsedAt { get; set; } = DateTime.Now;

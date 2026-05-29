@@ -44,6 +44,8 @@
         <SolidColorBrush x:Key="Ma10Brush" Color="#2563EB"/>
         <SolidColorBrush x:Key="Ma20Brush" Color="#FACC15"/>
         <SolidColorBrush x:Key="Ma60Brush" Color="#22C55E"/>
+        <SolidColorBrush x:Key="Ma240Brush" Color="#F97316"/>
+        <SolidColorBrush x:Key="Ma480Brush" Color="#8B5CF6"/>
 
         <!-- ?ㅽ겕 ?뚮쭏 ?붾젅??-->
         <SolidColorBrush x:Key="BgMainBrush" Color="#121212"/>
@@ -171,8 +173,8 @@
         <!-- 중앙 메인 -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.5*"/>
-                <ColumnDefinition Width="6.65*"/>
+                <ColumnDefinition Width="1.725*"/>
+                <ColumnDefinition Width="6.425*"/>
                 <ColumnDefinition Width="2*"/>
             </Grid.ColumnDefinitions>
 
@@ -451,7 +453,7 @@
 
                             <TextBlock Grid.Column="0"
                                        x:Name="SelectedStockTitle"
-                                       Text="일성아이에스"
+                                       Text="TradingDashboard"
                                        Style="{StaticResource PanelHeaderTextStyle}"/>
 
                             <TextBlock Grid.Column="1"
@@ -469,10 +471,29 @@
                                 <Button Content="월봉" Style="{StaticResource ToolbarButtonStyle}" Click="MonthChartButton_Click"/>
                                 <Button Content="주봉" Style="{StaticResource ToolbarButtonStyle}" Click="WeekChartButton_Click"/>
                                 <Button Content="일봉" Style="{StaticResource ToolbarButtonStyle}" Click="DayChartButton_Click"/>
-                                <Button Content="3분" Style="{StaticResource ToolbarButtonStyle}" IsEnabled="False"/>
-                                <Button Content="5분" Style="{StaticResource ToolbarButtonStyle}" IsEnabled="False"/>
-                                <Button Content="15분" Style="{StaticResource ToolbarButtonStyle}" IsEnabled="False"/>
-                                <Button Content="30분" Style="{StaticResource ToolbarButtonStyle}" IsEnabled="False"/>
+                                <ComboBox x:Name="MinuteChartComboBox"
+                                          Width="72"
+                                          Height="24"
+                                          Margin="4,0,0,0"
+                                          SelectedValuePath="Tag"
+                                          SelectionChanged="MinuteChartComboBox_SelectionChanged"
+                                          Background="#333333"
+                                          Foreground="{StaticResource WhiteValueBrush}">
+                                    <ComboBox.Resources>
+                                        <Style TargetType="ComboBoxItem">
+                                            <Setter Property="Background" Value="#333333"/>
+                                            <Setter Property="Foreground" Value="{StaticResource WhiteValueBrush}"/>
+                                            <Setter Property="Padding" Value="8,3"/>
+                                        </Style>
+                                    </ComboBox.Resources>
+                                    <ComboBoxItem Content="분봉" Tag=""/>
+                                    <ComboBoxItem Content="1분" Tag="Minute1"/>
+                                    <ComboBoxItem Content="3분" Tag="Minute3"/>
+                                    <ComboBoxItem Content="5분" Tag="Minute5"/>
+                                    <ComboBoxItem Content="10분" Tag="Minute10"/>
+                                    <ComboBoxItem Content="15분" Tag="Minute15"/>
+                                    <ComboBoxItem Content="30분" Tag="Minute30"/>
+                                </ComboBox>
                             </StackPanel>
                         </Grid>
                     </Border>
