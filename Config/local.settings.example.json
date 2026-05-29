@@ -7,14 +7,12 @@
     "MarketQuery": "증권 | 증시 | 코스피 | 코스닥 | 주식 | 금융",
     "Sort": "date"
   },
-
   "Dart": {
     "Enabled": true,
     "ApiKey": "DART_OPENAPI_KEY",
     "DisplayCount": 7,
     "LookbackDays": 180
   },
-
   "Kiwoom": {
     "UseRestApi": false,
     "UseOpenApiPlus": true,
@@ -26,7 +24,6 @@
     "MockMode": false,
     "RealMode": true
   },
-
   "Telegram": {
     "BotToken": "TELEGRAM_BOT_TOKEN",
     "DefaultChatId": "TELEGRAM_DEFAULT_CHAT_ID",
@@ -36,12 +33,19 @@
     ],
     "Enabled": true
   },
-
   "Dashboard": {
     "NewsCount": 10,
     "DisclosureCount": 7,
     "OrderBookDepth": 10,
     "RecentTradeCount": 10,
     "RefreshIntervalMs": 500
+  },
+  "LateNewsAlert": {
+    "Enabled": false,
+    "StartTime": "08:00",
+    "EndTime": "11:00",
+    "WarmupMinutes": 5,
+    "NewsCount": 3,
+    "TitleMaxLength": 25
   }
 }

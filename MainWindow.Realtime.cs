@@ -363,13 +363,18 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(code))
                     return;
 
-                if (await ApplyConditionRealtimeAddFromCacheAsync(code, name))
+                (bool handledFromCache, WatchStockItem? addedFromCache) = await ApplyConditionRealtimeAddFromCacheAsync(code, name);
+                if (handledFromCache)
                 {
+                    if (addedFromCache != null)
+                        await TrySendLateNewsAlertAsync(addedFromCache, _realtimeCts?.Token ?? CancellationToken.None);
+
                     await RegisterRealtime0BForCurrentWatchlistAsync();
                     return;
                 }
 
                 WatchStockItem stock = await _kiwoomConditionService.GetConditionStockAsync(code, name, _realtimeCts?.Token ?? CancellationToken.None);
+                bool added = false;
 
                 await Dispatcher.InvokeAsync(() =>
                 {
@@ -392,7 +397,11 @@ namespace TradingDashboard
                     SaveDailyWatchlistSnapshot(_watchStocks);
                     ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
                     AppendLog($"condition enter: {stock.Name} ({stock.Code})");
+                    added = true;
                 });
+
+                if (added)
+                    await TrySendLateNewsAlertAsync(stock, _realtimeCts?.Token ?? CancellationToken.None);
 
                 await RegisterRealtime0BForCurrentWatchlistAsync();
             }
@@ -406,16 +415,16 @@ namespace TradingDashboard
             }
         }
 
-        private async Task<bool> ApplyConditionRealtimeAddFromCacheAsync(string code, string name)
+        private async Task<(bool Handled, WatchStockItem? AddedStock)> ApplyConditionRealtimeAddFromCacheAsync(string code, string name)
         {
             return await Dispatcher.InvokeAsync(() =>
             {
                 if (_watchStockByCode.ContainsKey(code))
-                    return true;
+                    return (true, (WatchStockItem?)null);
 
                 WatchlistStockCacheEntry? entry = GetWatchlistMemoryCache(code);
                 if (entry == null)
-                    return false;
+                    return (false, (WatchStockItem?)null);
 
                 var stock = new WatchStockItem
                 {
@@ -445,7 +454,7 @@ namespace TradingDashboard
                 SaveDailyWatchlistSnapshot(_watchStocks);
                 ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
                 AppendLog($"condition re-enter(cache): {stock.Name} ({stock.Code})");
-                return true;
+                return (true, stock);
             });
         }
 

@@ -9,6 +9,7 @@ namespace TradingDashboard.Models
         public KiwoomSettings Kiwoom { get; set; } = new KiwoomSettings();
         public TelegramSettings Telegram { get; set; } = new TelegramSettings();
         public DashboardSettings Dashboard { get; set; } = new DashboardSettings();
+        public LateNewsAlertSettings LateNewsAlert { get; set; } = new LateNewsAlertSettings();
     }
 
     public class NaverNewsSettings
@@ -57,5 +58,15 @@ namespace TradingDashboard.Models
         public int OrderBookDepth { get; set; } = 10;
         public int RecentTradeCount { get; set; } = 10;
         public int RefreshIntervalMs { get; set; } = 500;
+    }
+
+    public class LateNewsAlertSettings
+    {
+        public bool Enabled { get; set; } = false;
+        public string StartTime { get; set; } = "08:00";
+        public string EndTime { get; set; } = "11:00";
+        public int WarmupMinutes { get; set; } = 5;
+        public int NewsCount { get; set; } = 3;
+        public int TitleMaxLength { get; set; } = 25;
     }
 }

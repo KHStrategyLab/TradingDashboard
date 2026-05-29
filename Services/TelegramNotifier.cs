@@ -21,6 +21,14 @@ namespace TradingDashboard.Services
             await SendAsync(_settings.DefaultChatId, message, cancellationToken).ConfigureAwait(false);
         }
 
+        public async Task SendHtmlToDefaultAsync(string message, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(_settings.DefaultChatId))
+                return;
+
+            await SendAsync(_settings.DefaultChatId, message, parseMode: "HTML", cancellationToken).ConfigureAwait(false);
+        }
+
         public async Task SendToAllAsync(string message, CancellationToken cancellationToken = default)
         {
             if (!_settings.Enabled)
@@ -36,6 +44,11 @@ namespace TradingDashboard.Services
 
         public async Task SendAsync(string chatId, string message, CancellationToken cancellationToken = default)
         {
+            await SendAsync(chatId, message, parseMode: string.Empty, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task SendAsync(string chatId, string message, string parseMode, CancellationToken cancellationToken = default)
+        {
             if (!_settings.Enabled)
                 return;
 
@@ -44,12 +57,17 @@ namespace TradingDashboard.Services
 
             string url = $"https://api.telegram.org/bot{_settings.BotToken}/sendMessage";
 
-            using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+            var body = new Dictionary<string, string>
             {
                 ["chat_id"] = chatId,
                 ["text"] = message,
                 ["disable_web_page_preview"] = "true"
-            });
+            };
+
+            if (!string.IsNullOrWhiteSpace(parseMode))
+                body["parse_mode"] = parseMode;
+
+            using var content = new FormUrlEncodedContent(body);
             using HttpResponseMessage response = await HttpClient.PostAsync(url, content, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
         }

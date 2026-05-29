@@ -30,6 +30,7 @@ namespace TradingDashboard
         private readonly NaverNewsService _newsService;
         private readonly NewsThumbnailService _newsThumbnailService = new();
         private readonly DartDisclosureService _disclosureService;
+        private readonly TelegramNotifier _telegramNotifier;
         private readonly KiwoomRestConditionService _kiwoomConditionService;
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly Queue<string> _logLines = new();
@@ -51,6 +52,9 @@ namespace TradingDashboard
         private readonly Dictionary<string, long> _lastTickPriceByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _lateNewsSentStockCodes = new(StringComparer.Ordinal);
+        private readonly object _lateNewsLock = new();
+        private readonly DateTime _lateNewsAppStartedAt = DateTime.Now;
         private const int MinuteChartCandleCount = 700;
         private const int DailyChartRealtimeDrawIntervalMs = 350;
         private const int MinuteChartRealtimeDrawIntervalMs = 1500;
@@ -97,6 +101,7 @@ namespace TradingDashboard
         private DateTime _marketStatusUnknownUntil = DateTime.MinValue;
         private bool _isNxtMarketMode;
         private bool _isMarketNewsLoading;
+        private DateTime _lateNewsSentDate = DateTime.Today;
         private ClientWebSocket? _realtimeWs;
         private CancellationTokenSource? _realtimeCts;
         private CancellationTokenSource? _selectedRequestCts;
@@ -131,6 +136,7 @@ namespace TradingDashboard
             _config = LocalSettingsLoader.Load();
             _newsService = new NaverNewsService(_config.NaverNews);
             _disclosureService = new DartDisclosureService(_config.Dart);
+            _telegramNotifier = new TelegramNotifier(_config.Telegram);
             _kiwoomConditionService = new KiwoomRestConditionService(_config.Kiwoom);
             _kiwoomConditionService.RestLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             LoadWatchlistCache();
