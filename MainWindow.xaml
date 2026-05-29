@@ -655,31 +655,31 @@
                                     Visibility="Collapsed"
                                     Background="#A0101010">
                                 <Grid>
-                                    <Border Width="230"
-                                            Height="132"
+                                    <Border Width="460"
+                                            Height="264"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
                                             Background="#202020"
                                             BorderBrush="{StaticResource LineBrush}"
                                             BorderThickness="1"
                                             CornerRadius="6"
-                                            Padding="18">
+                                            Padding="32">
                                         <StackPanel HorizontalAlignment="Center"
                                                     VerticalAlignment="Center">
-                                            <Grid Width="48"
-                                                  Height="48"
+                                            <Grid Width="96"
+                                                  Height="96"
                                                   HorizontalAlignment="Center">
                                                 <Ellipse Stroke="#343434"
-                                                         StrokeThickness="4"/>
+                                                         StrokeThickness="8"/>
                                                 <Path x:Name="StartupSpinnerArc"
-                                                      Data="M 24,4 A20,20 0 0 1 44,24"
+                                                      Data="M 48,8 A40,40 0 0 1 88,48"
                                                       Stroke="{StaticResource PaletteSkyBlue}"
-                                                      StrokeThickness="4"
+                                                      StrokeThickness="8"
                                                       StrokeStartLineCap="Round"
                                                       StrokeEndLineCap="Round">
                                                     <Path.RenderTransform>
-                                                        <RotateTransform CenterX="24"
-                                                                         CenterY="24"/>
+                                                        <RotateTransform CenterX="48"
+                                                                         CenterY="48"/>
                                                     </Path.RenderTransform>
                                                     <Path.Triggers>
                                                         <EventTrigger RoutedEvent="Loaded">
@@ -700,17 +700,17 @@
                                             <TextBlock x:Name="StartupLoadingText"
                                                        Text="준비 중..."
                                                        Foreground="{StaticResource TextMainBrush}"
-                                                       FontSize="13"
+                                                       FontSize="18"
                                                        FontWeight="Bold"
                                                        TextAlignment="Center"
                                                        TextWrapping="Wrap"
-                                                       Margin="0,14,0,0"/>
+                                                       Margin="0,24,0,0"/>
 
                                             <TextBlock Text="잠시만 기다려줘"
                                                        Foreground="{StaticResource TextSubBrush}"
-                                                       FontSize="11"
+                                                       FontSize="14"
                                                        HorizontalAlignment="Center"
-                                                       Margin="0,5,0,0"/>
+                                                       Margin="0,8,0,0"/>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
@@ -784,7 +784,7 @@
                                   Background="{StaticResource BgPanelBrush}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="102"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -836,7 +836,7 @@
 
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="102"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -948,7 +948,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="102"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
@@ -959,11 +959,11 @@
                                 </ItemsControl>
                                 <ItemsControl x:Name="SellPriceListBox" Grid.Row="0" Grid.Column="2" Background="{StaticResource BgMainBrush}" ClipToBounds="True">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><Grid VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Grid.Column="1" Text="{Binding PriceText}" Foreground="{Binding PriceBrush}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Grid.Column="2" Text="{Binding RateText}" Foreground="{Binding RateBrush}" FontSize="9" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="3,0,0,0"/></Grid></Border></DataTemplate></ItemsControl.ItemTemplate>
+                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><Border Background="{Binding CurrentPriceBackgroundBrush}" BorderBrush="{Binding CurrentPriceBorderBrush}" BorderThickness="{Binding CurrentPriceBorderThickness}" Margin="2,1" Padding="0"><Grid VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Grid.Column="1" Text="{Binding PriceText}" Foreground="{Binding PriceBrush}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Grid.Column="2" Text="{Binding RateText}" Foreground="{Binding RateBrush}" FontSize="9" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="3,0,0,0"/></Grid></Border></Border></DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <ItemsControl x:Name="BuyPriceListBox" Grid.Row="1" Grid.Column="2" Background="{StaticResource BgMainBrush}" ClipToBounds="True">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><Grid VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Grid.Column="1" Text="{Binding PriceText}" Foreground="{Binding PriceBrush}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Grid.Column="2" Text="{Binding RateText}" Foreground="{Binding RateBrush}" FontSize="9" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="3,0,0,0"/></Grid></Border></DataTemplate></ItemsControl.ItemTemplate>
+                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><Border Background="{Binding CurrentPriceBackgroundBrush}" BorderBrush="{Binding CurrentPriceBorderBrush}" BorderThickness="{Binding CurrentPriceBorderThickness}" Margin="2,1" Padding="0"><Grid VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Grid.Column="1" Text="{Binding PriceText}" Foreground="{Binding PriceBrush}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Grid.Column="2" Text="{Binding RateText}" Foreground="{Binding RateBrush}" FontSize="9" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="3,0,0,0"/></Grid></Border></Border></DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <ItemsControl x:Name="BuyQtyListBox" Grid.Row="1" Grid.Column="3" Background="{StaticResource BgMainBrush}" ClipToBounds="True">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -976,7 +976,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="102"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>

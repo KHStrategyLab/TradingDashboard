@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Media;
 using TradingDashboard.Models;
 
@@ -891,8 +892,9 @@ namespace TradingDashboard
 
         private void HighlightCenterPriceInHoga()
         {
-            UpdateHogaRateMarkers(_sellHogaLevels);
-            UpdateHogaRateMarkers(_buyHogaLevels);
+            long currentPrice = ResolveSelectedCurrentPriceForHogaMarker();
+            UpdateHogaRateMarkers(_sellHogaLevels, currentPrice);
+            UpdateHogaRateMarkers(_buyHogaLevels, currentPrice);
         }
 
         private static int ResolveRealtimeTradeSide(JsonElement values, string quantityText)
@@ -916,10 +918,27 @@ namespace TradingDashboard
             return 0;
         }
 
-        private void UpdateHogaRateMarkers(IEnumerable<HogaLevel> levels)
+        private long ResolveSelectedCurrentPriceForHogaMarker()
+        {
+            if (!string.IsNullOrWhiteSpace(_selectedStockCode)
+                && _watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? stock)
+                && stock.CurrentPrice > 0)
+            {
+                return stock.CurrentPrice;
+            }
+
+            return ParseLongAbs(_currentStatusMetrics.ClosePriceText);
+        }
+
+        private void UpdateHogaRateMarkers(IEnumerable<HogaLevel> levels, long currentPrice)
         {
             foreach (HogaLevel level in levels)
             {
+                bool isCurrentPrice = currentPrice > 0 && level.RawPrice == currentPrice;
+                level.CurrentPriceBorderBrush = isCurrentPrice ? _hogaCurrentPriceBorderBrush : Brushes.Transparent;
+                level.CurrentPriceBackgroundBrush = isCurrentPrice ? _hogaCurrentPriceBackgroundBrush : Brushes.Transparent;
+                level.CurrentPriceBorderThickness = isCurrentPrice ? new Thickness(1) : new Thickness(0);
+
                 if (level.RawPrice > 0 && _krxPrevClosePrice > 0)
                 {
                     decimal rate = (level.RawPrice - _krxPrevClosePrice) / (decimal)_krxPrevClosePrice * 100m;

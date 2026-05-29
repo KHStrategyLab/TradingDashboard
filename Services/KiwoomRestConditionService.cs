@@ -720,12 +720,44 @@ namespace TradingDashboard.Services
                 new { amt_qty_tp = "2", stk_cd = mtsRequestCode, date },
                 cancellationToken).ConfigureAwait(false);
 
+            RestLimitLog?.Invoke($"프로그램 TR 조회: ka90008 / {mtsRequestCode} / date {date}");
+            LogProgramTradeResponseShape(mtsRequestCode, date, mtsRoot);
             ProgramTradeSummary mtsSummary = ReadProgramTimeSummary(mtsRoot, date);
             if (mtsSummary.Found)
+            {
+                RestLimitLog?.Invoke($"프로그램 TR 적용: {mtsRequestCode} / {mtsSummary.LogText}");
                 return mtsSummary;
+            }
 
+            RestLimitLog?.Invoke($"프로그램 TR 값 없음: {mtsRequestCode} / date {date}");
             return new ProgramTradeSummary(false, 0, string.Empty);
 
+        }
+
+        private void LogProgramTradeResponseShape(string requestCode, string date, JsonElement root)
+        {
+            JsonElement rows = FindArrayByKeySafe(root, "stk_tm_prm_trde_trnsn");
+            if (rows.ValueKind != JsonValueKind.Array)
+            {
+                RestLimitLog?.Invoke($"프로그램 TR 배열 없음: {requestCode} / date {date} / root {DescribeJsonKeys(root)}");
+                return;
+            }
+
+            int count = rows.GetArrayLength();
+            if (count == 0)
+            {
+                RestLimitLog?.Invoke($"프로그램 TR 배열 0건: {requestCode} / date {date}");
+                return;
+            }
+
+            JsonElement first = rows[0];
+            string firstDate = NormalizeDigits(ReadAnyDeep(first, "dt", "date", "trde_dt", "base_dt"));
+            RestLimitLog?.Invoke(
+                $"프로그램 TR 배열: {requestCode} / {count}건 / 요청일 {date} / 첫일자 {firstDate} / " +
+                $"첫행 {DescribeJsonKeys(first)} / " +
+                $"netAmt {ReadAnyDeep(first, "prm_netprps_amt", "prmNetprpsAmt")} / " +
+                $"buyAmt {ReadAnyDeep(first, "prm_buy_amt", "prmBuyAmt")} / " +
+                $"sellAmt {ReadAnyDeep(first, "prm_sell_amt", "prmSellAmt")}");
         }
 
         private async Task<DailyTradeSummary> GetUnifiedDailyTradeSummaryAsync(string token, string baseCode, string fallbackRequestCode, string date, CancellationToken cancellationToken)
@@ -758,6 +790,15 @@ namespace TradingDashboard.Services
             }
 
             return new ProgramTradeSummary(false, 0, string.Empty);
+        }
+
+        private static string DescribeJsonKeys(JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Object)
+                return string.Join(",", element.EnumerateObject().Select(p => p.Name).Take(12));
+            if (element.ValueKind == JsonValueKind.Array)
+                return $"array[{element.GetArrayLength()}]";
+            return element.ValueKind.ToString();
         }
         private static ProgramTradeSummary ReadProgramTradeRow(JsonElement row)
         {

@@ -38,6 +38,8 @@ namespace TradingDashboard
         private readonly Brush _rateUpBrush;
         private readonly Brush _rateDownBrush;
         private readonly Brush _whiteBrush;
+        private readonly Brush _hogaCurrentPriceBorderBrush;
+        private readonly Brush _hogaCurrentPriceBackgroundBrush;
         private readonly ObservableCollection<WatchStockItem> _watchStocks = new ObservableCollection<WatchStockItem>();
         private readonly ObservableCollection<TradePrint> _recentTrades = new ObservableCollection<TradePrint>();
         private readonly ObservableCollection<HogaLevel> _sellHogaLevels = new ObservableCollection<HogaLevel>();
@@ -121,6 +123,8 @@ namespace TradingDashboard
             _rateUpBrush = (Brush)FindResource("PalettePink");
             _rateDownBrush = (Brush)FindResource("PaletteSkyBlue");
             _whiteBrush = (Brush)FindResource("PaletteWhite");
+            _hogaCurrentPriceBorderBrush = (Brush)FindResource("PaletteSkyBlue");
+            _hogaCurrentPriceBackgroundBrush = new SolidColorBrush(Color.FromRgb(0x0F, 0x32, 0x3E));
 
             _config = LocalSettingsLoader.Load();
             _newsService = new NaverNewsService(_config.NaverNews);
@@ -986,7 +990,16 @@ namespace TradingDashboard
                 {
                     AppendLog($"장중 거래량비율은 현재 누적거래량 기준 유지: {stockCode}");
                 }
-                ApplyProgramTradeInfo(exec);
+
+                // 실시간 0B 갱신은 _currentStatusMetrics를 기준으로 프로그램 칸을 다시 그린다.
+                // 따라서 ka90008에서 확인한 프로그램 값을 화면에만 찍지 말고 현재 종목 상태에도 보관해야 한다.
+                m.ProgramBuyText = exec.ProgramBuyText;
+                m.ProgramNetQuantity = exec.ProgramNetQuantity;
+                m.HasProgramTrade = exec.HasProgramTrade;
+                _currentStatusMetrics.ProgramBuyText = exec.ProgramBuyText;
+                _currentStatusMetrics.ProgramNetQuantity = exec.ProgramNetQuantity;
+                _currentStatusMetrics.HasProgramTrade = exec.HasProgramTrade;
+                ApplyProgramTradeInfo(_currentStatusMetrics);
             }
             catch (OperationCanceledException)
             {

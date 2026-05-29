@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Media;
 
 namespace TradingDashboard.Models
@@ -12,6 +13,9 @@ namespace TradingDashboard.Models
         private long _rawPrice;
         private Brush _priceBrush = Brushes.White;
         private Brush _rateBrush = Brushes.White;
+        private Brush _currentPriceBackgroundBrush = Brushes.Transparent;
+        private Brush _currentPriceBorderBrush = Brushes.Transparent;
+        private Thickness _currentPriceBorderThickness = new Thickness(0);
 
         public string PriceText
         {
@@ -47,6 +51,24 @@ namespace TradingDashboard.Models
         {
             get => _rateBrush;
             set => SetField(ref _rateBrush, value);
+        }
+
+        public Brush CurrentPriceBorderBrush
+        {
+            get => _currentPriceBorderBrush;
+            set => SetField(ref _currentPriceBorderBrush, value);
+        }
+
+        public Brush CurrentPriceBackgroundBrush
+        {
+            get => _currentPriceBackgroundBrush;
+            set => SetField(ref _currentPriceBackgroundBrush, value);
+        }
+
+        public Thickness CurrentPriceBorderThickness
+        {
+            get => _currentPriceBorderThickness;
+            set => SetField(ref _currentPriceBorderThickness, value);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
