@@ -8,6 +8,10 @@ namespace TradingDashboard.Models
         public string MarketTypeCode { get; set; } = string.Empty;
         public string MarketName { get; set; } = string.Empty;
         public string ProgramMarketType { get; set; } = string.Empty;
+        public long CurrentPrice { get; set; }
+        public long ChangeAmount { get; set; }
+        public string ChangeRateText { get; set; } = string.Empty;
+        public string VolumeText { get; set; } = string.Empty;
         public long LastPrice { get; set; }
         public string OrderWarning { get; set; } = string.Empty;
         public string AuditInfo { get; set; } = string.Empty;

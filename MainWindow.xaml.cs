@@ -88,6 +88,7 @@ namespace TradingDashboard
         private string _lastMarketStatusTime = string.Empty;
         private string _lastMarketExpectedRemain = string.Empty;
         private string _lastMarketStatusText = "장상태 미확인";
+        private string _conditionRealtimeSeq = string.Empty;
         private DateTime _lastMarketStatusAt = DateTime.MinValue;
         private DateTime _marketStatusUnknownUntil = DateTime.MinValue;
         private bool _isNxtMarketMode;
@@ -300,6 +301,10 @@ namespace TradingDashboard
                     MarketTypeCode = e.MarketTypeCode,
                     MarketName = e.MarketName,
                     ProgramMarketType = e.ProgramMarketType,
+                    CurrentPrice = e.CurrentPrice,
+                    ChangeAmount = e.ChangeAmount,
+                    ChangeRateText = e.ChangeRateText,
+                    VolumeText = e.VolumeText,
                     LastPrice = e.LastPrice,
                     OrderWarning = e.OrderWarning,
                     AuditInfo = e.AuditInfo,
@@ -382,6 +387,10 @@ namespace TradingDashboard
                         stock.MarketTypeCode,
                         stock.MarketName,
                         stock.ProgramMarketType,
+                        stock.CurrentPrice,
+                        stock.ChangeAmount,
+                        stock.ChangeRateText,
+                        stock.VolumeText,
                         stock.LastPrice,
                         stock.OrderWarning,
                         stock.AuditInfo,
@@ -420,6 +429,10 @@ namespace TradingDashboard
                     MarketTypeCode = s.MarketTypeCode,
                     MarketName = s.MarketName,
                     ProgramMarketType = s.ProgramMarketType,
+                    CurrentPrice = s.CurrentPrice,
+                    ChangeAmount = s.ChangeAmount,
+                    ChangeRateText = s.ChangeRateText,
+                    VolumeText = s.VolumeText,
                     LastPrice = s.LastPrice,
                     OrderWarning = s.OrderWarning,
                     AuditInfo = s.AuditInfo,
@@ -510,6 +523,14 @@ namespace TradingDashboard
                 stock.MarketName = entry.MarketName;
             if (string.IsNullOrWhiteSpace(stock.ProgramMarketType))
                 stock.ProgramMarketType = entry.ProgramMarketType;
+            if (stock.CurrentPrice <= 0)
+                stock.CurrentPrice = entry.CurrentPrice;
+            if (stock.ChangeAmount == 0)
+                stock.ChangeAmount = entry.ChangeAmount;
+            if (string.IsNullOrWhiteSpace(stock.ChangeRateText) || stock.ChangeRateText == "-")
+                stock.ChangeRateText = string.IsNullOrWhiteSpace(entry.ChangeRateText) ? stock.ChangeRateText : entry.ChangeRateText;
+            if (string.IsNullOrWhiteSpace(stock.VolumeText) || stock.VolumeText == "-")
+                stock.VolumeText = string.IsNullOrWhiteSpace(entry.VolumeText) ? stock.VolumeText : entry.VolumeText;
             if (stock.LastPrice <= 0)
                 stock.LastPrice = entry.LastPrice;
             if (string.IsNullOrWhiteSpace(stock.OrderWarning))
@@ -556,7 +577,7 @@ namespace TradingDashboard
             entry.BasePriceSource = string.Empty;
         }
 
-        private WatchlistStockCacheEntry UpsertWatchlistMemoryCache(string code, string name, bool? supportsNxt, string? marketTypeCode, string? marketName, string? programMarketType, long? lastPrice, string? orderWarning, string? auditInfo, string? stockState, string? sectorName, bool saveFile)
+        private WatchlistStockCacheEntry UpsertWatchlistMemoryCache(string code, string name, bool? supportsNxt, string? marketTypeCode, string? marketName, string? programMarketType, long? currentPrice, long? changeAmount, string? changeRateText, string? volumeText, long? lastPrice, string? orderWarning, string? auditInfo, string? stockState, string? sectorName, bool saveFile)
         {
             if (!_watchlistMemoryCache.TryGetValue(code, out WatchlistStockCacheEntry? entry))
             {
@@ -574,6 +595,14 @@ namespace TradingDashboard
                 entry.MarketName = marketName.Trim();
             if (!string.IsNullOrWhiteSpace(programMarketType))
                 entry.ProgramMarketType = programMarketType.Trim();
+            if (currentPrice.HasValue && currentPrice.Value > 0)
+                entry.CurrentPrice = currentPrice.Value;
+            if (changeAmount.HasValue)
+                entry.ChangeAmount = changeAmount.Value;
+            if (!string.IsNullOrWhiteSpace(changeRateText) && changeRateText != "-")
+                entry.ChangeRateText = changeRateText.Trim();
+            if (!string.IsNullOrWhiteSpace(volumeText) && volumeText != "-")
+                entry.VolumeText = volumeText.Trim();
             if (lastPrice.HasValue && lastPrice.Value > 0)
                 entry.LastPrice = lastPrice.Value;
             if (!string.IsNullOrWhiteSpace(orderWarning))
@@ -656,11 +685,23 @@ namespace TradingDashboard
             _ = LoadNewsAsync(stockName, selectionVersion);
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
             await LoadSelectedBasePriceAsync(stockCode, selectionVersion, requestToken);
+            if (!IsCurrentSelection(stockCode, selectionVersion))
+                return;
+
             await LoadSelectedOrderBookSnapshotAsync(stockCode, selectionVersion, requestToken);
+            if (!IsCurrentSelection(stockCode, selectionVersion))
+                return;
+
             _ = RegisterSelectedRealtime0DIfReadyAsync();
             StartSelectedChartRender();
             _ = LoadSelectedStockStatusAsync(stockCode, selectionVersion, requestToken);
             _ = LoadKrxClosingSnapshotIfNeededAsync(stockCode, selectionVersion, requestToken);
+        }
+
+        private bool IsCurrentSelection(string stockCode, int selectionVersion)
+        {
+            return selectionVersion == _selectionVersion &&
+                string.Equals(stockCode, _selectedStockCode, StringComparison.Ordinal);
         }
 
         private static void DisposeCanceledRequestLater(CancellationTokenSource? cts)
@@ -726,6 +767,10 @@ namespace TradingDashboard
                         stock?.MarketTypeCode,
                         stock?.MarketName,
                         stock?.ProgramMarketType,
+                        stock?.CurrentPrice,
+                        stock?.ChangeAmount,
+                        stock?.ChangeRateText,
+                        stock?.VolumeText,
                         stock?.LastPrice,
                         stock?.OrderWarning,
                         stock?.AuditInfo,

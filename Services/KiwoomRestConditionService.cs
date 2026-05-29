@@ -103,6 +103,21 @@ namespace TradingDashboard.Services
             return result;
         }
 
+        public async Task<List<(string Code, string Name)>> GetConditionBaseStocksAsync(CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            return await GetConditionBaseItemsAsync(token, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<WatchStockItem> GetConditionStockAsync(string code, string name, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            string normalizedCode = NormalizeStockCode(code);
+            return await GetStockInfoAsync(token, normalizedCode, name, null, cancellationToken).ConfigureAwait(false);
+        }
+
         public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
         {
             ValidateSettings();

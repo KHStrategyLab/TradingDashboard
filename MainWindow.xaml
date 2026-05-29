@@ -14,17 +14,17 @@
     <Window.Resources>
         <!-- 기존 프로그램 색상 팔레트 -->
         <!-- 중앙 팔레트 한곳에서 색상 관리 -->
-        <SolidColorBrush x:Key="PaletteGreen" Color="#16A34A"/>
+        <SolidColorBrush x:Key="PaletteGreen" Color="#36be4d"/>
         <SolidColorBrush x:Key="PaletteLightGreen" Color="#86EFAC"/>
-        <SolidColorBrush x:Key="PaletteBlue" Color="#1261C4"/>
-        <SolidColorBrush x:Key="PaletteSkyBlue" Color="#38BDF8"/>
-        <SolidColorBrush x:Key="PaletteRed" Color="#D92121"/>
+        <SolidColorBrush x:Key="PaletteBlue" Color="#6392d9"/>
+        <SolidColorBrush x:Key="PaletteSkyBlue" Color="#3ec3fa"/>
+        <SolidColorBrush x:Key="PaletteRed" Color="#f0473f"/>
         <SolidColorBrush x:Key="PalettePink" Color="#FF6B6B"/>
         <SolidColorBrush x:Key="PaletteYellow" Color="#EAB308"/>
         <SolidColorBrush x:Key="PaletteLightYellow" Color="#FDE68A"/>
         <SolidColorBrush x:Key="PaletteWhite" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="PaletteBlueGray" Color="#64748B"/>
-        <SolidColorBrush x:Key="PaletteOrange" Color="#F97316"/>
+        <SolidColorBrush x:Key="PaletteBlueGray" Color="#b6ccd8"/>
+        <SolidColorBrush x:Key="PaletteOrange" Color="#f09b3f"/>
         <SolidColorBrush x:Key="PaletteViolet" Color="#8B5CF6"/>
 
         <!-- ?덇굅?????명솚 -->
@@ -1071,17 +1071,17 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="시가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoOpenPriceText" Grid.Row="0" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="기준가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoBasePriceText" Grid.Row="0" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="고가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoHighPriceText" Grid.Row="1" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="시가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoOpenPriceText" Grid.Row="1" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="저가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoLowPriceText" Grid.Row="2" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="고가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoHighPriceText" Grid.Row="2" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="기준가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoBasePriceText" Grid.Row="3" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="저가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoLowPriceText" Grid.Row="3" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
                                     <TextBlock Grid.Row="4" Grid.Column="0" Text="거래대금" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="InfoTradingValueText" Grid.Row="4" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
@@ -1142,7 +1142,7 @@
                                                 <TextBlock Grid.Row="0"
                                                            Text="{Binding Title}"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="11"
+                                                           FontSize="13"
                                                            TextTrimming="CharacterEllipsis"/>
 
                                                 <TextBlock Grid.Row="1"
@@ -1180,21 +1180,21 @@
                                                 <TextBlock Grid.Column="0"
                                                            Text="공시"
                                                            Foreground="{StaticResource TextSubBrush}"
-                                                           FontSize="11"
+                                                           FontSize="12"
                                                            VerticalAlignment="Center"
                                                            Margin="0,0,8,0"/>
 
                                                 <TextBlock Grid.Column="1"
                                                            Text="{Binding Title}"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="12"
+                                                           FontSize="13"
                                                            VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis"/>
 
                                                 <TextBlock Grid.Column="2"
                                                            Text="{Binding DateText}"
                                                            Foreground="{StaticResource TextMutedBrush}"
-                                                           FontSize="10"
+                                                           FontSize="11"
                                                            VerticalAlignment="Center"
                                                            Margin="8,0,0,0"/>
                                             </Grid>

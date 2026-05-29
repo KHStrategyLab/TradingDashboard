@@ -638,7 +638,13 @@ namespace TradingDashboard
             ChartRenderState priceState = _priceChartRenderState;
             int renderedLastIndex = priceState.SourceStartIndex + priceState.CandleCount - 1;
             if (renderedLastIndex != _currentChartCandles.Count - 1)
+            {
+                if (candle.Close > priceState.Max || candle.Close < priceState.Min)
+                    return false;
+
+                UpdateCurrentPriceMarkerVisual(priceState, candle.Close);
                 return true;
+            }
 
             if (candle.High > priceState.Max || candle.Low < priceState.Min)
                 return false;
@@ -666,18 +672,7 @@ namespace TradingDashboard
             Canvas.SetLeft(_lastCandleBody, x);
             Canvas.SetTop(_lastCandleBody, Math.Min(yOpen, yClose));
 
-            if (_currentPriceMarkerLine != null && _currentPriceMarkerLabel != null && _currentPriceMarkerText != null)
-            {
-                double markerY = Math.Max(1, Math.Min(priceState.Height - 1, yClose));
-                Brush markerBrush = ResolveHogaBrushByKrxPrevClose((long)Math.Round(candle.Close));
-                _currentPriceMarkerLine.Y1 = markerY;
-                _currentPriceMarkerLine.Y2 = markerY;
-                _currentPriceMarkerLine.Stroke = markerBrush;
-                _currentPriceMarkerLabel.BorderBrush = markerBrush;
-                Canvas.SetTop(_currentPriceMarkerLabel, Math.Max(0, Math.Min(priceState.Height - 18, markerY - 9)));
-                _currentPriceMarkerText.Text = candle.Close.ToString("N0");
-                _currentPriceMarkerText.Foreground = markerBrush;
-            }
+            UpdateCurrentPriceMarkerVisual(priceState, candle.Close);
 
             double volumeScale = Math.Max(1, Math.Max(volumeState.MaxVolume, candle.Volume));
             double volumeBarH = (double)candle.Volume / volumeScale * (volumeState.Height - 2);
@@ -689,6 +684,30 @@ namespace TradingDashboard
             Canvas.SetTop(_lastVolumeBar, volumeState.Height - _lastVolumeBar.Height);
 
             return true;
+        }
+
+        private void UpdateCurrentPriceMarkerVisual(ChartRenderState priceState, double currentPrice)
+        {
+            if (currentPrice <= 0 ||
+                _currentPriceMarkerLine == null ||
+                _currentPriceMarkerLabel == null ||
+                _currentPriceMarkerText == null)
+            {
+                return;
+            }
+
+            double range = Math.Max(1, priceState.Max - priceState.Min);
+            double markerY = (priceState.Max - currentPrice) / range * (priceState.Height - 4) + 2;
+            markerY = Math.Max(1, Math.Min(priceState.Height - 1, markerY));
+            Brush markerBrush = ResolveHogaBrushByKrxPrevClose((long)Math.Round(currentPrice));
+
+            _currentPriceMarkerLine.Y1 = markerY;
+            _currentPriceMarkerLine.Y2 = markerY;
+            _currentPriceMarkerLine.Stroke = markerBrush;
+            _currentPriceMarkerLabel.BorderBrush = markerBrush;
+            Canvas.SetTop(_currentPriceMarkerLabel, Math.Max(0, Math.Min(priceState.Height - 18, markerY - 9)));
+            _currentPriceMarkerText.Text = currentPrice.ToString("N0");
+            _currentPriceMarkerText.Foreground = markerBrush;
         }
 
         private static string BuildMinuteBucketTime(string tradeTimeText, int minute)

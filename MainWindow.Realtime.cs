@@ -41,6 +41,7 @@ namespace TradingDashboard
                     return;
                 }
 
+                await RegisterConditionRealtimeAsync(_realtimeWs, ct);
                 await RegisterMarketStatusAsync(_realtimeWs, ct);
                 await RegisterRealtime0BAsync(_realtimeWs, ct);
                 await RegisterSelectedRealtime0DAsync(_realtimeWs, ct);
@@ -72,6 +73,49 @@ namespace TradingDashboard
             }, ct);
 
             AppendLog("0s 장운영구분 등록");
+        }
+
+        private async Task RegisterConditionRealtimeAsync(ClientWebSocket ws, CancellationToken ct)
+        {
+            try
+            {
+                await SendWsJsonAsync(ws, new { trnm = "CNSRLST" }, ct);
+                using JsonDocument list = await ReceiveByTrNameAsync(ws, "CNSRLST", ct);
+                string seq = ResolveConditionRealtimeSeq(list.RootElement, _config.Kiwoom.ConditionSeq01);
+                if (string.IsNullOrWhiteSpace(seq))
+                {
+                    AppendLog($"조건검색 실시간 추적 실패: 조건식 {(_config.Kiwoom.ConditionSeq01 ?? "1")}번 없음");
+                    return;
+                }
+
+                _conditionRealtimeSeq = seq;
+                await SendWsJsonAsync(ws, new
+                {
+                    trnm = "CNSRREQ",
+                    seq,
+                    search_type = "1",
+                    stex_tp = "K",
+                    cont_yn = "N",
+                    next_key = ""
+                }, ct);
+
+                using JsonDocument response = await ReceiveByTrNameAsync(ws, "CNSRREQ", ct);
+                string returnCode = ReadString(response.RootElement, "return_code");
+                if (!string.IsNullOrWhiteSpace(returnCode) && returnCode != "0")
+                {
+                    AppendLog($"조건검색 실시간 추적 실패: {returnCode} {ReadString(response.RootElement, "return_msg")}");
+                    return;
+                }
+
+                int initialCount = response.RootElement.TryGetProperty("data", out JsonElement data) && data.ValueKind == JsonValueKind.Array
+                    ? data.GetArrayLength()
+                    : 0;
+                AppendLog($"조건검색 실시간 추적 등록: {seq} ({initialCount}건)");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"조건검색 실시간 추적 등록 오류: {ex.Message}");
+            }
         }
 
         private async Task RegisterRealtime0BAsync(ClientWebSocket ws, CancellationToken ct)
@@ -277,9 +321,158 @@ namespace TradingDashboard
                     ApplyRealtimeHogaItem(item);
                 else if (string.Equals(type, "0H", StringComparison.OrdinalIgnoreCase))
                     ApplyRealtimeExpectedItem(item);
+                else if (IsConditionRealtimeItem(item))
+                    ApplyConditionRealtimeItem(item);
                 else
                     ApplyRealtimeItem(item);
             }
+        }
+
+        private static bool IsConditionRealtimeItem(JsonElement item)
+        {
+            string name = ReadString(item, "name");
+            string eventCode = ReadAnyRealtime(item, "841");
+            return name.Contains("조건", StringComparison.OrdinalIgnoreCase) ||
+                eventCode == "4" ||
+                eventCode == "5";
+        }
+
+        private void ApplyConditionRealtimeItem(JsonElement item)
+        {
+            string type = ReadString(item, "type");
+            string eventCode = ReadAnyRealtime(item, "841");
+            bool isAdd = eventCode == "4" || string.Equals(type, "02", StringComparison.OrdinalIgnoreCase);
+            bool isRemove = eventCode == "5" || string.Equals(type, "03", StringComparison.OrdinalIgnoreCase);
+            if (!isAdd && !isRemove)
+                return;
+
+            string code = NormalizeStockCode(ReadAnyRealtime(item, "item", "9001", "stk_cd", "stkCd", "code", "jm_code"));
+            if (string.IsNullOrWhiteSpace(code))
+                return;
+
+            string name = ReadAnyRealtime(item, "302", "stk_nm", "stkNm", "name", "jm_name");
+            if (isAdd)
+                _ = ApplyConditionRealtimeAddAsync(code, name);
+            else
+                ApplyConditionRealtimeRemove(code);
+        }
+
+        private async Task ApplyConditionRealtimeAddAsync(string code, string name)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(code))
+                    return;
+
+                if (await ApplyConditionRealtimeAddFromCacheAsync(code, name))
+                {
+                    await RegisterRealtime0BForCurrentWatchlistAsync();
+                    return;
+                }
+
+                WatchStockItem stock = await _kiwoomConditionService.GetConditionStockAsync(code, name, _realtimeCts?.Token ?? CancellationToken.None);
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (_watchStockByCode.ContainsKey(code))
+                        return;
+
+                    if (string.IsNullOrWhiteSpace(stock.Code))
+                        stock.Code = code;
+                    if (string.IsNullOrWhiteSpace(stock.Name))
+                        stock.Name = string.IsNullOrWhiteSpace(name) ? code : name;
+                    if (string.IsNullOrWhiteSpace(stock.ChangeRateText))
+                        stock.ChangeRateText = "-";
+                    if (string.IsNullOrWhiteSpace(stock.VolumeText))
+                        stock.VolumeText = "-";
+
+                    stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
+                    ApplyWatchlistCacheToStock(stock);
+                    _watchStocks.Insert(0, stock);
+                    _watchStockByCode[stock.Code] = stock;
+                    SaveDailyWatchlistSnapshot(_watchStocks);
+                    ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
+                    AppendLog($"조건검색 편입: {stock.Name} ({stock.Code})");
+                });
+
+                await RegisterRealtime0BForCurrentWatchlistAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                // ignore
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => AppendLog($"조건검색 편입 처리 오류: {code} / {ex.Message}"));
+            }
+        }
+
+        private async Task<bool> ApplyConditionRealtimeAddFromCacheAsync(string code, string name)
+        {
+            return await Dispatcher.InvokeAsync(() =>
+            {
+                if (_watchStockByCode.ContainsKey(code))
+                    return true;
+
+                WatchlistStockCacheEntry? entry = GetWatchlistMemoryCache(code);
+                if (entry == null)
+                    return false;
+
+                var stock = new WatchStockItem
+                {
+                    Code = code,
+                    Name = string.IsNullOrWhiteSpace(entry.Name)
+                        ? string.IsNullOrWhiteSpace(name) ? code : name
+                        : entry.Name,
+                    MarketTypeCode = entry.MarketTypeCode,
+                    MarketName = entry.MarketName,
+                    ProgramMarketType = entry.ProgramMarketType,
+                    CurrentPrice = entry.CurrentPrice,
+                    ChangeAmount = entry.ChangeAmount,
+                    ChangeRateText = string.IsNullOrWhiteSpace(entry.ChangeRateText) ? "-" : entry.ChangeRateText,
+                    VolumeText = string.IsNullOrWhiteSpace(entry.VolumeText) ? "-" : entry.VolumeText,
+                    LastPrice = entry.LastPrice,
+                    OrderWarning = entry.OrderWarning,
+                    AuditInfo = entry.AuditInfo,
+                    StockState = entry.StockState,
+                    SectorName = entry.SectorName,
+                    SupportsNxt = entry.SupportsNxt
+                };
+
+                ApplyWatchlistCacheToStock(stock);
+                stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
+                _watchStocks.Insert(0, stock);
+                _watchStockByCode[stock.Code] = stock;
+                SaveDailyWatchlistSnapshot(_watchStocks);
+                ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
+                AppendLog($"조건검색 재편입(캐시): {stock.Name} ({stock.Code})");
+                return true;
+            });
+        }
+
+        private async Task RegisterRealtime0BForCurrentWatchlistAsync()
+        {
+            if (_realtimeWs != null && _realtimeWs.State == WebSocketState.Open && _realtimeCts != null)
+                await RegisterRealtime0BAsync(_realtimeWs, _realtimeCts.Token);
+        }
+
+        private void ApplyConditionRealtimeRemove(string code)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (!_watchStockByCode.Remove(code))
+                    return;
+
+                WatchStockItem? existing = _watchStocks.FirstOrDefault(stock => stock.Code == code);
+                if (existing != null)
+                    _watchStocks.Remove(existing);
+
+                SaveDailyWatchlistSnapshot(_watchStocks);
+                AppendLog($"조건검색 이탈: {code}");
+            });
+
+            if (_realtimeWs != null && _realtimeWs.State == WebSocketState.Open && _realtimeCts != null)
+                _ = RegisterRealtime0BAsync(_realtimeWs, _realtimeCts.Token);
         }
 
         private void ApplyMarketStatusItem(JsonElement item)
@@ -878,6 +1071,37 @@ namespace TradingDashboard
             }
 
             return default;
+        }
+
+        private static string ResolveConditionRealtimeSeq(JsonElement root, string targetSeq)
+        {
+            if (!root.TryGetProperty("data", out JsonElement data) || data.ValueKind != JsonValueKind.Array)
+                return string.Empty;
+
+            string normalizedTarget = NormalizeDigits(targetSeq);
+            foreach (JsonElement item in data.EnumerateArray())
+            {
+                string seq = ReadString(item, "seq");
+                if (string.IsNullOrWhiteSpace(seq) && item.ValueKind == JsonValueKind.Array && item.GetArrayLength() > 0)
+                    seq = item[0].ToString();
+
+                if (NormalizeDigits(seq) == normalizedTarget)
+                    return seq.Trim();
+            }
+
+            return string.Empty;
+        }
+
+        private static string NormalizeDigits(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            string digits = new string(value.Where(char.IsDigit).ToArray());
+            if (digits.Length == 0)
+                return string.Empty;
+
+            return int.TryParse(digits, out int number) ? number.ToString() : digits.TrimStart('0');
         }
 
         private static async Task<string> ReceiveTextAsync(ClientWebSocket ws, CancellationToken ct)
