@@ -198,17 +198,53 @@
 
         <Style x:Key="WatchListBoxItemStyle" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Margin" Value="2,1"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#222222"/>
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#252525"/>
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemChrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="#172532"/>
+                                <Setter TargetName="ItemChrome" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="ItemChrome" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#3EC3FA"
+                                                          BlurRadius="8"
+                                                          ShadowDepth="0"
+                                                          Opacity="0.28"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="#132838"/>
+                                <Setter TargetName="ItemChrome" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="ItemChrome" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#3EC3FA"
+                                                          BlurRadius="10"
+                                                          ShadowDepth="0"
+                                                          Opacity="0.35"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="NewsListBoxItemStyle" TargetType="ListBoxItem">
@@ -616,11 +652,11 @@
                                         Orientation="Horizontal"
                                         VerticalAlignment="Center"
                                         Margin="0,0,10,0">
-                        <Button Content="M" Style="{StaticResource ToolbarButtonStyle}" Click="MonthChartButton_Click"/>
-                        <Button Content="W" Style="{StaticResource ToolbarButtonStyle}" Click="WeekChartButton_Click"/>
-                        <Button Content="D" Style="{StaticResource ToolbarButtonStyle}" Click="DayChartButton_Click"/>
+                        <Button Content="Month" Width="60" Style="{StaticResource ToolbarButtonStyle}" Click="MonthChartButton_Click"/>
+                        <Button Content="Week" Width="56" Style="{StaticResource ToolbarButtonStyle}" Click="WeekChartButton_Click"/>
+                        <Button Content="Day" Width="48" Style="{StaticResource ToolbarButtonStyle}" Click="DayChartButton_Click"/>
                                 <ComboBox x:Name="MinuteChartComboBox"
-                                          Width="72"
+                                          Width="82"
                                           Height="24"
                                           Margin="4,0,0,0"
                                           SelectedValuePath="Tag"
@@ -630,14 +666,14 @@
                                           DropDownClosed="MinuteChartComboBox_DropDownClosed"
                                           Style="{StaticResource DarkMinuteComboBoxStyle}">
                                     <ComboBoxItem x:Name="MinuteChartPlaceholderItem" Content="Min" Tag=""/>
-                                    <ComboBoxItem Content="1m" Tag="Minute1"/>
-                                    <ComboBoxItem Content="3m" Tag="Minute3"/>
-                                    <ComboBoxItem Content="5m" Tag="Minute5"/>
-                                    <ComboBoxItem Content="10m" Tag="Minute10"/>
-                                    <ComboBoxItem Content="15m" Tag="Minute15"/>
-                                    <ComboBoxItem Content="30m" Tag="Minute30"/>
-                                    <ComboBoxItem Content="60m" Tag="Minute60"/>
-                                    <ComboBoxItem Content="120m" Tag="Minute120"/>
+                                    <ComboBoxItem Content="1min" Tag="Minute1"/>
+                                    <ComboBoxItem Content="3min" Tag="Minute3"/>
+                                    <ComboBoxItem Content="5min" Tag="Minute5"/>
+                                    <ComboBoxItem Content="10min" Tag="Minute10"/>
+                                    <ComboBoxItem Content="15min" Tag="Minute15"/>
+                                    <ComboBoxItem Content="30min" Tag="Minute30"/>
+                                    <ComboBoxItem Content="60min" Tag="Minute60"/>
+                                    <ComboBoxItem Content="120min" Tag="Minute120"/>
                                 </ComboBox>
                             </StackPanel>
                         </Grid>

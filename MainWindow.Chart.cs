@@ -280,6 +280,7 @@ namespace TradingDashboard
             double range = Math.Max(1, max - min);
             double candleW = Math.Max(2, chartW / candles.Count * 0.62);
             double gap = chartW / candles.Count;
+            int visibleStartIndex = GetVisibleChartStartIndex();
 
             for (int i = 0; i < candles.Count; i++)
             {
@@ -316,7 +317,7 @@ namespace TradingDashboard
                 }
             }
 
-            int visibleStartIndex = GetVisibleChartStartIndex();
+            DrawPredayRangeBreakoutSignals(canvas, candles.Count, visibleStartIndex, chartW, h, min, max);
             DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 5, (Brush)FindResource("Ma5Brush"), chartW, h, min, max);
             DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 10, (Brush)FindResource("Ma10Brush"), chartW, h, min, max);
             DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 20, (Brush)FindResource("Ma20Brush"), chartW, h, min, max);
@@ -784,17 +785,17 @@ namespace TradingDashboard
         {
             return period switch
             {
-                ChartPeriod.Minute1 => "1m",
-                ChartPeriod.Minute3 => "3m",
-                ChartPeriod.Minute5 => "5m",
-                ChartPeriod.Minute10 => "10m",
-                ChartPeriod.Minute15 => "15m",
-                ChartPeriod.Minute30 => "30m",
-                ChartPeriod.Minute60 => "60m",
-                ChartPeriod.Minute120 => "120m",
-                ChartPeriod.Daily => "D",
-                ChartPeriod.Weekly => "W",
-                ChartPeriod.Monthly => "M",
+                ChartPeriod.Minute1 => "1min",
+                ChartPeriod.Minute3 => "3min",
+                ChartPeriod.Minute5 => "5min",
+                ChartPeriod.Minute10 => "10min",
+                ChartPeriod.Minute15 => "15min",
+                ChartPeriod.Minute30 => "30min",
+                ChartPeriod.Minute60 => "60min",
+                ChartPeriod.Minute120 => "120min",
+                ChartPeriod.Daily => "Day",
+                ChartPeriod.Weekly => "Week",
+                ChartPeriod.Monthly => "Month",
                 _ => period.ToString()
             };
         }
@@ -978,6 +979,123 @@ namespace TradingDashboard
                 Points = points
             };
             canvas.Children.Add(line);
+        }
+
+        private void DrawPredayRangeBreakoutSignals(Canvas canvas, int visibleCount, int visibleStartIndex, double w, double h, double min, double max)
+        {
+            if (_currentChartDataPeriod is not (ChartPeriod.Minute3 or ChartPeriod.Minute5) ||
+                _currentChartCandles.Count < 4 ||
+                visibleCount <= 0)
+            {
+                return;
+            }
+
+            double range = Math.Max(1, max - min);
+            double gap = w / visibleCount;
+            int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, visibleStartIndex + visibleCount - 1);
+
+            var tradingDates = _currentChartCandles
+                .Select(c => ExtractChartTradingDate(c.Date))
+                .Where(d => !string.IsNullOrWhiteSpace(d))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            var previousDayRangeByDate = new Dictionary<string, (double High, double Low)>(StringComparer.Ordinal);
+            var dayOpenByDate = new Dictionary<string, double>(StringComparer.Ordinal);
+
+            for (int i = 1; i < tradingDates.Count; i++)
+            {
+                string date = tradingDates[i];
+                string previousDate = tradingDates[i - 1];
+                List<ChartCandle> previousDayCandles = [.. _currentChartCandles
+                    .Where(c => ExtractChartTradingDate(c.Date) == previousDate)];
+
+                if (previousDayCandles.Count == 0)
+                    continue;
+
+                previousDayRangeByDate[date] = (previousDayCandles.Max(c => c.High), previousDayCandles.Min(c => c.Low));
+            }
+
+            foreach (ChartCandle candle in _currentChartCandles)
+            {
+                string date = ExtractChartTradingDate(candle.Date);
+                if (string.IsNullOrWhiteSpace(date) || dayOpenByDate.ContainsKey(date) || candle.Open <= 0)
+                    continue;
+
+                dayOpenByDate[date] = candle.Open;
+            }
+
+            for (int sourceIndex = Math.Max(2, visibleStartIndex); sourceIndex <= visibleEndIndex; sourceIndex++)
+            {
+                ChartCandle candle = _currentChartCandles[sourceIndex];
+                string date = ExtractChartTradingDate(candle.Date);
+                if (!dayOpenByDate.TryGetValue(date, out double dayOpen) ||
+                    !previousDayRangeByDate.TryGetValue(date, out (double High, double Low) previousRange))
+                {
+                    continue;
+                }
+
+                double breakoutLine = dayOpen + (previousRange.High - previousRange.Low) * 0.5;
+                double previousClose = _currentChartCandles[sourceIndex - 1].Close;
+                if (previousClose > breakoutLine || candle.Close <= breakoutLine)
+                    continue;
+
+                double rsi2 = CalculateRsi(sourceIndex, 2);
+                if (rsi2 <= 50)
+                    continue;
+
+                int visibleIndex = sourceIndex - visibleStartIndex;
+                double centerX = visibleIndex * gap + gap / 2;
+                double arrowPrice = Math.Max(1, candle.Low * 0.9);
+                double arrowY = (max - arrowPrice) / range * (h - 4) + 2;
+                DrawWhiteUpArrow(canvas, centerX, Math.Max(0, Math.Min(h - 14, arrowY)));
+            }
+        }
+
+        private static void DrawWhiteUpArrow(Canvas canvas, double centerX, double topY)
+        {
+            var triangle = new Polygon
+            {
+                Fill = Brushes.White,
+                Stroke = Brushes.White,
+                StrokeThickness = 1,
+                Points = new PointCollection
+                {
+                    new(centerX, topY),
+                    new(centerX - 6, topY + 10),
+                    new(centerX + 6, topY + 10)
+                }
+            };
+            canvas.Children.Add(triangle);
+        }
+
+        private double CalculateRsi(int sourceIndex, int period)
+        {
+            if (sourceIndex < period)
+                return 50;
+
+            double gain = 0;
+            double loss = 0;
+            for (int i = sourceIndex - period + 1; i <= sourceIndex; i++)
+            {
+                double change = _currentChartCandles[i].Close - _currentChartCandles[i - 1].Close;
+                if (change > 0)
+                    gain += change;
+                else
+                    loss -= change;
+            }
+
+            if (loss <= 0)
+                return gain > 0 ? 100 : 50;
+
+            double rs = gain / loss;
+            return 100 - 100 / (1 + rs);
+        }
+
+        private static string ExtractChartTradingDate(string chartDate)
+        {
+            string digits = new([.. (chartDate ?? string.Empty).Where(char.IsDigit)]);
+            return digits.Length >= 8 ? digits[..8] : string.Empty;
         }
 
         private void DrawVolumeChart(List<ChartCandle> candles)
