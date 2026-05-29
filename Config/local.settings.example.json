@@ -4,7 +4,7 @@
     "ClientSecret": "NAVER_CLIENT_SECRET",
     "DisplayCount": 10,
     "MarketDisplayCount": 20,
-    "MarketQuery": "증권 | 증시 | 코스피 | 코스닥 | 주식 | 금융",
+    "MarketQuery": "\uc99d\uc2dc|\ucf54\uc2a4\ud53c|\ucf54\uc2a4\ub2e5|\ud2b9\uc9d5\uc8fc|\uae09\ub4f1|\uacf5\uc2dc|\uc218\uc8fc|\uacf5\uae09\uacc4\uc57d|\ubc18\ub3c4\uccb4|AI|2\ucc28\uc804\uc9c0|\ub85c\ubd07",
     "Sort": "date"
   },
   "Dart": {

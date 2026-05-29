@@ -18,7 +18,7 @@ namespace TradingDashboard
             try
             {
                 int count = Math.Clamp(_config.LateNewsAlert.NewsCount, 1, 10);
-                List<NewsItem> newsItems = await _newsService.GetLatestNewsAsync(stock.Name, count, cancellationToken).ConfigureAwait(false);
+                List<NewsItem> newsItems = await _newsService.GetLatestNewsAsync(stock.Name, count * 3, cancellationToken).ConfigureAwait(false);
                 newsItems = [.. newsItems
                     .Where(item => !string.IsNullOrWhiteSpace(item.Title) && !string.IsNullOrWhiteSpace(item.Link))
                     .Take(count)];
@@ -106,7 +106,7 @@ namespace TradingDashboard
             string safeStockName = EscapeTelegramHtml(stockName);
             var lines = new List<string>
             {
-                $"{safeStockName} - 난가!!!??",
+                $"{safeStockName} - \uB09C\uAC00!!!??",
                 string.Empty
             };
 
@@ -115,7 +115,7 @@ namespace TradingDashboard
                 string title = EscapeTelegramHtml(ShortenTelegramText(item.Title, titleMaxLength));
                 string link = EscapeTelegramHtml(item.Link);
                 lines.Add($"{safeStockName} / {title}");
-                lines.Add($"<a href=\"{link}\">기사 보기</a>");
+                lines.Add($"<a href=\"{link}\">\uAE30\uC0AC \uBCF4\uAE30</a>");
                 lines.Add(string.Empty);
             }
 
@@ -131,7 +131,7 @@ namespace TradingDashboard
             if (clean.Length <= maxLength)
                 return clean;
 
-            return clean[..maxLength] + "…";
+            return clean[..maxLength] + "\u2026";
         }
 
         private static string EscapeTelegramHtml(string text)

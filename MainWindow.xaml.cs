@@ -46,6 +46,7 @@ namespace TradingDashboard
         private readonly ObservableCollection<TradePrint> _recentTrades = [];
         private readonly ObservableCollection<HogaLevel> _sellHogaLevels = [];
         private readonly ObservableCollection<HogaLevel> _buyHogaLevels = [];
+        private readonly List<NewsItem> _marketNewsCache = [];
         private readonly Dictionary<string, WatchStockItem> _watchStockByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, WatchlistStockCacheEntry> _watchlistMemoryCache = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ClosingSnapshotCacheEntry> _closingSnapshotMemoryCache = new(StringComparer.Ordinal);
@@ -101,6 +102,7 @@ namespace TradingDashboard
         private DateTime _marketStatusUnknownUntil = DateTime.MinValue;
         private bool _isNxtMarketMode;
         private bool _isMarketNewsLoading;
+        private DateTime _marketNewsCacheLoadedAt = DateTime.MinValue;
         private DateTime _lateNewsSentDate = DateTime.Today;
         private ClientWebSocket? _realtimeWs;
         private CancellationTokenSource? _realtimeCts;
@@ -168,7 +170,7 @@ namespace TradingDashboard
 
                 SetStartupLoading(true, "Loading condition 01 watchlist...");
                 await LoadWatchListFromKiwoomConditionAsync();
-                _ = LoadMarketNewsAsync();
+                _ = LoadMarketNewsAfterStartupDelayAsync();
             }
             finally
             {
@@ -179,6 +181,12 @@ namespace TradingDashboard
             {
                 WatchListBox.SelectedIndex = 0;
             }
+        }
+
+        private async Task LoadMarketNewsAfterStartupDelayAsync()
+        {
+            await Task.Delay(TimeSpan.FromSeconds(8));
+            await LoadMarketNewsAsync();
         }
 
         private async Task PrimeMarketStatusBeforeWatchlistAsync()
@@ -825,7 +833,7 @@ namespace TradingDashboard
             }
         }
 
-        private async Task LoadMarketNewsAsync(string? query = null)
+        private async Task LoadMarketNewsAsync(string? query = null, bool forceRefresh = false)
         {
             if (_isMarketNewsLoading)
                 return;
@@ -835,6 +843,21 @@ namespace TradingDashboard
             MarketNewsSearchButton.IsEnabled = false;
             string searchQuery = (query ?? MarketNewsSearchTextBox.Text).Trim();
             bool hasSearchQuery = !string.IsNullOrWhiteSpace(searchQuery);
+            bool canUseCache = !hasSearchQuery
+                && !forceRefresh
+                && _marketNewsCache.Count > 0
+                && DateTime.Now - _marketNewsCacheLoadedAt < TimeSpan.FromMinutes(10);
+
+            if (canUseCache)
+            {
+                MarketNewsListBox.ItemsSource = _marketNewsCache.ToList();
+                MarketNewsStatusText.Text = $"market news {_marketNewsCache.Count}items · cache";
+                MarketNewsRefreshButton.IsEnabled = true;
+                MarketNewsSearchButton.IsEnabled = true;
+                _isMarketNewsLoading = false;
+                return;
+            }
+
             MarketNewsStatusText.Text = hasSearchQuery
                 ? $"searching news: {searchQuery}"
                 : "loading market news...";
@@ -845,6 +868,13 @@ namespace TradingDashboard
                     ? await _newsService.SearchNewsAsync(searchQuery)
                     : await _newsService.GetMarketNewsAsync();
                 MarketNewsListBox.ItemsSource = news;
+                if (!hasSearchQuery)
+                {
+                    _marketNewsCache.Clear();
+                    _marketNewsCache.AddRange(news);
+                    _marketNewsCacheLoadedAt = DateTime.Now;
+                }
+
                 MarketNewsStatusText.Text = hasSearchQuery
                     ? $"search {news.Count}items · {DateTime.Now:HH:mm} · {searchQuery}"
                     : $"market news {news.Count}items · {DateTime.Now:HH:mm} refreshed";
@@ -855,8 +885,17 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                MarketNewsListBox.ItemsSource = null;
-                MarketNewsStatusText.Text = hasSearchQuery ? "news search failed" : "market news query failed";
+                if (!hasSearchQuery && _marketNewsCache.Count > 0)
+                {
+                    MarketNewsListBox.ItemsSource = _marketNewsCache.ToList();
+                    MarketNewsStatusText.Text = $"market news {_marketNewsCache.Count}items · cached after error";
+                }
+                else
+                {
+                    MarketNewsListBox.ItemsSource = null;
+                    MarketNewsStatusText.Text = hasSearchQuery ? "news search failed" : "market news query failed";
+                }
+
                 AppendLog($"{(hasSearchQuery ? "news search" : "market news query")} error: {ex.GetType().Name} / {ex.Message}");
             }
             finally
@@ -869,7 +908,7 @@ namespace TradingDashboard
 
         private async void MarketNewsRefreshButton_Click(object sender, RoutedEventArgs e)
         {
-            await LoadMarketNewsAsync();
+            await LoadMarketNewsAsync(forceRefresh: true);
         }
 
         private async void MarketNewsSearchButton_Click(object sender, RoutedEventArgs e)
@@ -884,6 +923,43 @@ namespace TradingDashboard
 
             e.Handled = true;
             await LoadMarketNewsAsync(MarketNewsSearchTextBox.Text);
+        }
+
+        private async void TelegramManualSendButton_Click(object sender, RoutedEventArgs e)
+        {
+            await SendManualTelegramMessageAsync();
+        }
+
+        private async void TelegramManualTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter || (Keyboard.Modifiers & ModifierKeys.Control) == 0)
+                return;
+
+            e.Handled = true;
+            await SendManualTelegramMessageAsync();
+        }
+
+        private async Task SendManualTelegramMessageAsync()
+        {
+            string message = TelegramManualTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(message))
+                return;
+
+            TelegramManualSendButton.IsEnabled = false;
+            try
+            {
+                await _telegramNotifier.SendManualToDefaultAsync(message);
+                TelegramManualTextBox.Clear();
+                AppendLog("Telegram manual message sent");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Telegram manual message error: {ex.Message}");
+            }
+            finally
+            {
+                TelegramManualSendButton.IsEnabled = true;
+            }
         }
 
         private async Task LoadMarketNewsThumbnailsAsync(IReadOnlyList<NewsItem> news)

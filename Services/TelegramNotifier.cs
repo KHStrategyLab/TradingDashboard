@@ -21,6 +21,14 @@ namespace TradingDashboard.Services
             await SendAsync(_settings.DefaultChatId, message, cancellationToken).ConfigureAwait(false);
         }
 
+        public async Task SendManualToDefaultAsync(string message, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(_settings.DefaultChatId))
+                return;
+
+            await SendAsync(_settings.DefaultChatId, message, parseMode: string.Empty, ignoreEnabled: true, cancellationToken).ConfigureAwait(false);
+        }
+
         public async Task SendHtmlToDefaultAsync(string message, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(_settings.DefaultChatId))
@@ -49,7 +57,12 @@ namespace TradingDashboard.Services
 
         public async Task SendAsync(string chatId, string message, string parseMode, CancellationToken cancellationToken = default)
         {
-            if (!_settings.Enabled)
+            await SendAsync(chatId, message, parseMode, ignoreEnabled: false, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task SendAsync(string chatId, string message, string parseMode, bool ignoreEnabled, CancellationToken cancellationToken = default)
+        {
+            if (!_settings.Enabled && !ignoreEnabled)
                 return;
 
             if (string.IsNullOrWhiteSpace(_settings.BotToken) || string.IsNullOrWhiteSpace(chatId) || string.IsNullOrWhiteSpace(message))

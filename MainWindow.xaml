@@ -18,7 +18,7 @@
         <SolidColorBrush x:Key="PaletteLightGreen" Color="#86EFAC"/>
         <SolidColorBrush x:Key="PaletteBlue" Color="#6392d9"/>
         <SolidColorBrush x:Key="PaletteSkyBlue" Color="#3ec3fa"/>
-        <SolidColorBrush x:Key="PaletteRed" Color="#f0473f"/>
+        <SolidColorBrush x:Key="PaletteRed" Color="#f0332f"/>
         <SolidColorBrush x:Key="PalettePink" Color="#FF6B6B"/>
         <SolidColorBrush x:Key="PaletteYellow" Color="#EAB308"/>
         <SolidColorBrush x:Key="PaletteLightYellow" Color="#FDE68A"/>
@@ -1430,9 +1430,60 @@
                         </Border>
                     </TabItem>
 
-                    <TabItem Header="Themes">
+                    <TabItem Header="Etc">
                         <Grid Background="{StaticResource BgPanelBrush}">
-                            <TextBlock Text="Theme analysis panel"
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="1*"/>
+                                <RowDefinition Height="3*"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0"
+                                    Margin="10"
+                                    Padding="10"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0"
+                                               Text="Telegram Message"
+                                               Foreground="{StaticResource TextMainBrush}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,6"/>
+
+                                    <TextBox Grid.Row="1"
+                                             x:Name="TelegramManualTextBox"
+                                             Background="#101010"
+                                             BorderBrush="{StaticResource LineBrush}"
+                                             BorderThickness="1"
+                                             Foreground="{StaticResource TextMainBrush}"
+                                             FontSize="12"
+                                             Padding="6"
+                                             TextWrapping="Wrap"
+                                             AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Hidden"
+                                             KeyDown="TelegramManualTextBox_KeyDown"/>
+
+                                    <Button Grid.Row="2"
+                                            x:Name="TelegramManualSendButton"
+                                            Content="Send"
+                                            Width="76"
+                                            Height="24"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,8,0,0"
+                                            Style="{StaticResource ToolbarButtonStyle}"
+                                            Click="TelegramManualSendButton_Click"/>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock Grid.Row="1"
+                                       Text="ETC panel"
                                        Style="{StaticResource PlaceholderTextStyle}"/>
                         </Grid>
                     </TabItem>
