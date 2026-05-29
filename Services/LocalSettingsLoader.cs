@@ -9,7 +9,7 @@ namespace TradingDashboard.Services
     {
         private const string DefaultRelativePath = "Config/local.settings.json";
 
-        public static AppConfig Load(string path = null)
+        public static AppConfig Load(string? path = null)
         {
             string settingsPath = string.IsNullOrWhiteSpace(path)
                 ? ResolveSettingsPath()
@@ -18,7 +18,7 @@ namespace TradingDashboard.Services
             if (string.IsNullOrWhiteSpace(settingsPath) || !File.Exists(settingsPath))
             {
                 throw new FileNotFoundException(
-                    "local.settings.json 파일을 찾을 수 없습니다. 프로젝트 루트의 Config 폴더를 확인하세요.",
+                    "local.settings.json was not found. Check the Config folder in the project root.",
                     settingsPath ?? DefaultRelativePath);
             }
 
@@ -37,17 +37,17 @@ namespace TradingDashboard.Services
 
         private static string ResolveSettingsPath()
         {
-            // 1. 실행 파일 기준 bin 폴더 아래 Config/local.settings.json
+            // Check Config/local.settings.json under the executable folder.
             string basePath = Path.Combine(AppContext.BaseDirectory, DefaultRelativePath);
             if (File.Exists(basePath))
                 return basePath;
 
-            // 2. 현재 작업 폴더 기준 Config/local.settings.json
+            // Check Config/local.settings.json under the current working folder.
             string currentPath = Path.Combine(Directory.GetCurrentDirectory(), DefaultRelativePath);
             if (File.Exists(currentPath))
                 return currentPath;
 
-            // 3. bin/Debug/... 에서 프로젝트 루트까지 거슬러 올라가며 검색
+            // Walk up from bin/Debug/... to the project root.
             string foundFromBase = SearchUpwards(AppContext.BaseDirectory, DefaultRelativePath);
             if (!string.IsNullOrWhiteSpace(foundFromBase))
                 return foundFromBase;
@@ -61,7 +61,7 @@ namespace TradingDashboard.Services
 
         private static string SearchUpwards(string startDirectory, string relativePath)
         {
-            DirectoryInfo directory = new DirectoryInfo(startDirectory);
+            DirectoryInfo? directory = new(startDirectory);
 
             while (directory != null)
             {

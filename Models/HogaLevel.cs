@@ -15,7 +15,7 @@ namespace TradingDashboard.Models
         private Brush _rateBrush = Brushes.White;
         private Brush _currentPriceBackgroundBrush = Brushes.Transparent;
         private Brush _currentPriceBorderBrush = Brushes.Transparent;
-        private Thickness _currentPriceBorderThickness = new Thickness(0);
+        private Thickness _currentPriceBorderThickness = new(0);
 
         public string PriceText
         {

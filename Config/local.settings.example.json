@@ -3,6 +3,8 @@
     "ClientId": "NAVER_CLIENT_ID",
     "ClientSecret": "NAVER_CLIENT_SECRET",
     "DisplayCount": 10,
+    "MarketDisplayCount": 20,
+    "MarketQuery": "증권 | 증시 | 코스피 | 코스닥 | 주식 | 금융",
     "Sort": "date"
   },
 

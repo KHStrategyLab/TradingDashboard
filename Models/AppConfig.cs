@@ -16,6 +16,8 @@ namespace TradingDashboard.Models
         public string ClientId { get; set; } = string.Empty;
         public string ClientSecret { get; set; } = string.Empty;
         public int DisplayCount { get; set; } = 10;
+        public int MarketDisplayCount { get; set; } = 20;
+        public string MarketQuery { get; set; } = "증권 | 증시 | 코스피 | 코스닥 | 주식 | 금융";
         public string Sort { get; set; } = "date";
     }
 
@@ -44,7 +46,7 @@ namespace TradingDashboard.Models
     {
         public string BotToken { get; set; } = string.Empty;
         public string DefaultChatId { get; set; } = string.Empty;
-        public List<string> ChatIds { get; set; } = new List<string>();
+        public List<string> ChatIds { get; set; } = [];
         public bool Enabled { get; set; } = true;
     }
 

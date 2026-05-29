@@ -17,9 +17,9 @@ namespace TradingDashboard.Models
         public long RegularMarketTradeQty { get; set; }
         public long AfterMarketTradeQty { get; set; }
         public long DailySectionTradeQty { get; set; }
-        public List<HogaQuoteLevel> SellLevels { get; } = new List<HogaQuoteLevel>();
-        public List<HogaQuoteLevel> BuyLevels { get; } = new List<HogaQuoteLevel>();
-        public List<ClosingTradePrint> RecentTrades { get; } = new List<ClosingTradePrint>();
+        public List<HogaQuoteLevel> SellLevels { get; } = [];
+        public List<HogaQuoteLevel> BuyLevels { get; } = [];
+        public List<ClosingTradePrint> RecentTrades { get; } = [];
     }
 
     public class HogaQuoteLevel

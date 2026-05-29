@@ -11,24 +11,19 @@ using TradingDashboard.Models;
 
 namespace TradingDashboard.Services
 {
-    public class NaverNewsService
+    public class NaverNewsService(NaverNewsSettings settings)
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
+        private static readonly HttpClient HttpClient = new();
 
-        private readonly NaverNewsSettings _settings;
+        private readonly NaverNewsSettings _settings = settings ?? new NaverNewsSettings();
 
-        public NaverNewsService(NaverNewsSettings settings)
-        {
-            _settings = settings ?? new NaverNewsSettings();
-        }
-
-        public async Task<List<NewsItem>> GetLatestNewsAsync(string stockName, int? count = null, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<List<NewsItem>> GetLatestNewsAsync(string stockName, int? count = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(stockName))
-                return new List<NewsItem>();
+                return [];
 
             if (string.IsNullOrWhiteSpace(_settings.ClientId) || string.IsNullOrWhiteSpace(_settings.ClientSecret))
-                return new List<NewsItem>();
+                return [];
 
             int displayCount = count ?? _settings.DisplayCount;
             if (displayCount <= 0)
@@ -41,34 +36,50 @@ namespace TradingDashboard.Services
             string query = Uri.EscapeDataString(stockName);
             string url = $"https://openapi.naver.com/v1/search/news.json?query={query}&display={displayCount}&start=1&sort={sort}";
 
-            using (var request = new HttpRequestMessage(HttpMethod.Get, url))
-            {
-                request.Headers.Add("X-Naver-Client-Id", _settings.ClientId);
-                request.Headers.Add("X-Naver-Client-Secret", _settings.ClientSecret);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("X-Naver-Client-Id", _settings.ClientId);
+            request.Headers.Add("X-Naver-Client-Secret", _settings.ClientSecret);
 
-                using (HttpResponseMessage response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
+            using HttpResponseMessage response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+
+            string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            NaverNewsResponse? result = JsonSerializer.Deserialize<NaverNewsResponse>(json, options);
+
+            if (result?.Items == null)
+                return [];
+
+            return [.. result.Items
+                .Take(displayCount)
+                .Select(item =>
                 {
-                    response.EnsureSuccessStatusCode();
+                    string link = string.IsNullOrWhiteSpace(item.OriginalLink) ? item.Link : item.OriginalLink;
+                    return new NewsItem
+                    {
+                        Title = CleanText(item.Title),
+                        Link = link,
+                        Description = CleanText(item.Description),
+                        PubDate = FormatPubDate(item.PubDate),
+                        Source = ExtractHost(link),
+                        ThumbnailText = "NEWS"
+                    };
+                })];
+        }
 
-                    string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                    NaverNewsResponse result = JsonSerializer.Deserialize<NaverNewsResponse>(json, options);
+        public Task<List<NewsItem>> GetMarketNewsAsync(CancellationToken cancellationToken = default)
+        {
+            string query = string.IsNullOrWhiteSpace(_settings.MarketQuery)
+                ? "증권 | 증시 | 코스피 | 코스닥 | 주식 | 금융"
+                : _settings.MarketQuery;
+            int count = _settings.MarketDisplayCount > 0 ? _settings.MarketDisplayCount : 20;
+            return GetLatestNewsAsync(query, count, cancellationToken);
+        }
 
-                    if (result == null || result.Items == null)
-                        return new List<NewsItem>();
-
-                    return result.Items
-                        .Take(displayCount)
-                        .Select(item => new NewsItem
-                        {
-                            Title = CleanText(item.Title),
-                            Link = string.IsNullOrWhiteSpace(item.OriginalLink) ? item.Link : item.OriginalLink,
-                            PubDate = FormatPubDate(item.PubDate),
-                            Source = ExtractHost(string.IsNullOrWhiteSpace(item.OriginalLink) ? item.Link : item.OriginalLink)
-                        })
-                        .ToList();
-                }
-            }
+        public Task<List<NewsItem>> SearchNewsAsync(string query, CancellationToken cancellationToken = default)
+        {
+            int count = _settings.MarketDisplayCount > 0 ? _settings.MarketDisplayCount : 20;
+            return GetLatestNewsAsync(query, count, cancellationToken);
         }
 
         private static string CleanText(string text)
@@ -85,23 +96,21 @@ namespace TradingDashboard.Services
             if (string.IsNullOrWhiteSpace(pubDate))
                 return string.Empty;
 
-            if (DateTimeOffset.TryParse(pubDate, out DateTimeOffset parsed))
-                return parsed.LocalDateTime.ToString("MM-dd HH:mm");
-
-            return pubDate;
+            return DateTimeOffset.TryParse(pubDate, out DateTimeOffset parsed)
+                ? parsed.LocalDateTime.ToString("MM-dd HH:mm")
+                : pubDate;
         }
 
         private static string ExtractHost(string link)
         {
-            if (Uri.TryCreate(link, UriKind.Absolute, out Uri uri))
-                return uri.Host.Replace("www.", string.Empty);
-
-            return "뉴스";
+            return Uri.TryCreate(link, UriKind.Absolute, out Uri? uri)
+                ? uri.Host.Replace("www.", string.Empty)
+                : "news";
         }
 
         private class NaverNewsResponse
         {
-            public List<NaverNewsRawItem> Items { get; set; } = new List<NaverNewsRawItem>();
+            public List<NaverNewsRawItem> Items { get; set; } = [];
         }
 
         private class NaverNewsRawItem

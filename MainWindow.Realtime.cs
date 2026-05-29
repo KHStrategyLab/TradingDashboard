@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -31,14 +31,14 @@ namespace TradingDashboard
 
                 _realtimeWs = new ClientWebSocket();
                 await _realtimeWs.ConnectAsync(new Uri("wss://api.kiwoom.com:10000/api/dostk/websocket"), ct);
-                AppendLog("0B WS 연결");
+                AppendLog("0B WS connected");
 
                 await SendWsJsonAsync(_realtimeWs, new { trnm = "LOGIN", token }, ct);
                 using JsonDocument login = await ReceiveByTrNameAsync(_realtimeWs, "LOGIN", ct);
                 string loginCode = ReadString(login.RootElement, "return_code");
                 if (loginCode != "0")
                 {
-                    AppendLog($"0B LOGIN 실패: {loginCode}");
+                    AppendLog($"0B LOGIN failed: {loginCode}");
                     return;
                 }
 
@@ -46,13 +46,13 @@ namespace TradingDashboard
                 await RegisterMarketStatusAsync(_realtimeWs, ct);
                 await RegisterRealtime0BAsync(_realtimeWs, ct);
                 await RegisterSelectedRealtime0DAsync(_realtimeWs, ct);
-                AppendLog($"0B 등록 완료: {_watchStockByCode.Count}종목");
+                AppendLog($"0B registration complete: {_watchStockByCode.Count}stocks");
 
                 _ = Task.Run(() => ReceiveRealtimeLoopAsync(_realtimeWs, ct), ct);
             }
             catch (Exception ex)
             {
-                AppendLog($"0B 시작 오류: {ex.Message}");
+                AppendLog($"0B start error: {ex.Message}");
             }
         }
 
@@ -73,7 +73,7 @@ namespace TradingDashboard
                 }
             }, ct);
 
-            AppendLog("0s 장운영구분 등록");
+            AppendLog("0s market status registered");
         }
 
         private async Task RegisterConditionRealtimeAsync(ClientWebSocket ws, CancellationToken ct)
@@ -85,7 +85,7 @@ namespace TradingDashboard
                 string seq = ResolveConditionRealtimeSeq(list.RootElement, _config.Kiwoom.ConditionSeq01);
                 if (string.IsNullOrWhiteSpace(seq))
                 {
-                    AppendLog($"조건검색 실시간 추적 실패: 조건식 {(_config.Kiwoom.ConditionSeq01 ?? "1")}번 없음");
+                    AppendLog($"condition realtime tracking failed: condition {(_config.Kiwoom.ConditionSeq01 ?? "1")} not found");
                     return;
                 }
 
@@ -104,27 +104,26 @@ namespace TradingDashboard
                 string returnCode = ReadString(response.RootElement, "return_code");
                 if (!string.IsNullOrWhiteSpace(returnCode) && returnCode != "0")
                 {
-                    AppendLog($"조건검색 실시간 추적 실패: {returnCode} {ReadString(response.RootElement, "return_msg")}");
+                    AppendLog($"condition realtime tracking failed: {returnCode} {ReadString(response.RootElement, "return_msg")}");
                     return;
                 }
 
                 int initialCount = response.RootElement.TryGetProperty("data", out JsonElement data) && data.ValueKind == JsonValueKind.Array
                     ? data.GetArrayLength()
                     : 0;
-                AppendLog($"조건검색 실시간 추적 등록: {seq} ({initialCount}건)");
+                AppendLog($"condition realtime tracking registered: {seq} ({initialCount}items)");
             }
             catch (Exception ex)
             {
-                AppendLog($"조건검색 실시간 추적 등록 오류: {ex.Message}");
+                AppendLog($"condition realtime tracking registration error: {ex.Message}");
             }
         }
 
         private async Task RegisterRealtime0BAsync(ClientWebSocket ws, CancellationToken ct)
         {
-            string[] krxItems = _watchStockByCode.Keys
+            string[] krxItems = [.. _watchStockByCode.Keys
                 .Where(code => !string.IsNullOrWhiteSpace(code))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
+                .Distinct(StringComparer.Ordinal)];
 
             if (krxItems.Length == 0)
                 return;
@@ -147,11 +146,10 @@ namespace TradingDashboard
             if (!ShouldUseNxtMarketNow())
                 return;
 
-            string[] nxtItems = _watchStockByCode
+            string[] nxtItems = [.. _watchStockByCode
                 .Where(kv => kv.Value.SupportsNxt)
                 .Select(kv => $"{kv.Key}_NX")
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+                .Distinct(StringComparer.OrdinalIgnoreCase)];
 
             if (nxtItems.Length == 0)
                 return;
@@ -171,7 +169,7 @@ namespace TradingDashboard
                 }
             }, ct);
 
-            AppendLog($"0B NXT 장후 등록: {nxtItems.Length}종목");
+            AppendLog($"0B NXT after-market registered: {nxtItems.Length}stocks");
         }
 
         private static bool IsNxtMarketWindow()
@@ -222,28 +220,28 @@ namespace TradingDashboard
         {
             return code switch
             {
-                "0" => "KRX 장시작전 알림",
-                "3" => "KRX 장시작",
-                "2" => "KRX 장마감 알림",
-                "4" => "KRX 장마감",
-                "8" => "KRX 정규장마감",
-                "9" => "전체장마감",
-                "a" => "KRX 시간외 종가매매 시작",
-                "b" => "KRX 시간외 종가매매 종료",
-                "c" => "KRX 시간외 단일가 시작",
-                "d" => "KRX 시간외 단일가 종료",
-                "e" => "선옵 장마감전 동시호가 종료",
-                "f" => "선물옵션 장운영시간 알림",
-                "o" => "선옵 장시작",
-                "s" => "선옵 장마감전 동시호가 시작",
-                "P" => "NXT 프리마켓 시작",
-                "Q" => "NXT 프리마켓 종료",
-                "R" => "NXT 메인마켓 시작",
-                "S" => "NXT 메인마켓 종료",
-                "T" => "NXT 에프터마켓 단일가 시작",
-                "U" => "NXT 에프터마켓 시작",
-                "V" => "NXT 에프터마켓 종료",
-                _ => string.IsNullOrWhiteSpace(code) ? "장상태 미확인" : $"장상태 미정의({code})"
+                "0" => "KRX pre-open notice",
+                "3" => "KRX open",
+                "2" => "KRX close notice",
+                "4" => "KRX closed",
+                "8" => "KRX regular closed",
+                "9" => "all markets closed",
+                "a" => "KRX after-hours close trading start",
+                "b" => "KRX after-hours close trading end",
+                "c" => "KRX after-hours single-price start",
+                "d" => "KRX after-hours single-price end",
+                "e" => "futures/options closing auction end",
+                "f" => "futures/options session notice",
+                "o" => "futures/options open",
+                "s" => "futures/options closing auction start",
+                "P" => "NXT pre-market start",
+                "Q" => "NXT pre-market end",
+                "R" => "NXT main market start",
+                "S" => "NXT main market end",
+                "T" => "NXT after-market single-price start",
+                "U" => "NXT after-market start",
+                "V" => "NXT after-market end",
+                _ => string.IsNullOrWhiteSpace(code) ? "Market status unknown" : $"undefined market status({code})"
             };
         }
 
@@ -301,7 +299,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => AppendLog($"0B 수신 오류: {ex.Message}"));
+                Dispatcher.Invoke(() => AppendLog($"0B receive error: {ex.Message}"));
             }
         }
 
@@ -393,7 +391,7 @@ namespace TradingDashboard
                     _watchStockByCode[stock.Code] = stock;
                     SaveDailyWatchlistSnapshot(_watchStocks);
                     ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
-                    AppendLog($"조건검색 편입: {stock.Name} ({stock.Code})");
+                    AppendLog($"condition enter: {stock.Name} ({stock.Code})");
                 });
 
                 await RegisterRealtime0BForCurrentWatchlistAsync();
@@ -404,7 +402,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => AppendLog($"조건검색 편입 처리 오류: {code} / {ex.Message}"));
+                Dispatcher.Invoke(() => AppendLog($"condition enter handling error: {code} / {ex.Message}"));
             }
         }
 
@@ -446,7 +444,7 @@ namespace TradingDashboard
                 _watchStockByCode[stock.Code] = stock;
                 SaveDailyWatchlistSnapshot(_watchStocks);
                 ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
-                AppendLog($"조건검색 재편입(캐시): {stock.Name} ({stock.Code})");
+                AppendLog($"condition re-enter(cache): {stock.Name} ({stock.Code})");
                 return true;
             });
         }
@@ -469,7 +467,7 @@ namespace TradingDashboard
                     _watchStocks.Remove(existing);
 
                 SaveDailyWatchlistSnapshot(_watchStocks);
-                AppendLog($"조건검색 이탈: {code}");
+                AppendLog($"condition exit: {code}");
             });
 
             if (_realtimeWs != null && _realtimeWs.State == WebSocketState.Open && _realtimeCts != null)
@@ -503,7 +501,7 @@ namespace TradingDashboard
             if (previousMode == _isNxtMarketMode && string.Equals(previousCode, _lastMarketStatusCode, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            Dispatcher.Invoke(() => AppendLog($"0s 장운영구분: 215={_lastMarketStatusCode} / {_lastMarketStatusText} / {(_isNxtMarketMode ? "NXT 사용" : "KRX 사용")}"));
+            Dispatcher.Invoke(() => AppendLog($"0s market status: 215={_lastMarketStatusCode} / {_lastMarketStatusText} / {(_isNxtMarketMode ? "use NXT" : "use KRX")}"));
             _ = RefreshRealtimeRegistrationAfterMarketStatusAsync();
         }
 
@@ -527,7 +525,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => AppendLog($"0s 반영 재등록 오류: {ex.Message}"));
+                Dispatcher.Invoke(() => AppendLog($"0s refresh re-registration error: {ex.Message}"));
             }
         }
 
@@ -567,7 +565,7 @@ namespace TradingDashboard
                     if (TryApplyCurrentPriceFallbackHoga(code, "0D fallback"))
                         return;
 
-                    AppendLog($"0D 빈 호가 수신, 기존 호가 유지: {code}");
+                    AppendLog($"0D empty order book received, keep existing: {code}");
                     return;
                 }
 
@@ -612,7 +610,7 @@ namespace TradingDashboard
                 long totalSell = sellDisplayRows.Sum(r => r.Qty);
                 long totalBuy = buyDisplayRows.Sum(r => r.Qty);
                 UpdateHogaSummary(totalSell, totalBuy);
-                HogaStatusText.Text = $"현재가 {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s) && s.CurrentPrice > 0 ? s.CurrentPrice.ToString("N0") : "-")} / 등락률 {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s2) ? s2.ChangeRateText : "-")} / 0D {_last0DReceivedAt:HH:mm:ss}";
+                HogaStatusText.Text = $"Price {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s) && s.CurrentPrice > 0 ? s.CurrentPrice.ToString("N0") : "-")} / Rate {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s2) ? s2.ChangeRateText : "-")} / 0D {_last0DReceivedAt:HH:mm:ss}";
 
                 HighlightCenterPriceInHoga();
             });
@@ -636,7 +634,7 @@ namespace TradingDashboard
                     stock.ChangeRateText = FormatKrxPreviousCloseRate(curNum);
                 }
 
-                HogaStatusText.Text = $"현재가 {(curNum > 0 ? curNum.ToString("N0") : "-")} / 등락률 {FormatKrxPreviousCloseRate(curNum)} / 0D {(_last0DReceivedAt == DateTime.MinValue ? "-" : _last0DReceivedAt.ToString("HH:mm:ss"))}";
+                HogaStatusText.Text = $"Price {(curNum > 0 ? curNum.ToString("N0") : "-")} / Rate {FormatKrxPreviousCloseRate(curNum)} / 0D {(_last0DReceivedAt == DateTime.MinValue ? "-" : _last0DReceivedAt.ToString("HH:mm:ss"))}";
                 HighlightCenterPriceInHoga();
             });
         }
@@ -651,7 +649,7 @@ namespace TradingDashboard
                 if (TryApplyCurrentPriceFallbackHoga(_selectedStockCode, $"{source} fallback"))
                     return;
 
-                AppendLog($"{source} 빈 호가, 기존 호가 유지");
+                AppendLog($"{source} empty order book, keep existing");
                 return;
             }
 
@@ -696,7 +694,7 @@ namespace TradingDashboard
             long totalSell = sellDisplayRows.Sum(r => r.Qty);
             long totalBuy = buyDisplayRows.Sum(r => r.Qty);
             UpdateHogaSummary(totalSell, totalBuy);
-            HogaStatusText.Text = $"현재가 {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s) && s.CurrentPrice > 0 ? s.CurrentPrice.ToString("N0") : "-")} / 등락률 {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s2) ? s2.ChangeRateText : "-")} / {source} {_last0DReceivedAt:HH:mm:ss}";
+            HogaStatusText.Text = $"Price {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s) && s.CurrentPrice > 0 ? s.CurrentPrice.ToString("N0") : "-")} / Rate {(_watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? s2) ? s2.ChangeRateText : "-")} / {source} {_last0DReceivedAt:HH:mm:ss}";
             HighlightCenterPriceInHoga();
         }
 
@@ -730,20 +728,20 @@ namespace TradingDashboard
             }
 
             _sellHogaLevels[9].PriceText = currentPrice.ToString("N0");
-            _sellHogaLevels[9].QtyText = "시장가";
+            _sellHogaLevels[9].QtyText = "MKT";
             _sellHogaLevels[9].RawPrice = currentPrice;
             _sellHogaLevels[9].PriceBrush = ResolveHogaBrushByKrxPrevClose(currentPrice);
 
             _buyHogaLevels[0].PriceText = currentPrice.ToString("N0");
-            _buyHogaLevels[0].QtyText = "시장가";
+            _buyHogaLevels[0].QtyText = "MKT";
             _buyHogaLevels[0].RawPrice = currentPrice;
             _buyHogaLevels[0].PriceBrush = ResolveHogaBrushByKrxPrevClose(currentPrice);
 
             _last0DReceivedAt = DateTime.Now;
             UpdateHogaSummary(null, null);
-            HogaStatusText.Text = $"현재가 {currentPrice:N0} / 등락률 {(_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? s) ? s.ChangeRateText : "-")} / {source} {_last0DReceivedAt:HH:mm:ss}";
+            HogaStatusText.Text = $"Price {currentPrice:N0} / Rate {(_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? s) ? s.ChangeRateText : "-")} / {source} {_last0DReceivedAt:HH:mm:ss}";
             HighlightCenterPriceInHoga();
-            AppendLog($"{source}: 호가 없음, 현재가/시장가 기준선 표시: {stockCode}");
+            AppendLog($"{source}: no order book, show Price/MKT fallback line: {stockCode}");
             return true;
         }
 
@@ -1008,7 +1006,7 @@ namespace TradingDashboard
                 }
             }, ct);
 
-            AppendLog($"0D/0H 등록: {requestCode}");
+            AppendLog($"0D/0H registered: {requestCode}");
         }
 
         private static async Task SendWsJsonAsync(ClientWebSocket ws, object payload, CancellationToken ct)
@@ -1040,18 +1038,11 @@ namespace TradingDashboard
             }
         }
 
-        private readonly struct MarketStatusSnapshot
+        private readonly struct MarketStatusSnapshot(string code, string time, string expectedRemain)
         {
-            public MarketStatusSnapshot(string code, string time, string expectedRemain)
-            {
-                Code = code;
-                Time = time;
-                ExpectedRemain = expectedRemain;
-            }
-
-            public string Code { get; }
-            public string Time { get; }
-            public string ExpectedRemain { get; }
+            public string Code { get; } = code;
+            public string Time { get; } = time;
+            public string ExpectedRemain { get; } = expectedRemain;
         }
 
         private static async Task<MarketStatusSnapshot> ReceiveMarketStatusSnapshotAsync(ClientWebSocket ws, CancellationToken ct)
@@ -1122,7 +1113,7 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(value))
                 return string.Empty;
 
-            string digits = new string(value.Where(char.IsDigit).ToArray());
+            string digits = new([.. value.Where(char.IsDigit)]);
             if (digits.Length == 0)
                 return string.Empty;
 

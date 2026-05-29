@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -37,14 +37,12 @@ namespace TradingDashboard
 
         private void MinuteChartComboBox_DropDownOpened(object sender, EventArgs e)
         {
-            if (MinuteChartPlaceholderItem != null)
-                MinuteChartPlaceholderItem.Visibility = Visibility.Collapsed;
+            MinuteChartPlaceholderItem?.Visibility = Visibility.Collapsed;
         }
 
         private void MinuteChartComboBox_DropDownClosed(object sender, EventArgs e)
         {
-            if (MinuteChartPlaceholderItem != null)
-                MinuteChartPlaceholderItem.Visibility = Visibility.Visible;
+            MinuteChartPlaceholderItem?.Visibility = Visibility.Visible;
         }
 
         private void ResetMinuteChartComboSelection()
@@ -106,34 +104,29 @@ namespace TradingDashboard
                     if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
                         return;
 
-                    ApplyChartCandles(cachedCandles, selectedStockCode, requestedPeriod, "캐시");
+                    ApplyChartCandles(cachedCandles, selectedStockCode, requestedPeriod, "cache");
                     showedCachedChart = true;
                 }
 
                 List<ChartCandle> candles;
                 if (IsMinuteChartPeriod(requestedPeriod))
                 {
-                    candles = (await _kiwoomConditionService.GetMinuteCandlesAsync(selectedStockCode, ResolveMinuteChartInterval(requestedPeriod), useNxtMarket, count, cancellationToken))
+                    candles = [.. (await _kiwoomConditionService.GetMinuteCandlesAsync(selectedStockCode, ResolveMinuteChartInterval(requestedPeriod), useNxtMarket, count, cancellationToken))
                         .TakeLast(count)
-                        .Select(ToChartCandle)
-                        .ToList();
+                        .Select(ToChartCandle)];
                 }
                 else
                 {
                     candles = requestedPeriod switch
                     {
-                        ChartPeriod.Daily => (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
+                        ChartPeriod.Daily => [.. (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
                             .TakeLast(count)
-                            .Select(ToChartCandle)
-                            .ToList(),
-                        ChartPeriod.Weekly => (await _kiwoomConditionService.GetWeeklyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken))
-                            .Select(ToChartCandle).ToList(),
-                        ChartPeriod.Monthly => (await _kiwoomConditionService.GetMonthlyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken))
-                            .Select(ToChartCandle).ToList(),
-                        _ => (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
+                            .Select(ToChartCandle)],
+                        ChartPeriod.Weekly => [.. (await _kiwoomConditionService.GetWeeklyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken)).Select(ToChartCandle)],
+                        ChartPeriod.Monthly => [.. (await _kiwoomConditionService.GetMonthlyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken)).Select(ToChartCandle)],
+                        _ => [.. (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
                             .TakeLast(count)
-                            .Select(ToChartCandle)
-                            .ToList()
+                            .Select(ToChartCandle)]
                     };
                 }
                 if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
@@ -143,7 +136,7 @@ namespace TradingDashboard
                     return;
 
                 SetChartMemoryCache(cacheKey, candles);
-                ApplyChartCandles(candles, selectedStockCode, requestedPeriod, showedCachedChart ? "최신갱신" : "초기");
+                ApplyChartCandles(candles, selectedStockCode, requestedPeriod, showedCachedChart ? "refresh" : "initial");
             }
             catch (OperationCanceledException)
             {
@@ -151,7 +144,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                AppendLog($"차트 조회 오류: {ex.Message}");
+                AppendLog($"chart query error: {ex.Message}");
             }
         }
 
@@ -181,7 +174,7 @@ namespace TradingDashboard
                 return candles.Count > 0;
             }
 
-            candles = new List<ChartCandle>();
+            candles = [];
             return false;
         }
 
@@ -216,10 +209,9 @@ namespace TradingDashboard
 
         private static List<ChartCandle> CloneChartCandles(IEnumerable<ChartCandle> candles)
         {
-            return candles
+            return [.. candles
                 .Where(c => c != null)
-                .Select(CloneChartCandle)
-                .ToList();
+                .Select(CloneChartCandle)];
         }
 
         private static ChartCandle CloneChartCandle(ChartCandle c)
@@ -365,7 +357,7 @@ namespace TradingDashboard
             }
 
             DateTime now = DateTime.Now;
-            ChartCandle last = _currentChartCandles[_currentChartCandles.Count - 1];
+            ChartCandle last = _currentChartCandles[^1];
             if (!IsSameCalendarChartBucket(last.Date, period, now))
             {
                 last = new ChartCandle
@@ -416,7 +408,7 @@ namespace TradingDashboard
                 return;
 
             _lastRealtimeChartDrawAt = DateTime.Now;
-            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(period)} 실시간");
+            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(period)} realtime");
         }
 
         private void ApplyRealtimeChartTick(string code, long price, long cumulativeVolume, long tradeVolume, string tradeTimeText)
@@ -442,7 +434,7 @@ namespace TradingDashboard
             }
 
             string bucketTime = BuildMinuteBucketTime(tradeTimeText, minute);
-            ChartCandle last = _currentChartCandles[_currentChartCandles.Count - 1];
+            ChartCandle last = _currentChartCandles[^1];
             bool isNewCandle = false;
             if (!IsSameChartDate(last.Date, bucketTime))
             {
@@ -485,7 +477,7 @@ namespace TradingDashboard
                 return;
 
             _lastRealtimeChartDrawAt = DateTime.Now;
-            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} 축재계산");
+            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} axis recalculation");
         }
 
         private void DrawFullChart(List<ChartCandle> candles, string reason)
@@ -501,7 +493,7 @@ namespace TradingDashboard
             DrawVolumeChart(candles);
             sw.Stop();
 
-            AppendLog($"차트 전체그리기({FormatChartPeriodLabel(_currentChartDataPeriod)} / {reason}): {candles.Count}봉 / {sw.ElapsedMilliseconds:N0}ms");
+            AppendLog($"chart full render({FormatChartPeriodLabel(_currentChartDataPeriod)} / {reason}): {candles.Count}bars / {sw.ElapsedMilliseconds:N0}ms");
         }
 
         private void ResetChartViewport()
@@ -513,7 +505,7 @@ namespace TradingDashboard
         private List<ChartCandle> GetVisibleChartCandles()
         {
             if (_currentChartCandles.Count == 0)
-                return new List<ChartCandle>();
+                return [];
 
             int start = _chartViewCount > 0
                 ? Math.Clamp(_chartViewStartIndex, 0, Math.Max(0, _currentChartCandles.Count - 1))
@@ -522,7 +514,7 @@ namespace TradingDashboard
                 ? Math.Clamp(_chartViewCount, 1, _currentChartCandles.Count - start)
                 : _currentChartCandles.Count;
 
-            return _currentChartCandles.Skip(start).Take(count).ToList();
+            return [.. _currentChartCandles.Skip(start).Take(count)];
         }
 
         private int GetVisibleChartStartIndex()
@@ -547,7 +539,7 @@ namespace TradingDashboard
             if (e.ClickCount >= 2)
             {
                 ResetChartViewport();
-                DrawFullChart("전체복귀");
+                DrawFullChart("full reset");
                 e.Handled = true;
                 return;
             }
@@ -619,7 +611,7 @@ namespace TradingDashboard
 
             _chartViewStartIndex = visibleStart + first;
             _chartViewCount = Math.Clamp(selectedCount, 1, _currentChartCandles.Count - _chartViewStartIndex);
-            DrawFullChart($"구간선택 {_chartViewCount}봉");
+            DrawFullChart($"range selection {_chartViewCount}bars");
             e.Handled = true;
         }
 
@@ -713,17 +705,17 @@ namespace TradingDashboard
         private static string BuildMinuteBucketTime(string tradeTimeText, int minute)
         {
             DateTime now = DateTime.Now;
-            string digits = new string((tradeTimeText ?? string.Empty).Where(char.IsDigit).ToArray());
+            string digits = new([.. (tradeTimeText ?? string.Empty).Where(char.IsDigit)]);
             if (digits.Length >= 14)
             {
-                string full = digits.Substring(0, 14);
+                string full = digits[..14];
                 if (DateTime.TryParseExact(full, "yyyyMMddHHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime parsed))
                     now = parsed;
             }
             else if (digits.Length >= 6)
             {
-                string hms = digits.Substring(0, 6);
-                if (int.TryParse(hms.Substring(0, 2), out int hour) &&
+                string hms = digits[..6];
+                if (int.TryParse(hms[..2], out int hour) &&
                     int.TryParse(hms.Substring(2, 2), out int minuteValue) &&
                     int.TryParse(hms.Substring(4, 2), out int second) &&
                     hour >= 0 && hour < 24 &&
@@ -792,17 +784,17 @@ namespace TradingDashboard
         {
             return period switch
             {
-                ChartPeriod.Minute1 => "1분봉",
-                ChartPeriod.Minute3 => "3분봉",
-                ChartPeriod.Minute5 => "5분봉",
-                ChartPeriod.Minute10 => "10분봉",
-                ChartPeriod.Minute15 => "15분봉",
-                ChartPeriod.Minute30 => "30분봉",
-                ChartPeriod.Minute60 => "60분봉",
-                ChartPeriod.Minute120 => "120분봉",
-                ChartPeriod.Daily => "일봉",
-                ChartPeriod.Weekly => "주봉",
-                ChartPeriod.Monthly => "월봉",
+                ChartPeriod.Minute1 => "1m",
+                ChartPeriod.Minute3 => "3m",
+                ChartPeriod.Minute5 => "5m",
+                ChartPeriod.Minute10 => "10m",
+                ChartPeriod.Minute15 => "15m",
+                ChartPeriod.Minute30 => "30m",
+                ChartPeriod.Minute60 => "60m",
+                ChartPeriod.Minute120 => "120m",
+                ChartPeriod.Daily => "D",
+                ChartPeriod.Weekly => "W",
+                ChartPeriod.Monthly => "M",
                 _ => period.ToString()
             };
         }
@@ -838,9 +830,9 @@ namespace TradingDashboard
 
         private static bool TryParseChartDate(string chartDate, out DateTime date)
         {
-            string digits = new string((chartDate ?? string.Empty).Where(char.IsDigit).ToArray());
+            string digits = new([.. (chartDate ?? string.Empty).Where(char.IsDigit)]);
             if (digits.Length >= 8)
-                return DateTime.TryParseExact(digits.Substring(0, 8), "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out date);
+                return DateTime.TryParseExact(digits[..8], "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out date);
 
             date = default;
             return false;
@@ -848,14 +840,14 @@ namespace TradingDashboard
 
         private static bool IsSameChartDate(string chartDate, string yyyymmdd)
         {
-            string normalized = new string((chartDate ?? string.Empty).Where(char.IsDigit).ToArray());
-            string target = new string((yyyymmdd ?? string.Empty).Where(char.IsDigit).ToArray());
+            string normalized = new([.. (chartDate ?? string.Empty).Where(char.IsDigit)]);
+            string target = new([.. (yyyymmdd ?? string.Empty).Where(char.IsDigit)]);
             if (target.Length >= 14 && normalized.Length >= 12)
-                return string.Equals(normalized.Substring(0, Math.Min(12, normalized.Length)), target.Substring(0, 12), StringComparison.Ordinal);
+                return string.Equals(normalized[..Math.Min(12, normalized.Length)], target[..12], StringComparison.Ordinal);
             if (normalized.Length >= 8)
-                normalized = normalized.Substring(0, 8);
+                normalized = normalized[..8];
             if (target.Length >= 8)
-                target = target.Substring(0, 8);
+                target = target[..8];
             return string.Equals(normalized, target, StringComparison.Ordinal);
         }
 
@@ -1087,9 +1079,9 @@ namespace TradingDashboard
         private static string FormatAxisNumber(long value)
         {
             if (value >= 100_000_000)
-                return $"{value / 100_000_000d:0.#}억";
+                return $"{value / 100_000_000d:0.#}B KRW";
             if (value >= 10_000)
-                return $"{value / 10_000d:0.#}만";
+                return $"{value / 10_000d:0.#}K";
             return value.ToString("N0");
         }
 
@@ -1100,9 +1092,9 @@ namespace TradingDashboard
 
             decimal hundredMillion = value / 100m;
             if (hundredMillion >= 10m)
-                return $"{hundredMillion:N1}억";
+                return $"{hundredMillion:N1}B KRW";
 
-            return $"{value:N0}백만";
+            return $"{value:N0}M KRW";
         }
 
         private enum ChartPeriod
@@ -1146,12 +1138,12 @@ namespace TradingDashboard
 
         private sealed class ChartCacheEntry
         {
-            public List<ChartCandle> Candles { get; set; } = new List<ChartCandle>();
+            public List<ChartCandle> Candles { get; set; } = [];
             public DateTime CachedAt { get; set; }
             public long LastAccess { get; set; }
         }
 
-        private static ChartCandle ToChartCandle(DailyCandle c) => new ChartCandle
+        private static ChartCandle ToChartCandle(DailyCandle c) => new()
         {
             Date = c.Date,
             Open = c.Open,

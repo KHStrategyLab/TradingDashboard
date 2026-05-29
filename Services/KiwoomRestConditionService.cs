@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -13,13 +13,13 @@ using TradingDashboard.Models;
 
 namespace TradingDashboard.Services
 {
-    public sealed class KiwoomRestConditionService
+    public sealed class KiwoomRestConditionService(KiwoomSettings settings, HttpClient? httpClient = null)
     {
-        private readonly KiwoomSettings _settings;
-        private readonly HttpClient _httpClient;
-        private readonly SemaphoreSlim _restRequestGate = new SemaphoreSlim(1, 1);
-        private readonly SemaphoreSlim _restConcurrencyGate = new SemaphoreSlim(5, 5);
-        private readonly SemaphoreSlim _tokenGate = new SemaphoreSlim(1, 1);
+        private readonly KiwoomSettings _settings = settings ?? new KiwoomSettings();
+        private readonly HttpClient _httpClient = httpClient ?? new HttpClient();
+        private readonly SemaphoreSlim _restRequestGate = new(1, 1);
+        private readonly SemaphoreSlim _restConcurrencyGate = new(5, 5);
+        private readonly SemaphoreSlim _tokenGate = new(1, 1);
         private DateTime _lastRestRequestAtUtc = DateTime.MinValue;
         private DateTime _restBurstWindowStartUtc = DateTime.MinValue;
         private DateTime _restSustainedUntilUtc = DateTime.MinValue;
@@ -40,11 +40,6 @@ namespace TradingDashboard.Services
         private static readonly TimeSpan AccessTokenRefreshMargin = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan RestCooldownOnLimit = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan RestMaxCooldownOnLimit = TimeSpan.FromSeconds(120);
-        public KiwoomRestConditionService(KiwoomSettings settings, HttpClient? httpClient = null)
-        {
-            _settings = settings ?? new KiwoomSettings();
-            _httpClient = httpClient ?? new HttpClient();
-        }
 
         public async Task<List<string>> GetConditionStockNamesAsync(CancellationToken cancellationToken = default)
         {
@@ -59,7 +54,7 @@ namespace TradingDashboard.Services
             string loginCode = ReadString(loginRes.RootElement, "return_code");
             if (loginCode != "0")
             {
-                throw new InvalidOperationException($"키움 로그인 실패: code={loginCode}, msg={ReadString(loginRes.RootElement, "return_msg")}");
+                throw new InvalidOperationException($"Kiwoom login failed: code={loginCode}, msg={ReadString(loginRes.RootElement, "return_msg")}");
             }
 
             await SendJsonAsync(ws, new { trnm = "CNSRLST" }, cancellationToken).ConfigureAwait(false);
@@ -67,7 +62,7 @@ namespace TradingDashboard.Services
             string seq = ResolveConditionSeq(listRes.RootElement, _settings.ConditionSeq01);
             if (string.IsNullOrWhiteSpace(seq))
             {
-                throw new InvalidOperationException($"조건식 {(_settings.ConditionSeq01 ?? "1")}번을 찾지 못했습니다.");
+                throw new InvalidOperationException($"condition {(_settings.ConditionSeq01 ?? "1")} not found.");
             }
 
             await SendJsonAsync(ws, new
@@ -130,7 +125,7 @@ namespace TradingDashboard.Services
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string baseCode = NormalizeStockCode(code);
             if (string.IsNullOrWhiteSpace(baseCode))
-                return new List<DailyCandle>();
+                return [];
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/chart");
@@ -147,13 +142,13 @@ namespace TradingDashboard.Services
 
             using HttpResponseMessage response = await SendKiwoomRestAsync(req, "ka10081", cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
-                return new List<DailyCandle>();
+                return [];
 
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             using JsonDocument doc = JsonDocument.Parse(json);
             JsonElement array = FindFirstArray(doc.RootElement);
             if (array.ValueKind != JsonValueKind.Array)
-                return new List<DailyCandle>();
+                return [];
 
             var candles = new List<DailyCandle>();
             foreach (JsonElement item in array.EnumerateArray())
@@ -163,12 +158,11 @@ namespace TradingDashboard.Services
                     candles.Add(candle);
             }
 
-            return candles
+            return [.. candles
                 .GroupBy(c => c.Date, System.StringComparer.Ordinal)
                 .Select(g => g.First())
                 .OrderBy(c => c.Date)
-                .TakeLast(takeCount)
-                .ToList();
+                .TakeLast(takeCount)];
         }
 
         public async Task<List<DailyCandle>> GetWeeklyCandlesAsync(string code, bool useNxtMarket = false, int takeCount = 120, CancellationToken cancellationToken = default)
@@ -182,11 +176,11 @@ namespace TradingDashboard.Services
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string baseCode = NormalizeStockCode(code);
             if (string.IsNullOrWhiteSpace(baseCode))
-                return new List<DailyCandle>();
+                return [];
 
-            // MTS 표시 규칙과 맞춘다.
-            // useNxtMarket=true이면 OHLC/현재가/거래량 계열은 NXT 코드로 조회한다.
-            // 단, 화면 기준가와 색상 기준은 MainWindow에서 별도로 잠근 KRX 전일종가만 사용한다.
+            // Match the MTS display rules.
+            // When useNxtMarket=true, query OHLC/price/volume using the NXT code.
+            // Base price and colors still use the KRX previous close locked by MainWindow.
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/chart");
@@ -204,7 +198,7 @@ namespace TradingDashboard.Services
 
             using HttpResponseMessage response = await SendKiwoomRestAsync(req, "ka10080", cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
-                return new List<DailyCandle>();
+                return [];
 
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             using JsonDocument doc = JsonDocument.Parse(json);
@@ -212,7 +206,7 @@ namespace TradingDashboard.Services
             if (array.ValueKind != JsonValueKind.Array)
                 array = FindFirstArray(doc.RootElement);
             if (array.ValueKind != JsonValueKind.Array)
-                return new List<DailyCandle>();
+                return [];
 
             var candles = new List<DailyCandle>();
             foreach (JsonElement item in array.EnumerateArray())
@@ -222,12 +216,11 @@ namespace TradingDashboard.Services
                     candles.Add(candle);
             }
 
-            return candles
+            return [.. candles
                 .GroupBy(c => c.Date, System.StringComparer.Ordinal)
                 .Select(g => g.First())
                 .OrderBy(c => c.Date)
-                .TakeLast(takeCount)
-                .ToList();
+                .TakeLast(takeCount)];
         }
 
         public async Task<List<DailyCandle>> GetMonthlyCandlesAsync(string code, bool useNxtMarket = false, int takeCount = 80, CancellationToken cancellationToken = default)
@@ -241,7 +234,7 @@ namespace TradingDashboard.Services
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string baseCode = NormalizeStockCode(code);
             if (string.IsNullOrWhiteSpace(baseCode))
-                return new List<DailyCandle>();
+                return [];
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/chart");
@@ -258,13 +251,13 @@ namespace TradingDashboard.Services
 
             using HttpResponseMessage response = await SendKiwoomRestAsync(req, apiId, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
-                return new List<DailyCandle>();
+                return [];
 
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             using JsonDocument doc = JsonDocument.Parse(json);
             JsonElement array = FindFirstArray(doc.RootElement);
             if (array.ValueKind != JsonValueKind.Array)
-                return new List<DailyCandle>();
+                return [];
 
             var candles = new List<DailyCandle>();
             foreach (JsonElement item in array.EnumerateArray())
@@ -274,12 +267,11 @@ namespace TradingDashboard.Services
                     candles.Add(candle);
             }
 
-            return candles
+            return [.. candles
                 .GroupBy(c => c.Date, System.StringComparer.Ordinal)
                 .Select(g => g.First())
                 .OrderBy(c => c.Date)
-                .TakeLast(takeCount)
-                .ToList();
+                .TakeLast(takeCount)];
         }
 
         public async Task<StockStatusMetrics> GetStockStatusMetricsAsync(string code, CancellationToken cancellationToken = default)
@@ -308,9 +300,9 @@ namespace TradingDashboard.Services
                 JsonElement root = doc.RootElement;
 
                 long price = Math.Abs(ParseLongSafe(ReadAnyDeep(root, "cur_prc", "curPrc", "price", "now_prc", "10")));
-                long open = Math.Abs(ParseLongSafe(ReadAnyDeep(root, "open_pric", "open", "stck_oprc", "시가", "16")));
-                long high = Math.Abs(ParseLongSafe(ReadAnyDeep(root, "high_pric", "high", "stck_hgpr", "고가", "17")));
-                long low = Math.Abs(ParseLongSafe(ReadAnyDeep(root, "low_pric", "low", "stck_lwpr", "저가", "18")));
+                long open = Math.Abs(ParseLongSafe(ReadAnyDeep(root, "open_pric", "open", "stck_oprc", "open", "16")));
+                long high = Math.Abs(ParseLongSafe(ReadAnyDeep(root, "high_pric", "high", "stck_hgpr", "high", "17")));
+                long low = Math.Abs(ParseLongSafe(ReadAnyDeep(root, "low_pric", "low", "stck_lwpr", "low", "18")));
                 long volume = ParseLongSafe(ReadAnyDeep(root, "trde_qty", "trdeQty", "acc_trde_qty", "acml_vol", "volume", "13"));
                 long tradingValue = ParseLongSafe(ReadAnyDeep(root, "trde_prica", "trde_amt", "acc_trde_prica", "acc_trde_amt", "acml_tr_pbmn", "14"));
                 bool tradingValueFromApi = tradingValue > 0;
@@ -390,9 +382,9 @@ namespace TradingDashboard.Services
             long dayDiff = ParseLongSafe(ReadAnyDeep(root10007, "pred_pre", "predPre", "change", "chg_val", "11"));
             if (dayDiff == 0)
                 dayDiff = ParseLongSafe(ReadAnyDeep(root10100, "pred_pre", "predPre", "change", "chg_val", "11"));
-            long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+            long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "base_prc", "basePrc", "std_prc", "yday_prc", "Base")));
             if (basePrice <= 0)
-                basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+                basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "base_prc", "basePrc", "std_prc", "yday_prc", "Base")));
             long previousClosePrice = ResolvePreviousClosePrice(root10007);
             if (previousClosePrice <= 0)
                 previousClosePrice = ResolvePreviousClosePrice(root10100);
@@ -467,7 +459,7 @@ namespace TradingDashboard.Services
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string baseCode = NormalizeStockCode(code);
             if (string.IsNullOrWhiteSpace(baseCode))
-                return Array.Empty<(string, StockStatusMetrics)>();
+                return [];
 
             var results = new List<(string RequestCode, StockStatusMetrics Metrics)>();
             foreach (string requestCode in new[] { baseCode, $"{baseCode}_NX", $"{baseCode}_AL" })
@@ -512,9 +504,9 @@ namespace TradingDashboard.Services
             long dayDiff = ParseLongSafe(ReadAnyDeep(root10007, "pred_pre", "predPre", "change", "chg_val", "11"));
             if (dayDiff == 0)
                 dayDiff = ParseLongSafe(ReadAnyDeep(root10100, "pred_pre", "predPre", "change", "chg_val", "11"));
-            long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+            long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "base_prc", "basePrc", "std_prc", "yday_prc", "Base")));
             if (basePrice <= 0)
-                basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+                basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "base_prc", "basePrc", "std_prc", "yday_prc", "Base")));
             long previousClosePrice = ResolvePreviousClosePrice(root10007);
             if (previousClosePrice <= 0)
                 previousClosePrice = ResolvePreviousClosePrice(root10100);
@@ -638,7 +630,7 @@ namespace TradingDashboard.Services
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string baseCode = NormalizeStockCode(code);
             if (string.IsNullOrWhiteSpace(baseCode))
-                return Array.Empty<(string Date, long Volume)>();
+                return [];
 
             string today = DateTime.Now.ToString("yyyyMMdd");
             JsonElement root = await PostApiRootAsync(token, "ka10015", "/api/dostk/stkinfo", new { stk_cd = $"{baseCode}_AL", strt_dt = today }, cancellationToken).ConfigureAwait(false);
@@ -669,7 +661,7 @@ namespace TradingDashboard.Services
                 rate += "%";
             snapshot.ChangeRateText = string.IsNullOrWhiteSpace(rate) ? "-" : rate;
 
-            long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(quoteRoot, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+            long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(quoteRoot, "base_prc", "basePrc", "std_prc", "yday_prc", "Base")));
             long previousClosePrice = ResolvePreviousClosePrice(quoteRoot);
             if (previousClosePrice > 0)
                 basePrice = previousClosePrice;
@@ -720,16 +712,16 @@ namespace TradingDashboard.Services
                 new { amt_qty_tp = "2", stk_cd = mtsRequestCode, date },
                 cancellationToken).ConfigureAwait(false);
 
-            RestLimitLog?.Invoke($"프로그램 TR 조회: ka90008 / {mtsRequestCode} / date {date}");
+            RestLimitLog?.Invoke($"program TR query: ka90008 / {mtsRequestCode} / date {date}");
             LogProgramTradeResponseShape(mtsRequestCode, date, mtsRoot);
             ProgramTradeSummary mtsSummary = ReadProgramTimeSummary(mtsRoot, date);
             if (mtsSummary.Found)
             {
-                RestLimitLog?.Invoke($"프로그램 TR 적용: {mtsRequestCode} / {mtsSummary.LogText}");
+                RestLimitLog?.Invoke($"program TR applied: {mtsRequestCode} / {mtsSummary.LogText}");
                 return mtsSummary;
             }
 
-            RestLimitLog?.Invoke($"프로그램 TR 값 없음: {mtsRequestCode} / date {date}");
+            RestLimitLog?.Invoke($"program TR empty: {mtsRequestCode} / date {date}");
             return new ProgramTradeSummary(false, 0, string.Empty);
 
         }
@@ -739,22 +731,22 @@ namespace TradingDashboard.Services
             JsonElement rows = FindArrayByKeySafe(root, "stk_tm_prm_trde_trnsn");
             if (rows.ValueKind != JsonValueKind.Array)
             {
-                RestLimitLog?.Invoke($"프로그램 TR 배열 없음: {requestCode} / date {date} / root {DescribeJsonKeys(root)}");
+                RestLimitLog?.Invoke($"program TR array missing: {requestCode} / date {date} / root {DescribeJsonKeys(root)}");
                 return;
             }
 
             int count = rows.GetArrayLength();
             if (count == 0)
             {
-                RestLimitLog?.Invoke($"프로그램 TR 배열 0건: {requestCode} / date {date}");
+                RestLimitLog?.Invoke($"program TR array 0 rows: {requestCode} / date {date}");
                 return;
             }
 
             JsonElement first = rows[0];
             string firstDate = NormalizeDigits(ReadAnyDeep(first, "dt", "date", "trde_dt", "base_dt"));
             RestLimitLog?.Invoke(
-                $"프로그램 TR 배열: {requestCode} / {count}건 / 요청일 {date} / 첫일자 {firstDate} / " +
-                $"첫행 {DescribeJsonKeys(first)} / " +
+                $"program TR array: {requestCode} / {count}rows / request date {date} / first date {firstDate} / " +
+                $"first row {DescribeJsonKeys(first)} / " +
                 $"netAmt {ReadAnyDeep(first, "prm_netprps_amt", "prmNetprpsAmt")} / " +
                 $"buyAmt {ReadAnyDeep(first, "prm_buy_amt", "prmBuyAmt")} / " +
                 $"sellAmt {ReadAnyDeep(first, "prm_sell_amt", "prmSellAmt")}");
@@ -1153,7 +1145,7 @@ namespace TradingDashboard.Services
         {
             if (string.IsNullOrWhiteSpace(_settings.AppKey) || string.IsNullOrWhiteSpace(_settings.SecretKey))
             {
-                throw new InvalidOperationException("키움 AppKey/SecretKey가 설정되지 않았습니다.");
+                throw new InvalidOperationException("Kiwoom AppKey/SecretKey is not configured.");
             }
         }
 
@@ -1199,7 +1191,7 @@ namespace TradingDashboard.Services
             using JsonDocument doc = JsonDocument.Parse(json);
             string token = ReadString(doc.RootElement, "token");
             if (string.IsNullOrWhiteSpace(token))
-                throw new InvalidOperationException("키움 토큰 응답에 token 값이 없습니다.");
+                throw new InvalidOperationException("Kiwoom token response has no token value.");
 
             return token;
         }
@@ -1384,7 +1376,7 @@ namespace TradingDashboard.Services
             {
                 WebSocketReceiveResult result = await ws.ReceiveAsync(buffer, cancellationToken).ConfigureAwait(false);
                 if (result.MessageType == WebSocketMessageType.Close)
-                    throw new InvalidOperationException("키움 WebSocket 연결이 종료되었습니다.");
+                    throw new InvalidOperationException("Kiwoom WebSocket connection closed.");
 
                 ms.Write(buffer, 0, result.Count);
                 if (result.EndOfMessage)
@@ -1403,13 +1395,13 @@ namespace TradingDashboard.Services
             using JsonDocument loginRes = await ReceiveByTrNameAsync(ws, "LOGIN", TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
             string loginCode = ReadString(loginRes.RootElement, "return_code");
             if (loginCode != "0")
-                throw new InvalidOperationException($"키움 로그인 실패: code={loginCode}, msg={ReadString(loginRes.RootElement, "return_msg")}");
+                throw new InvalidOperationException($"Kiwoom login failed: code={loginCode}, msg={ReadString(loginRes.RootElement, "return_msg")}");
 
             await SendJsonAsync(ws, new { trnm = "CNSRLST" }, cancellationToken).ConfigureAwait(false);
             using JsonDocument listRes = await ReceiveByTrNameAsync(ws, "CNSRLST", TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
             string seq = ResolveConditionSeq(listRes.RootElement, _settings.ConditionSeq01);
             if (string.IsNullOrWhiteSpace(seq))
-                throw new InvalidOperationException($"조건식 {(_settings.ConditionSeq01 ?? "1")}번을 찾지 못했습니다.");
+                throw new InvalidOperationException($"condition {(_settings.ConditionSeq01 ?? "1")} not found.");
 
             await SendJsonAsync(ws, new { trnm = "CNSRREQ", seq, search_type = "1", stex_tp = "K", cont_yn = "N", next_key = "" }, cancellationToken).ConfigureAwait(false);
             using JsonDocument condRes = await ReceiveByTrNameAsync(ws, "CNSRREQ", TimeSpan.FromSeconds(20), cancellationToken).ConfigureAwait(false);
@@ -1608,14 +1600,14 @@ namespace TradingDashboard.Services
                     names.Add(display);
             }
 
-            return names.Distinct(StringComparer.Ordinal).ToList();
+            return [.. names.Distinct(StringComparer.Ordinal)];
         }
 
         private static string ReadConditionName(JsonElement item)
         {
             if (item.ValueKind == JsonValueKind.Object)
             {
-                string[] keys = { "stk_nm", "stkNm", "name", "jm_name", "jmname" };
+                string[] keys = ["stk_nm", "stkNm", "name", "jm_name", "jmname"];
                 foreach (string key in keys)
                 {
                     string value = ReadString(item, key);
@@ -1646,7 +1638,7 @@ namespace TradingDashboard.Services
         {
             if (item.ValueKind == JsonValueKind.Object)
             {
-                string[] keys = { "stk_cd", "stkCd", "code", "jm_code", "jmcode", "종목코드" };
+            string[] keys = ["stk_cd", "stkCd", "code", "jm_code", "jmcode", "종목코드"];
                 foreach (string key in keys)
                 {
                     string value = ReadString(item, key);
@@ -1694,7 +1686,7 @@ namespace TradingDashboard.Services
             if (string.IsNullOrWhiteSpace(value))
                 return string.Empty;
 
-            string digits = new string(value.Where(char.IsDigit).ToArray());
+            string digits = new([.. value.Where(char.IsDigit)]);
             if (digits.Length == 0)
                 return string.Empty;
 
@@ -1706,11 +1698,11 @@ namespace TradingDashboard.Services
             if (string.IsNullOrWhiteSpace(value))
                 return string.Empty;
 
-            string digits = new string(value.Where(char.IsDigit).ToArray());
+            string digits = new([.. value.Where(char.IsDigit)]);
             if (digits.Length == 0)
                 return string.Empty;
 
-            return digits.Length >= 6 ? digits.Substring(digits.Length - 6) : digits.PadLeft(6, '0');
+            return digits.Length >= 6 ? digits[^6..] : digits.PadLeft(6, '0');
         }
 
         private static List<(string Code, string Name)> ParseConditionBaseItems(JsonElement root)
@@ -1729,10 +1721,9 @@ namespace TradingDashboard.Services
                 items.Add((code, string.IsNullOrWhiteSpace(name) ? code : name.Trim()));
             }
 
-            return items
+            return [.. items
                 .GroupBy(x => x.Code, StringComparer.Ordinal)
-                .Select(g => g.First())
-                .ToList();
+                .Select(g => g.First())];
         }
 
         private static string ReadAny(JsonElement element, params string[] keys)
@@ -1787,7 +1778,7 @@ namespace TradingDashboard.Services
 
             string clean = value.Replace(",", "").Replace("+", "").Trim();
             while (clean.StartsWith("--", StringComparison.Ordinal))
-                clean = "-" + clean.Substring(2);
+                clean = "-" + clean[2..];
             return long.TryParse(clean, out long parsed) ? parsed : 0;
         }
 
@@ -1804,7 +1795,7 @@ namespace TradingDashboard.Services
                 "basePrc",
                 "std_prc",
                 "yday_prc",
-                "기준가")));
+                "Base")));
         }
 
         private static JsonElement FindFirstArray(JsonElement root)
@@ -1833,15 +1824,15 @@ namespace TradingDashboard.Services
 
         private static DailyCandle? ParseDailyCandle(JsonElement item)
         {
-            string date = ReadAnyDeep(item, "cntr_tm", "time", "tm", "dt", "date", "d", "stk_dt", "?쇱옄");
+            string date = ReadAnyDeep(item, "cntr_tm", "time", "tm", "dt", "date", "d", "stk_dt", "일자");
             if (string.IsNullOrWhiteSpace(date) && item.ValueKind == JsonValueKind.Array && item.GetArrayLength() > 0)
                 date = item[0].ToString();
 
-            date = new string((date ?? string.Empty).Where(char.IsDigit).ToArray());
+            date = new string([.. (date ?? string.Empty).Where(char.IsDigit)]);
             if (date.Length >= 14)
-                date = date.Substring(0, 14);
+                date = date[..14];
             else if (date.Length >= 8)
-                date = date.Substring(0, 8);
+                date = date[..8];
 
             long open = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "open_pric", "open", "stck_oprc")));
             long high = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "high_pric", "high", "stck_hgpr")));
@@ -1904,4 +1895,3 @@ namespace TradingDashboard.Services
         }
     }
 }
-

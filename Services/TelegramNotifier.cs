@@ -8,17 +8,12 @@ using TradingDashboard.Models;
 
 namespace TradingDashboard.Services
 {
-    public class TelegramNotifier
+    public class TelegramNotifier(TelegramSettings settings)
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
-        private readonly TelegramSettings _settings;
+        private static readonly HttpClient HttpClient = new();
+        private readonly TelegramSettings _settings = settings ?? new TelegramSettings();
 
-        public TelegramNotifier(TelegramSettings settings)
-        {
-            _settings = settings ?? new TelegramSettings();
-        }
-
-        public async Task SendToDefaultAsync(string message, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task SendToDefaultAsync(string message, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(_settings.DefaultChatId))
                 return;
@@ -26,7 +21,7 @@ namespace TradingDashboard.Services
             await SendAsync(_settings.DefaultChatId, message, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task SendToAllAsync(string message, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task SendToAllAsync(string message, CancellationToken cancellationToken = default)
         {
             if (!_settings.Enabled)
                 return;
@@ -39,7 +34,7 @@ namespace TradingDashboard.Services
             }
         }
 
-        public async Task SendAsync(string chatId, string message, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task SendAsync(string chatId, string message, CancellationToken cancellationToken = default)
         {
             if (!_settings.Enabled)
                 return;
@@ -49,18 +44,14 @@ namespace TradingDashboard.Services
 
             string url = $"https://api.telegram.org/bot{_settings.BotToken}/sendMessage";
 
-            using (var content = new FormUrlEncodedContent(new Dictionary<string, string>
+            using var content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["chat_id"] = chatId,
                 ["text"] = message,
                 ["disable_web_page_preview"] = "true"
-            }))
-            {
-                using (HttpResponseMessage response = await HttpClient.PostAsync(url, content, cancellationToken).ConfigureAwait(false))
-                {
-                    response.EnsureSuccessStatusCode();
-                }
-            }
+            });
+            using HttpResponseMessage response = await HttpClient.PostAsync(url, content, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
         }
     }
 }

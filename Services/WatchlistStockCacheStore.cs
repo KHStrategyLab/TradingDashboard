@@ -7,7 +7,7 @@ namespace TradingDashboard.Services
     public sealed class WatchlistStockCacheStore
     {
         private const string RelativePath = "Config/watchlist_stock_cache.json";
-        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        private static readonly JsonSerializerOptions JsonOptions = new()
         {
             WriteIndented = true,
             PropertyNameCaseInsensitive = true
@@ -18,11 +18,11 @@ namespace TradingDashboard.Services
         public List<WatchlistStockCacheEntry> Load()
         {
             if (!File.Exists(CachePath))
-                return new List<WatchlistStockCacheEntry>();
+                return [];
 
             string json = File.ReadAllText(CachePath);
             return JsonSerializer.Deserialize<List<WatchlistStockCacheEntry>>(json, JsonOptions)
-                   ?? new List<WatchlistStockCacheEntry>();
+                   ?? [];
         }
 
         public void Save(IEnumerable<WatchlistStockCacheEntry> entries)
@@ -50,7 +50,7 @@ namespace TradingDashboard.Services
 
         private static string SearchUpwards(string startDirectory, string childDirectory)
         {
-            DirectoryInfo? directory = new DirectoryInfo(startDirectory);
+            DirectoryInfo? directory = new(startDirectory);
             while (directory != null)
             {
                 string candidate = Path.Combine(directory.FullName, childDirectory);

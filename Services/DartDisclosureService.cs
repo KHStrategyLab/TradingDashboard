@@ -14,32 +14,26 @@ using TradingDashboard.Models;
 
 namespace TradingDashboard.Services
 {
-    public sealed class DartDisclosureService
+    public sealed class DartDisclosureService(DartSettings settings)
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
+        private static readonly HttpClient HttpClient = new();
 
-        private readonly DartSettings _settings;
-        private readonly string _corpCodeCachePath;
+        private readonly DartSettings _settings = settings ?? new DartSettings();
+        private readonly string _corpCodeCachePath = ResolveCachePath();
         private Dictionary<string, string>? _corpCodeByStockCode;
-
-        public DartDisclosureService(DartSettings settings)
-        {
-            _settings = settings ?? new DartSettings();
-            _corpCodeCachePath = ResolveCachePath();
-        }
 
         public async Task<List<DisclosureItem>> GetLatestDisclosuresAsync(string stockCode, int? count = null, CancellationToken cancellationToken = default)
         {
             if (!_settings.Enabled || string.IsNullOrWhiteSpace(_settings.ApiKey) || string.IsNullOrWhiteSpace(stockCode))
-                return new List<DisclosureItem>();
+                return [];
 
             string normalizedStockCode = NormalizeStockCode(stockCode);
             if (string.IsNullOrWhiteSpace(normalizedStockCode))
-                return new List<DisclosureItem>();
+                return [];
 
             Dictionary<string, string> corpCodeMap = await GetCorpCodeMapAsync(cancellationToken).ConfigureAwait(false);
             if (!corpCodeMap.TryGetValue(normalizedStockCode, out string? corpCode) || string.IsNullOrWhiteSpace(corpCode))
-                return new List<DisclosureItem>();
+                return [];
 
             int displayCount = count ?? _settings.DisplayCount;
             if (displayCount <= 0)
@@ -66,13 +60,13 @@ namespace TradingDashboard.Services
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             DartListResponse? result = JsonSerializer.Deserialize<DartListResponse>(json, options);
             if (result == null)
-                return new List<DisclosureItem>();
+                return [];
             if (!string.IsNullOrWhiteSpace(result.Status) && result.Status != "000")
-                return new List<DisclosureItem>();
+                return [];
             if (result.List == null || result.List.Count == 0)
-                return new List<DisclosureItem>();
+                return [];
 
-            return result.List
+            return [.. result.List
                 .Take(displayCount)
                 .Select(item => new DisclosureItem
                 {
@@ -82,8 +76,7 @@ namespace TradingDashboard.Services
                     Link = string.IsNullOrWhiteSpace(item.ReceiptNo)
                         ? string.Empty
                         : $"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={item.ReceiptNo}"
-                })
-                .ToList();
+                })];
         }
 
         private async Task<Dictionary<string, string>> GetCorpCodeMapAsync(CancellationToken cancellationToken)
@@ -160,7 +153,7 @@ namespace TradingDashboard.Services
 
         private static string? SearchUpwards(string startPath, string folderName)
         {
-            DirectoryInfo? dir = new DirectoryInfo(startPath);
+            DirectoryInfo? dir = new(startPath);
             while (dir != null)
             {
                 string candidate = Path.Combine(dir.FullName, folderName);
@@ -177,7 +170,7 @@ namespace TradingDashboard.Services
             string text = (value ?? string.Empty).Trim()
                 .Replace("_NX", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Replace("_AL", string.Empty, StringComparison.OrdinalIgnoreCase);
-            return text.Length >= 6 ? text.Substring(0, 6) : text;
+            return text.Length >= 6 ? text[..6] : text;
         }
 
         private static string FormatDate(string? raw)
@@ -191,7 +184,7 @@ namespace TradingDashboard.Services
         {
             public string Status { get; set; } = string.Empty;
             public string Message { get; set; } = string.Empty;
-            public List<DartDisclosureRawItem> List { get; set; } = new List<DartDisclosureRawItem>();
+            public List<DartDisclosureRawItem> List { get; set; } = [];
         }
 
         private sealed class DartDisclosureRawItem

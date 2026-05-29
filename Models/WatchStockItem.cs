@@ -180,11 +180,11 @@ namespace TradingDashboard.Models
         public string LastPriceText => LastPrice > 0 ? LastPrice.ToString("N0") : "-";
         public string MarketBadgeText => string.IsNullOrWhiteSpace(MarketName) ? MarketTypeCode : NormalizeMarketName(MarketName);
         public string OrderWarningBadgeText => FormatOrderWarning(OrderWarning);
-        public string OrderWarningListBadgeText => NormalizeText(OrderWarning) == "5" ? "경고" : OrderWarningBadgeText;
+        public string OrderWarningListBadgeText => NormalizeText(OrderWarning) == "5" ? "WARN" : OrderWarningBadgeText;
         public string AuditInfoBadgeText => FormatAuditInfo(AuditInfo);
         public string AlertListBadgeText => !string.IsNullOrWhiteSpace(OrderWarningListBadgeText)
             ? OrderWarningListBadgeText
-            : AuditInfoBadgeText == "투자주의" ? "주의" : AuditInfoBadgeText;
+            : AuditInfoBadgeText == "CAUTION" ? "CAUT" : AuditInfoBadgeText;
         public string MetaBadgeText
         {
             get
@@ -234,6 +234,8 @@ namespace TradingDashboard.Models
             string text = NormalizeText(value);
             return text switch
             {
+                "Exchange" => string.Empty,
+                "KOSPI" => string.Empty,
                 "거래소" => string.Empty,
                 "코스피" => string.Empty,
                 _ => text
@@ -247,11 +249,11 @@ namespace TradingDashboard.Models
             {
                 "" => string.Empty,
                 "0" => string.Empty,
-                "1" => "ETF주의",
-                "2" => "정리매매",
-                "3" => "단기과열",
-                "4" => "투자위험",
-                "5" => "투자경고",
+                "1" => "ETF",
+                "2" => "CLEAN",
+                "3" => "HOT",
+                "4" => "RISK",
+                "5" => "WARN",
                 _ => code
             };
         }
@@ -259,12 +261,12 @@ namespace TradingDashboard.Models
         private static string FormatAuditInfo(string? value)
         {
             string text = NormalizeText(value);
-            if (string.IsNullOrWhiteSpace(text) || text == "정상")
+            if (string.IsNullOrWhiteSpace(text) || text == "Normal" || text == "정상")
                 return string.Empty;
-            if (text.Contains("단기과열"))
-                return "단기과열";
-            if (text.Contains("투자주의") || text.Contains("환기"))
-                return "투자주의";
+            if (text.Contains("단기과열") || text.Contains("Hot", StringComparison.OrdinalIgnoreCase))
+                return "HOT";
+            if (text.Contains("투자주의") || text.Contains("환기") || text.Contains("Caution", StringComparison.OrdinalIgnoreCase))
+                return "CAUTION";
             return text;
         }
     }

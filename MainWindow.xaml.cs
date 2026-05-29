@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -28,10 +28,11 @@ namespace TradingDashboard
         private const double ChartRightPadding = 25d;
         private readonly AppConfig _config;
         private readonly NaverNewsService _newsService;
+        private readonly NewsThumbnailService _newsThumbnailService = new();
         private readonly DartDisclosureService _disclosureService;
         private readonly KiwoomRestConditionService _kiwoomConditionService;
-        private readonly WatchlistStockCacheStore _watchlistCacheStore = new WatchlistStockCacheStore();
-        private readonly Queue<string> _logLines = new Queue<string>();
+        private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
+        private readonly Queue<string> _logLines = new();
         private readonly Brush _upColorBrush;
         private readonly Brush _downColorBrush;
         private readonly Brush _aggressiveBuyQtyBrush;
@@ -40,24 +41,24 @@ namespace TradingDashboard
         private readonly Brush _whiteBrush;
         private readonly Brush _hogaCurrentPriceBorderBrush;
         private readonly Brush _hogaCurrentPriceBackgroundBrush;
-        private readonly ObservableCollection<WatchStockItem> _watchStocks = new ObservableCollection<WatchStockItem>();
-        private readonly ObservableCollection<TradePrint> _recentTrades = new ObservableCollection<TradePrint>();
-        private readonly ObservableCollection<HogaLevel> _sellHogaLevels = new ObservableCollection<HogaLevel>();
-        private readonly ObservableCollection<HogaLevel> _buyHogaLevels = new ObservableCollection<HogaLevel>();
-        private readonly Dictionary<string, WatchStockItem> _watchStockByCode = new Dictionary<string, WatchStockItem>(StringComparer.Ordinal);
-        private readonly Dictionary<string, WatchlistStockCacheEntry> _watchlistMemoryCache = new Dictionary<string, WatchlistStockCacheEntry>(StringComparer.Ordinal);
-        private readonly Dictionary<string, ClosingSnapshotCacheEntry> _closingSnapshotMemoryCache = new Dictionary<string, ClosingSnapshotCacheEntry>(StringComparer.Ordinal);
-        private readonly Dictionary<string, long> _lastTickPriceByCode = new Dictionary<string, long>(StringComparer.Ordinal);
-        private readonly Dictionary<string, long> _lastBuyExecCumByCode = new Dictionary<string, long>(StringComparer.Ordinal);
-        private readonly Dictionary<string, long> _lastSellExecCumByCode = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly ObservableCollection<WatchStockItem> _watchStocks = [];
+        private readonly ObservableCollection<TradePrint> _recentTrades = [];
+        private readonly ObservableCollection<HogaLevel> _sellHogaLevels = [];
+        private readonly ObservableCollection<HogaLevel> _buyHogaLevels = [];
+        private readonly Dictionary<string, WatchStockItem> _watchStockByCode = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, WatchlistStockCacheEntry> _watchlistMemoryCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ClosingSnapshotCacheEntry> _closingSnapshotMemoryCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _lastTickPriceByCode = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
         private const int MinuteChartCandleCount = 700;
         private const int DailyChartRealtimeDrawIntervalMs = 350;
         private const int MinuteChartRealtimeDrawIntervalMs = 1500;
         private const int MaxChartMemoryCacheEntries = 200;
         private const int MaxChartMemoryCacheCandles = 100_000;
         private const int MinChartDragCandleCount = 10;
-        private readonly List<ChartCandle> _currentChartCandles = new List<ChartCandle>();
-        private readonly Dictionary<ChartCacheKey, ChartCacheEntry> _chartMemoryCache = new Dictionary<ChartCacheKey, ChartCacheEntry>();
+        private readonly List<ChartCandle> _currentChartCandles = [];
+        private readonly Dictionary<ChartCacheKey, ChartCacheEntry> _chartMemoryCache = [];
         private long _chartCacheAccessSequence;
         private int _chartRenderVersion;
         private ChartPeriod _currentChartPeriod = ChartPeriod.Daily;
@@ -81,7 +82,7 @@ namespace TradingDashboard
         private string _selectedStockCode = string.Empty;
         private long _buyTradeVolume;
         private long _sellTradeVolume;
-        private StockStatusMetrics _currentStatusMetrics = new StockStatusMetrics();
+        private StockStatusMetrics _currentStatusMetrics = new();
         private long _krxPrevClosePrice;
         private long _selectedPreviousVolume;
         private bool _selectedUsesUnifiedDailyVolume;
@@ -90,21 +91,22 @@ namespace TradingDashboard
         private string _lastMarketStatusCode = string.Empty;
         private string _lastMarketStatusTime = string.Empty;
         private string _lastMarketExpectedRemain = string.Empty;
-        private string _lastMarketStatusText = "장상태 미확인";
+        private string _lastMarketStatusText = "Market status unknown";
         private string _conditionRealtimeSeq = string.Empty;
         private DateTime _lastMarketStatusAt = DateTime.MinValue;
         private DateTime _marketStatusUnknownUntil = DateTime.MinValue;
         private bool _isNxtMarketMode;
+        private bool _isMarketNewsLoading;
         private ClientWebSocket? _realtimeWs;
         private CancellationTokenSource? _realtimeCts;
         private CancellationTokenSource? _selectedRequestCts;
         private CancellationTokenSource? _chartRequestCts;
         private CancellationTokenSource? _watchlistCacheRefreshCts;
-        private static readonly string[] MarketStatusTypes = { "0s" };
-        private static readonly string[] SellPriceKeys = { "41", "42", "43", "44", "45", "46", "47", "48", "49", "50" };
-        private static readonly string[] SellQtyKeys = { "61", "62", "63", "64", "65", "66", "67", "68", "69", "70" };
-        private static readonly string[] BuyPriceKeys = { "51", "52", "53", "54", "55", "56", "57", "58", "59", "60" };
-        private static readonly string[] BuyQtyKeys = { "71", "72", "73", "74", "75", "76", "77", "78", "79", "80" };
+        private static readonly string[] MarketStatusTypes = ["0s"];
+        private static readonly string[] SellPriceKeys = ["41", "42", "43", "44", "45", "46", "47", "48", "49", "50"];
+        private static readonly string[] SellQtyKeys = ["61", "62", "63", "64", "65", "66", "67", "68", "69", "70"];
+        private static readonly string[] BuyPriceKeys = ["51", "52", "53", "54", "55", "56", "57", "58", "59", "60"];
+        private static readonly string[] BuyQtyKeys = ["71", "72", "73", "74", "75", "76", "77", "78", "79", "80"];
 
         private sealed class ClosingSnapshotCacheEntry
         {
@@ -143,7 +145,7 @@ namespace TradingDashboard
                 _sellHogaLevels.Add(new HogaLevel());
                 _buyHogaLevels.Add(new HogaLevel());
             }
-            HogaStatusText.Text = "현재가 - / 등락률 - / 0D -";
+            HogaStatusText.Text = "Price - / Rate - / 0D -";
             UpdateHogaSummary(0, 0);
 
             Loaded += MainWindow_Loaded;
@@ -152,14 +154,15 @@ namespace TradingDashboard
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            AppendLog("앱 시작");
+            AppendLog("App started");
             try
             {
-                SetStartupLoading(true, "장구분 확인 중...");
+                SetStartupLoading(true, "Checking market status...");
                 await PrimeMarketStatusBeforeWatchlistAsync();
 
-                SetStartupLoading(true, "검색식 01번에서 종목 불러오는 중...");
+                SetStartupLoading(true, "Loading condition 01 watchlist...");
                 await LoadWatchListFromKiwoomConditionAsync();
+                _ = LoadMarketNewsAsync();
             }
             finally
             {
@@ -179,7 +182,7 @@ namespace TradingDashboard
 
             try
             {
-                AppendLog("0s 장운영구분 선조회 시작");
+                AppendLog("0s market status prime started");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 CancellationToken ct = cts.Token;
                 string token = await _kiwoomConditionService.GetAccessTokenAsync(ct);
@@ -191,7 +194,7 @@ namespace TradingDashboard
                 string loginCode = ReadString(login.RootElement, "return_code");
                 if (loginCode != "0")
                 {
-                    AppendLog($"0s 선조회 LOGIN 실패: {loginCode}");
+                    AppendLog($"0s prime LOGIN failed: {loginCode}");
                     return;
                 }
 
@@ -200,22 +203,22 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(status.Code))
                 {
                     MarkMarketStatusUnknown();
-                    AppendLog($"0s 장운영구분 선조회값 없음, 장상태 미확인({(IsNxtMarketWindow() ? "시간대 기준 NXT" : "KRX 우선")})");
+                    AppendLog($"0s market status prime returned no value, Market status unknown({(IsNxtMarketWindow() ? "time-window NXT" : "KRX first")})");
                     return;
                 }
 
                 ApplyMarketStatusSnapshot(status, allowRefresh: false);
-                AppendLog($"0s 장운영구분 선조회: 215={_lastMarketStatusCode} / {_lastMarketStatusText} / {(_isNxtMarketMode ? "NXT 사용" : "KRX 사용")}");
+                AppendLog($"0s market status prime: 215={_lastMarketStatusCode} / {_lastMarketStatusText} / {(_isNxtMarketMode ? "use NXT" : "use KRX")}");
             }
             catch (OperationCanceledException)
             {
                 MarkMarketStatusUnknown();
-                AppendLog($"0s 장운영구분 선조회 시간초과, 장상태 미확인({(IsNxtMarketWindow() ? "시간대 기준 NXT" : "KRX 우선")})");
+                AppendLog($"0s market status prime timed out, Market status unknown({(IsNxtMarketWindow() ? "time-window NXT" : "KRX first")})");
             }
             catch (Exception ex)
             {
                 MarkMarketStatusUnknown();
-                AppendLog($"0s 장운영구분 선조회 오류: {ex.Message}");
+                AppendLog($"0s market status prime error: {ex.Message}");
             }
         }
 
@@ -224,7 +227,7 @@ namespace TradingDashboard
             _lastMarketStatusCode = string.Empty;
             _lastMarketStatusTime = string.Empty;
             _lastMarketExpectedRemain = string.Empty;
-            _lastMarketStatusText = "장상태 미확인";
+            _lastMarketStatusText = "Market status unknown";
             _lastMarketStatusAt = DateTime.MinValue;
             _marketStatusUnknownUntil = DateTime.Now.AddMinutes(2);
             _isNxtMarketMode = IsNxtMarketWindow();
@@ -236,32 +239,32 @@ namespace TradingDashboard
             {
                 if (!_config.Kiwoom.UseRestApi)
                 {
-                    AppendLog("키움 REST 비활성화(UseRestApi=false)");
+                    AppendLog("Kiwoom REST disabled(UseRestApi=false)");
                     _krxPrevClosePrice = 0;
                     return;
                 }
 
-                AppendLog("키움 조건식(01) 조회 시작");
+                AppendLog("Kiwoom condition 01 query started");
 
                 List<WatchStockItem> stocks = await _kiwoomConditionService.GetConditionStocksAsync();
                 if (stocks.Count == 0)
                 {
-                    AppendLog("조건식 결과 0건");
-                    ApplyCachedWatchListFallback("조건식 결과 0건");
+                    AppendLog("condition result 0 items");
+                    ApplyCachedWatchListFallback("condition result 0 items");
                     return;
                 }
 
                 ApplyWatchList(stocks);
                 SaveDailyWatchlistSnapshot(stocks);
-                AppendLog($"조건식 결과 {stocks.Count}건 반영");
+                AppendLog($"condition result {stocks.Count}items applied");
                 ScheduleWatchlistBasePriceRefresh(stocks, TimeSpan.FromSeconds(30));
                 _ = StartRealtimeTradeAsync();
             }
             catch (Exception ex)
             {
-                AppendLog($"조건식 조회 오류: {ex.Message}");
-                if (!ApplyCachedWatchListFallback("조건식 조회 실패"))
-                    MessageBox.Show($"키움 조건식(01) 조회 오류: {ex.Message}");
+                AppendLog($"condition query error: {ex.Message}");
+                if (!ApplyCachedWatchListFallback("condition query failed"))
+                    MessageBox.Show($"Kiwoom condition(01) query error: {ex.Message}");
             }
         }
 
@@ -270,12 +273,12 @@ namespace TradingDashboard
             List<WatchStockItem> cachedStocks = BuildWatchListFromCache();
             if (cachedStocks.Count == 0)
             {
-                AppendLog($"{reason}, 사용 가능한 관심종목 캐시 없음");
+                AppendLog($"{reason}, no usable watchlist cache");
                 return false;
             }
 
             ApplyWatchList(cachedStocks);
-            AppendLog($"{reason}, 관심종목 캐시 {cachedStocks.Count}건 반영");
+            AppendLog($"{reason}, watchlist cache {cachedStocks.Count}items applied");
             ScheduleWatchlistBasePriceRefresh(cachedStocks, TimeSpan.FromSeconds(30));
             _ = StartRealtimeTradeAsync();
             return true;
@@ -284,21 +287,19 @@ namespace TradingDashboard
         private List<WatchStockItem> BuildWatchListFromCache()
         {
             string today = DateTime.Now.ToString("yyyyMMdd");
-            List<WatchlistStockCacheEntry> entries = _watchlistMemoryCache.Values
+            List<WatchlistStockCacheEntry> entries = [.. _watchlistMemoryCache.Values
                 .Where(e => !string.IsNullOrWhiteSpace(e.Code) && (e.SnapshotDate == today || e.LastSeenConditionDate == today))
-                .OrderBy(e => e.LastUsedAt)
-                .ToList();
+                .OrderBy(e => e.LastUsedAt)];
 
             if (entries.Count == 0)
             {
-                entries = _watchlistMemoryCache.Values
+                entries = [.. _watchlistMemoryCache.Values
                     .Where(e => !string.IsNullOrWhiteSpace(e.Code))
                     .OrderBy(e => e.LastUsedAt)
-                    .Take(10)
-                    .ToList();
+                    .Take(10)];
             }
 
-            return entries
+            return [.. entries
                 .Select(e => new WatchStockItem
                 {
                     Code = e.Code,
@@ -316,8 +317,7 @@ namespace TradingDashboard
                     StockState = e.StockState,
                     SectorName = e.SectorName,
                     SupportsNxt = e.SupportsNxt
-                })
-                .ToList();
+                })];
         }
 
         private void ApplyWatchList(IEnumerable<WatchStockItem> stocks)
@@ -349,7 +349,7 @@ namespace TradingDashboard
                     _watchStockByCode[stock.Code] = stock;
             }
 
-            AppendLog("왼쪽 목록 갱신");
+            AppendLog("left list refreshed");
         }
 
         private void LoadWatchlistCache()
@@ -369,11 +369,11 @@ namespace TradingDashboard
                 }
 
                 TrimWatchlistMemoryCache();
-                AppendLog($"관심종목 캐시 로드: {_watchlistMemoryCache.Count}건");
+                AppendLog($"watchlist cache loaded: {_watchlistMemoryCache.Count}items");
             }
             catch (Exception ex)
             {
-                AppendLog($"관심종목 캐시 로드 오류: {ex.Message}");
+                AppendLog($"watchlist cache loaded error: {ex.Message}");
             }
         }
 
@@ -412,11 +412,11 @@ namespace TradingDashboard
                 }
 
                 _watchlistCacheStore.Save(snapshot);
-                AppendLog($"관심종목 캐시 저장: {snapshot.Count}건");
+                AppendLog($"watchlist cache saved: {snapshot.Count}items");
             }
             catch (Exception ex)
             {
-                AppendLog($"관심종목 캐시 저장 오류: {ex.Message}");
+                AppendLog($"watchlist cache save error: {ex.Message}");
             }
         }
 
@@ -425,7 +425,7 @@ namespace TradingDashboard
             _watchlistCacheRefreshCts?.Cancel();
             _watchlistCacheRefreshCts = new CancellationTokenSource();
             CancellationToken token = _watchlistCacheRefreshCts.Token;
-            List<WatchStockItem> snapshot = stocks
+            List<WatchStockItem> snapshot = [.. stocks
                 .Where(s => !string.IsNullOrWhiteSpace(s.Code))
                 .Select(s => new WatchStockItem
                 {
@@ -444,8 +444,7 @@ namespace TradingDashboard
                     StockState = s.StockState,
                     SectorName = s.SectorName,
                     SupportsNxt = s.SupportsNxt
-                })
-                .ToList();
+                })];
 
             _ = RefreshWatchlistBasePricesInBackgroundAsync(snapshot, idleDelay, token);
         }
@@ -506,11 +505,11 @@ namespace TradingDashboard
                 _watchlistCacheStore.Save(snapshotCodes
                     .Where(code => _watchlistMemoryCache.ContainsKey(code))
                     .Select(code => _watchlistMemoryCache[code]));
-                Dispatcher.Invoke(() => AppendLog("관심종목 기준가 캐시 갱신"));
+                Dispatcher.Invoke(() => AppendLog("watchlist base-price cache refreshed"));
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => AppendLog($"관심종목 기준가 캐시 저장 오류: {ex.Message}"));
+                Dispatcher.Invoke(() => AppendLog($"watchlist base-price cache save error: {ex.Message}"));
             }
         }
 
@@ -559,8 +558,8 @@ namespace TradingDashboard
 
         private static bool IsTrustedKrxBasePrice(WatchlistStockCacheEntry? entry, string date)
         {
-            // 기준가 변경금지: 화면 기준가는 반드시 KRX 전일종가만 사용한다.
-            // NXT 종가, 현재가, LastPrice, 출처 없는 캐시값은 기준가를 덮을 수 없다.
+            // base price invariant: screen base price must use only KRX previous close.
+            // NXT close/current/LastPrice or untrusted cache values must not overwrite base price.
             return entry != null &&
                 entry.BasePrice > 0 &&
                 string.Equals(entry.BasePriceDate, date, StringComparison.Ordinal) &&
@@ -569,7 +568,7 @@ namespace TradingDashboard
 
         private static void SetCachedKrxBasePrice(WatchlistStockCacheEntry entry, long basePrice, string date)
         {
-            // KRX 전일종가만 이 함수를 통해 기준가로 확정한다.
+            // Only KRX previous close is locked as base price here.
             entry.BasePrice = basePrice;
             entry.BasePriceDate = date;
             entry.BasePriceSource = KrxPreviousCloseBasePriceSource;
@@ -681,12 +680,12 @@ namespace TradingDashboard
             _currentChartCode = string.Empty;
             _lastRealtimeChartDrawAt = DateTime.MinValue;
             ClearSelectedChartVisuals();
-            HogaStatusText.Text = "현재가 - / 등락률 - / 0D -";
+            HogaStatusText.Text = "Price - / Rate - / 0D -";
             UpdateHogaSummary(0, 0);
             ResetTradeSummaryInfo();
             InfoBasePriceText.Text = "-";
             InfoBasePriceText.Foreground = _whiteBrush;
-            AppendLog($"종목 선택: {stockName}");
+            AppendLog($"stock selected: {stockName}");
 
             _ = LoadNewsAsync(stockName, selectionVersion);
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
@@ -756,8 +755,8 @@ namespace TradingDashboard
 
                 string today = DateTime.Now.ToString("yyyyMMdd");
                 WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stockCode);
-                // 기준가 변경금지: 검증된 KRX 전일종가 캐시가 없을 때만 KRX 기준가를 조회한다.
-                // 다른 시장/실시간/종목정보 값으로 대체하지 않는다.
+                // base price invariant: Query KRX base price only when a trusted cached previous close is unavailable.
+                // Never replace it with another market, realtime, or stock-info value.
                 long basePrice = IsTrustedKrxBasePrice(cache, today)
                     ? cache!.BasePrice
                     : await _kiwoomConditionService.GetKrxPreviousClosePriceAsync(stockCode, cancellationToken);
@@ -789,8 +788,8 @@ namespace TradingDashboard
                 InfoBasePriceText.Text = basePrice > 0 ? basePrice.ToString("N0") : "-";
                 InfoBasePriceText.Foreground = _whiteBrush;
                 AppendLog(basePrice > 0
-                    ? $"기준가 잠금(KRX 전일종가{(IsTrustedKrxBasePrice(cache, today) ? " 캐시" : "")}): {basePrice:N0}"
-                    : "기준가 잠금 실패(KRX 전일종가, NXT 값 대체 금지)");
+                    ? $"base price locked(KRX prev close{(IsTrustedKrxBasePrice(cache, today) ? " cache" : "")}): {basePrice:N0}"
+                    : "base price lock failed(KRX prev close, NXT fallback forbidden)");
             }
             catch (OperationCanceledException)
             {
@@ -798,7 +797,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                AppendLog($"기준가 선조회 오류: {ex.Message}");
+                AppendLog($"base price prime error: {ex.Message}");
             }
         }
 
@@ -811,12 +810,124 @@ namespace TradingDashboard
                     return;
 
                 StockNewsListBox.ItemsSource = news;
-                AppendLog($"뉴스 로드: {stockName} ({news.Count}건)");
+                AppendLog($"news loaded: {stockName} ({news.Count}items)");
             }
             catch (Exception ex)
             {
-                AppendLog($"뉴스 조회 오류: {ex.Message}");
-                MessageBox.Show($"뉴스 조회 오류: {ex.Message}");
+                AppendLog($"news query error: {ex.Message}");
+                MessageBox.Show($"news query error: {ex.Message}");
+            }
+        }
+
+        private async Task LoadMarketNewsAsync(string? query = null)
+        {
+            if (_isMarketNewsLoading)
+                return;
+
+            _isMarketNewsLoading = true;
+            MarketNewsRefreshButton.IsEnabled = false;
+            MarketNewsSearchButton.IsEnabled = false;
+            string searchQuery = (query ?? MarketNewsSearchTextBox.Text).Trim();
+            bool hasSearchQuery = !string.IsNullOrWhiteSpace(searchQuery);
+            MarketNewsStatusText.Text = hasSearchQuery
+                ? $"searching news: {searchQuery}"
+                : "loading market news...";
+
+            try
+            {
+                var news = hasSearchQuery
+                    ? await _newsService.SearchNewsAsync(searchQuery)
+                    : await _newsService.GetMarketNewsAsync();
+                MarketNewsListBox.ItemsSource = news;
+                MarketNewsStatusText.Text = hasSearchQuery
+                    ? $"search {news.Count}items · {DateTime.Now:HH:mm} · {searchQuery}"
+                    : $"market news {news.Count}items · {DateTime.Now:HH:mm} refreshed";
+                AppendLog(hasSearchQuery
+                    ? $"news search: {searchQuery} ({news.Count}items)"
+                    : $"market news loaded: {news.Count}items");
+                _ = LoadMarketNewsThumbnailsAsync(news);
+            }
+            catch (Exception ex)
+            {
+                MarketNewsListBox.ItemsSource = null;
+                MarketNewsStatusText.Text = hasSearchQuery ? "news search failed" : "market news query failed";
+                AppendLog($"{(hasSearchQuery ? "news search" : "market news query")} error: {ex.GetType().Name} / {ex.Message}");
+            }
+            finally
+            {
+                MarketNewsRefreshButton.IsEnabled = true;
+                MarketNewsSearchButton.IsEnabled = true;
+                _isMarketNewsLoading = false;
+            }
+        }
+
+        private async void MarketNewsRefreshButton_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadMarketNewsAsync();
+        }
+
+        private async void MarketNewsSearchButton_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadMarketNewsAsync(MarketNewsSearchTextBox.Text);
+        }
+
+        private async void MarketNewsSearchTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter)
+                return;
+
+            e.Handled = true;
+            await LoadMarketNewsAsync(MarketNewsSearchTextBox.Text);
+        }
+
+        private async Task LoadMarketNewsThumbnailsAsync(IReadOnlyList<NewsItem> news)
+        {
+            using var gate = new SemaphoreSlim(3);
+            var tasks = news
+                .Where(item => !string.IsNullOrWhiteSpace(item.Link))
+                .Select(async item =>
+                {
+                    await gate.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        string thumbnailUrl = await _newsThumbnailService.GetThumbnailUrlAsync(item.Link).ConfigureAwait(false);
+                        if (string.IsNullOrWhiteSpace(thumbnailUrl))
+                            return;
+
+                        await Dispatcher.InvokeAsync(() => item.ThumbnailUrl = thumbnailUrl);
+                    }
+                    finally
+                    {
+                        gate.Release();
+                    }
+                })
+                .ToArray();
+
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        private void OpenLinkedItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            string link = string.Empty;
+            if (sender is ListBox { SelectedItem: NewsItem news })
+                link = news.Link;
+            else if (sender is ListBox { SelectedItem: DisclosureItem disclosure })
+                link = disclosure.Link;
+
+            if (string.IsNullOrWhiteSpace(link))
+                return;
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = link,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"link open error: {ex.Message}");
             }
         }
 
@@ -831,7 +942,7 @@ namespace TradingDashboard
                     return;
 
                 StockDisclosureListBox.ItemsSource = disclosures;
-                AppendLog($"공시 로드: {stockCode} ({disclosures.Count}건)");
+                AppendLog($"filings loaded: {stockCode} ({disclosures.Count}items)");
             }
             catch (OperationCanceledException)
             {
@@ -842,7 +953,7 @@ namespace TradingDashboard
                 if (selectionVersion != _selectionVersion)
                     return;
                 StockDisclosureListBox.ItemsSource = null;
-                AppendLog($"공시 조회 오류: {ex.GetType().Name} / {ex.Message}");
+                AppendLog($"filings query error: {ex.GetType().Name} / {ex.Message}");
             }
         }
 
@@ -861,25 +972,25 @@ namespace TradingDashboard
 
                 if (!HasAnyHogaLevel(snapshot) && useNxtMarket && !IsNxtFrozenWindow())
                 {
-                    // NXT/SOR 표시 중에는 KRX 전일종가만 기준가로 사용한다.
-                    // KRX 호가 fallback은 MTS의 NXT 호가 화면과 다른 값을 섞으므로 적용하지 않는다.
-                    AppendLog($"NXT 호가 조회값 없음, KRX fallback 생략: {stockCode}");
+                    // When showing NXT/SOR, only KRX previous close is used as base price.
+                    // KRX order-book fallback is skipped because it mixes values unlike the MTS NXT view.
+                    AppendLog($"NXT order book empty, skip KRX fallback: {stockCode}");
                 }
 
                 if (!HasAnyHogaLevel(snapshot))
                 {
-                    if (TryApplyCurrentPriceFallbackHoga(stockCode, "호가 REST fallback"))
+                    if (TryApplyCurrentPriceFallbackHoga(stockCode, "order book REST fallback"))
                         return;
 
-                    AppendLog($"호가 REST 조회값 없음, 기존 호가 유지: {stockCode}");
+                    AppendLog($"order book REST empty, keep existing order book: {stockCode}");
                     return;
                 }
 
                 ApplyHogaRows(
-                    snapshot.SellLevels.Select(r => (r.Price, r.Quantity)).ToList(),
-                    snapshot.BuyLevels.Select(r => (r.Price, r.Quantity)).ToList(),
-                    useNxtMarket ? "NXT 호가 REST" : "KRX 호가 REST");
-                AppendLog($"{(useNxtMarket ? "NXT" : "KRX")} 호가 REST 적용: {stockCode}");
+                    [.. snapshot.SellLevels.Select(r => (r.Price, r.Quantity))],
+                    [.. snapshot.BuyLevels.Select(r => (r.Price, r.Quantity))],
+                    useNxtMarket ? "NXT order book REST" : "KRX order book REST");
+                AppendLog($"{(useNxtMarket ? "NXT" : "KRX")} order book REST applied: {stockCode}");
             }
             catch (OperationCanceledException)
             {
@@ -887,7 +998,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                AppendLog($"호가 REST 조회 오류: {ex.Message}");
+                AppendLog($"order book REST error: {ex.Message}");
             }
         }
 
@@ -904,29 +1015,29 @@ namespace TradingDashboard
                     return;
                 }
 
-                // MTS 기준: 기준가는 항상 KRX 전일종가를 쓰지만,
-                // NXT 종목을 NXT 시간대에 보고 있을 때 시가/고가/저가/현재가는 NXT 시세를 표시한다.
+                // MTS rule: base price always uses KRX previous close,
+                // while NXT-enabled stocks show NXT OHLC/current price during NXT windows.
                 bool useNxtMarket = ShouldUseNxtDataForStock(stockCode);
                 StockStatusMetrics m = await _kiwoomConditionService.GetStockStatusMetricsByGuideAsync(stockCode, useNxtMarket, cancellationToken);
                 if (useNxtMarket && IsEmptyStockStatus(m) && !IsNxtFrozenWindow())
                 {
-                    // NXT/SOR 표시 중에는 KRX 전일종가만 기준가로 사용한다.
-                    // 시/고/저/종/현재가를 KRX로 재조회해 채우면 MTS SOR ON 화면과 어긋난다.
-                    AppendLog($"NXT 종목정보 조회값 없음, KRX fallback 생략: {stockCode}");
+                    // When showing NXT/SOR, only KRX previous close is used as base price.
+                    // Refilling OHLC/current price from KRX would diverge from MTS SOR ON.
+                    AppendLog($"NXT stock metrics empty, skip KRX fallback: {stockCode}");
                 }
 
                 if (IsEmptyStockStatus(m))
                 {
-                    AppendLog($"종목정보 조회값 없음, 기존 정보 유지: {stockCode}");
+                    AppendLog($"stock metrics empty, keep existing metrics: {stockCode}");
                     return;
                 }
 
                 string statusRequestCode = useNxtMarket ? $"{NormalizeStockCode(stockCode)}_NX" : NormalizeStockCode(stockCode);
                 _selectedUsesUnifiedDailyVolume = false;
                 AppendLog(
-                    $"종목정보 TR: {statusRequestCode} / {(useNxtMarket ? "NXT" : "KRX")} / " +
-                    $"화면기준가(KRX) {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} / " +
-                    $"응답기준가 {m.BasePriceText} / 시가 {m.OpenPriceText} / 고가 {m.HighPriceText} / 저가 {m.LowPriceText} / 종가 {m.ClosePriceText} / 거래량 {m.VolumeText}");
+                    $"stock metrics TR: {statusRequestCode} / {(useNxtMarket ? "NXT" : "KRX")} / " +
+                    $"screen base(KRX) {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} / " +
+                    $"response base {m.BasePriceText} / open {m.OpenPriceText} / high {m.HighPriceText} / low {m.LowPriceText} / close {m.ClosePriceText} / volume {m.VolumeText}");
                 if (_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selectedForCompare) && selectedForCompare.SupportsNxt)
                     await LogStockStatusCompareAsync(stockCode, selectionVersion, cancellationToken);
 
@@ -938,14 +1049,14 @@ namespace TradingDashboard
 
                 m.VolumeRatioText = dailyVolumeRatioText;
                 AppendLog(_krxPrevClosePrice > 0
-                    ? $"호가 기준가(KRX 전일종가): {_krxPrevClosePrice:N0}"
-                    : "호가 기준가(KRX 전일종가) 조회 실패");
+                    ? $"order book base(KRX prev close): {_krxPrevClosePrice:N0}"
+                    : "order book base(KRX prev close) query failed");
                 SetSelectedStockSubInfo(m, dailyVolumeRatioText, dailyVolumeRatioBrush);
                 InfoOpenPriceText.Text = m.OpenPriceText;
                 InfoHighPriceText.Text = m.HighPriceText;
                 InfoLowPriceText.Text = m.LowPriceText;
-                // 이 값은 StockStatusMetrics.BasePriceText를 쓰지 않는다.
-                // NXT 응답의 기준가가 섞이면 안 되므로 선택 시작부에서 잠근 KRX 전일종가만 표시한다.
+                // Do not use StockStatusMetrics.BasePriceText here.
+                // Display the KRX previous close locked at selection start to avoid mixing NXT base values.
                 InfoBasePriceText.Text = _krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-";
                 ApplySelectedPriceInfoColors(m);
                 InfoTradingValueText.Text = m.TradingValueText;
@@ -965,7 +1076,7 @@ namespace TradingDashboard
                 else
                 {
                     ResetTradeSummaryInfo();
-                    AppendLog($"체결량 조회값 없음 또는 총량 불일치, 체결량 표시 제외: {stockCode}");
+                    AppendLog($"execution volume empty or total mismatch, hide execution volume: {stockCode}");
                 }
                 if (ShouldUseFinalDailyVolumeForRatio(stockCode, useNxtMarket) && (exec.DailyTradeQty > 0 || exec.DailySectionTradeQty > 0))
                 {
@@ -984,15 +1095,15 @@ namespace TradingDashboard
                     _selectedUsesUnifiedDailyVolume = true;
                     InfoPrevTimeVolumeRatioText.Text = verifiedVolumeRatioText;
                     InfoPrevTimeVolumeRatioText.Foreground = verifiedVolumeRatioBrush;
-                    AppendLog($"일별거래상세 통합 합계: 총 {verifiedVolume:N0} / 장전 {exec.BeforeMarketTradeQty:N0} / 장중 {exec.RegularMarketTradeQty:N0} / 장후 {exec.AfterMarketTradeQty:N0}");
+                    AppendLog($"unified daily trade detail total: total {verifiedVolume:N0} / pre {exec.BeforeMarketTradeQty:N0} / regular {exec.RegularMarketTradeQty:N0} / after {exec.AfterMarketTradeQty:N0}");
                 }
                 else if (exec.DailyTradeQty > 0 || exec.DailySectionTradeQty > 0)
                 {
-                    AppendLog($"장중 거래량비율은 현재 누적거래량 기준 유지: {stockCode}");
+                    AppendLog($"keep regular-session volume ratio based on current cumulative volume: {stockCode}");
                 }
 
-                // 실시간 0B 갱신은 _currentStatusMetrics를 기준으로 프로그램 칸을 다시 그린다.
-                // 따라서 ka90008에서 확인한 프로그램 값을 화면에만 찍지 말고 현재 종목 상태에도 보관해야 한다.
+                // Realtime 0B updates redraw the program field from _currentStatusMetrics.
+                // Store the ka90008 program value in the current stock state, not only in the UI.
                 m.ProgramBuyText = exec.ProgramBuyText;
                 m.ProgramNetQuantity = exec.ProgramNetQuantity;
                 m.HasProgramTrade = exec.HasProgramTrade;
@@ -1007,7 +1118,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                AppendLog($"상태표시줄 조회 오류: {ex.Message}");
+                AppendLog($"status metrics query error: {ex.Message}");
             }
         }
 
@@ -1018,10 +1129,9 @@ namespace TradingDashboard
                 return ("-", _whiteBrush);
 
             IReadOnlyList<(string Date, long Volume)> volumes = await _kiwoomConditionService.GetUnifiedDailyTradeVolumesAsync(stockCode, 5, cancellationToken);
-            List<(string Date, long Volume)> orderedVolumes = volumes
+            List<(string Date, long Volume)> orderedVolumes = [.. volumes
                 .Where(v => !string.IsNullOrWhiteSpace(v.Date) && v.Volume > 0)
-                .OrderByDescending(v => v.Date)
-                .ToList();
+                .OrderByDescending(v => v.Date)];
 
             long previousVolume = orderedVolumes.Count > 1 ? orderedVolumes[1].Volume : 0;
             _selectedPreviousVolume = previousVolume;
@@ -1049,9 +1159,9 @@ namespace TradingDashboard
                 foreach ((string requestCode, StockStatusMetrics metrics) in rows)
                 {
                     AppendLog(
-                        $"종목정보 비교: {requestCode} / 기준 {metrics.BasePriceText} / " +
-                        $"시 {metrics.OpenPriceText} / 고 {metrics.HighPriceText} / 저 {metrics.LowPriceText} / 종 {metrics.ClosePriceText} / " +
-                        $"거래량 {metrics.VolumeText} / 거래대금 {metrics.TradingValueText}");
+                        $"stock metrics compare: {requestCode} / base {metrics.BasePriceText} / " +
+                        $"open {metrics.OpenPriceText} / high {metrics.HighPriceText} / low {metrics.LowPriceText} / close {metrics.ClosePriceText} / " +
+                        $"volume {metrics.VolumeText} / value {metrics.TradingValueText}");
                 }
             }
             catch (OperationCanceledException)
@@ -1061,7 +1171,7 @@ namespace TradingDashboard
             catch (Exception ex)
             {
                 if (selectionVersion == _selectionVersion && stockCode == _selectedStockCode)
-                    AppendLog($"종목정보 비교 로그 오류: {stockCode} / {ex.Message}");
+                    AppendLog($"stock metrics compare log error: {stockCode} / {ex.Message}");
             }
         }
 
@@ -1074,8 +1184,8 @@ namespace TradingDashboard
             if (!useNxtExecution || HasAnyExecutionSummaryValue(exec) || IsNxtFrozenWindow())
                 return exec;
 
-            // NXT/SOR 표시 중에는 KRX 전일종가 외의 KRX 체결/시세값을 섞지 않는다.
-            AppendLog($"NXT 체결량 조회값 없음, KRX fallback 생략: {stockCode}");
+            // When showing NXT/SOR, do not mix KRX execution/quote values except KRX previous close.
+            AppendLog($"NXT execution summary empty, skip KRX fallback: {stockCode}");
             return exec;
         }
 
@@ -1084,8 +1194,8 @@ namespace TradingDashboard
             bool supportsNxt = IsNxtSupportedStock(stockCode);
             if (supportsNxt && useNxtMarket)
             {
-                // MTS SOR ON 기준: NXT 시간대 시/고/저/종은 NXT 계열을 표시하되,
-                // 거래량/거래대금/전일거래량비율은 _AL 통합 일별거래상세를 우선한다.
+                // MTS SOR ON rule: show NXT OHLC in NXT windows,
+                // but prefer _AL unified daily details for volume/value/previous-volume ratio.
                 return IsNxtMarketWindow() || IsNxtFrozenWindow();
             }
 
@@ -1148,11 +1258,11 @@ namespace TradingDashboard
                 && stock.MetaBadgeText != "-")
             {
                 SelectedStockSubInfo.Inlines.Add(new Run($"{stock.MetaBadgeText} · "));
-                SelectedStockSubInfo.Inlines.Add(new Run($"전일종가 {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} · "));
+                SelectedStockSubInfo.Inlines.Add(new Run($"Prev Close {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} · "));
             }
 
             SelectedStockSubInfo.Inlines.Add(new Run(
-                $"시가총액 {metrics.MarketCapText} · 유통주식수 {metrics.ListedSharesText}"));
+                $"Market Cap {metrics.MarketCapText} · Float Shares {metrics.ListedSharesText}"));
         }
 
         private async Task LoadKrxClosingSnapshotIfNeededAsync(string stockCode, int selectionVersion, CancellationToken cancellationToken = default)
@@ -1170,7 +1280,7 @@ namespace TradingDashboard
 
                 if (supportsNxt && IsNxtMarketWindow() && !useNxtSnapshot)
                 {
-                    AppendLog($"NXT 장중: KRX 종가 스냅샷 적용 생략: {stockCode}");
+                    AppendLog($"NXT session active: skip KRX close snapshot: {stockCode}");
                     return;
                 }
 
@@ -1184,8 +1294,8 @@ namespace TradingDashboard
                 string cacheKey = BuildClosingSnapshotCacheKey(stockCode, useNxtSnapshot);
                 if (_closingSnapshotMemoryCache.TryGetValue(cacheKey, out ClosingSnapshotCacheEntry? cached))
                 {
-                    ApplyClosingSnapshot(CloneClosingSnapshot(cached.Snapshot), cached.IsNxtSnapshot ? "NXT 20시 최종 캐시" : "KRX 종가 캐시");
-                    AppendLog($"{(cached.IsNxtSnapshot ? "NXT 20시 최종" : "KRX 종가")} 스냅샷 캐시 적용: {stockCode}");
+                    ApplyClosingSnapshot(CloneClosingSnapshot(cached.Snapshot), cached.IsNxtSnapshot ? "NXT 20:00 final cache" : "KRX close cache");
+                    AppendLog($"{(cached.IsNxtSnapshot ? "NXT 20:00 final" : "KRX close")} snapshot cache applied: {stockCode}");
                     return;
                 }
 
@@ -1202,8 +1312,8 @@ namespace TradingDashboard
                     IsNxtSnapshot = useNxtSnapshot,
                     CachedAt = DateTime.Now
                 };
-                ApplyClosingSnapshot(snapshot, useNxtSnapshot ? "NXT 20시 최종" : "KRX 종가");
-                AppendLog($"{(useNxtSnapshot ? "NXT 20시 최종" : "KRX 종가")} 스냅샷 적용: {stockCode}");
+                ApplyClosingSnapshot(snapshot, useNxtSnapshot ? "NXT 20:00 final" : "KRX close");
+                AppendLog($"{(useNxtSnapshot ? "NXT 20:00 final" : "KRX close")} snapshot applied: {stockCode}");
             }
             catch (OperationCanceledException)
             {
@@ -1211,7 +1321,7 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
-                AppendLog($"장마감 스냅샷 오류: {ex.Message}");
+                AppendLog($"closing snapshot error: {ex.Message}");
             }
         }
 
@@ -1232,9 +1342,9 @@ namespace TradingDashboard
             }
 
             if (HasAnyHogaLevel(snapshot))
-                ApplyHogaRows(snapshot.SellLevels.Select(r => (r.Price, r.Quantity)).ToList(), snapshot.BuyLevels.Select(r => (r.Price, r.Quantity)).ToList(), $"{source} 스냅샷");
+                ApplyHogaRows([.. snapshot.SellLevels.Select(r => (r.Price, r.Quantity))], [.. snapshot.BuyLevels.Select(r => (r.Price, r.Quantity))], $"{source} snapshot");
             else
-                AppendLog($"{source} 스냅샷 호가 없음, 기존 호가 유지: {snapshot.Code}");
+                AppendLog($"{source} snapshot order book empty, keep existing order book: {snapshot.Code}");
             if (snapshot.CurrentPrice > 0)
             {
                 InfoBasePriceText.Text = _krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-";
@@ -1255,15 +1365,15 @@ namespace TradingDashboard
                 _currentStatusMetrics.VolumeRatioText = verifiedVolumeRatioText;
                 if (_watchStockByCode.TryGetValue(snapshot.Code, out WatchStockItem? stockForVolume))
                     stockForVolume.VolumeText = InfoVolumeText.Text;
-                AppendLog($"{source} 일별거래상세 통합 합계: 총 {verifiedVolume:N0} / 장전 {snapshot.BeforeMarketTradeQty:N0} / 장중 {snapshot.RegularMarketTradeQty:N0} / 장후 {snapshot.AfterMarketTradeQty:N0}");
+                AppendLog($"{source} unified daily trade detail total: total {verifiedVolume:N0} / pre {snapshot.BeforeMarketTradeQty:N0} / regular {snapshot.RegularMarketTradeQty:N0} / after {snapshot.AfterMarketTradeQty:N0}");
             }
 
             ResetTradeSummaryInfo();
-            AppendLog($"{source} 장마감 후 매수/매도체결량 공란 처리: {snapshot.Code}");
+            AppendLog($"{source} post-close buy/sell execution volume blanked: {snapshot.Code}");
 
             if (snapshot.RecentTrades.Count == 0)
             {
-                AppendLog($"{source} 최근체결 없음, 기존 체결목록 유지: {snapshot.Code}");
+                AppendLog($"{source} no recent trades, keep existing trade list: {snapshot.Code}");
                 return;
             }
 
@@ -1407,7 +1517,7 @@ namespace TradingDashboard
                 : changeAmount > 0 ? _upColorBrush : changeAmount < 0 ? _downColorBrush : _whiteBrush;
 
             string rateText = stock.ChangeRateText;
-            HogaStatusText.Text = $"현재가 {(currentPrice > 0 ? currentPrice.ToString("N0") : stock.CurrentPrice > 0 ? stock.CurrentPrice.ToString("N0") : "-")} / 등락률 {rateText} / 기준가 {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
+            HogaStatusText.Text = $"Price {(currentPrice > 0 ? currentPrice.ToString("N0") : stock.CurrentPrice > 0 ? stock.CurrentPrice.ToString("N0") : "-")} / Rate {rateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
         }
 
         private void AppendLog(string message)
@@ -1439,7 +1549,7 @@ namespace TradingDashboard
             }
 
             StartupLoadingOverlay.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
-            StartupLoadingText.Text = string.IsNullOrWhiteSpace(message) ? "준비 중..." : message;
+            StartupLoadingText.Text = string.IsNullOrWhiteSpace(message) ? "Loading..." : message;
         }
 
         private void MainWindow_Closed(object? sender, EventArgs e)
@@ -1469,13 +1579,13 @@ namespace TradingDashboard
 
             string text = raw.Trim().Replace("_AL", "", StringComparison.OrdinalIgnoreCase).Replace("_NX", "", StringComparison.OrdinalIgnoreCase);
             if (text.StartsWith("A", StringComparison.OrdinalIgnoreCase))
-                text = text.Substring(1);
+                text = text[1..];
 
-            string digits = new string(text.Where(char.IsDigit).ToArray());
+            string digits = new([.. text.Where(char.IsDigit)]);
             if (digits.Length == 0)
                 return string.Empty;
 
-            return digits.Length >= 6 ? digits.Substring(digits.Length - 6) : digits.PadLeft(6, '0');
+            return digits.Length >= 6 ? digits[^6..] : digits.PadLeft(6, '0');
         }
 
         private static long ParseLongAbs(string text)
@@ -1514,5 +1624,3 @@ namespace TradingDashboard
 
     }
 }
-
-
