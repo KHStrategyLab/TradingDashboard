@@ -90,6 +90,112 @@
             <Setter Property="FontSize" Value="12"/>
         </Style>
 
+        <Style x:Key="DarkComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="Background" Value="#333333"/>
+            <Setter Property="Foreground" Value="{StaticResource WhiteValueBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#444444"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#252525"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkMinuteComboBoxStyle" TargetType="{x:Type ComboBox}">
+            <Setter Property="Background" Value="#333333"/>
+            <Setter Property="Foreground" Value="{StaticResource WhiteValueBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid>
+                            <Border x:Name="MainBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0">
+                                <Grid>
+                                    <ContentPresenter Margin="8,0,18,0"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Left"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}"
+                                                      Content="{Binding SelectedItem.Content, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                    <Path Width="8"
+                                          Height="4"
+                                          HorizontalAlignment="Right"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,7,0"
+                                          Data="M 0 0 L 4 4 L 8 0 Z"
+                                          Fill="{StaticResource TextMainBrush}"/>
+                                </Grid>
+                            </Border>
+
+                            <ToggleButton Focusable="False"
+                                          ClickMode="Press"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Bottom"
+                                   PopupAnimation="None">
+                                <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border Background="#333333"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="0">
+                                        <ScrollViewer Margin="0"
+                                                      CanContentScroll="True">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MainBorder" Property="Background" Value="#3A3A3A"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="MainBorder" Property="Background" Value="#333333"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="WatchListBoxItemStyle" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="0"/>
@@ -315,7 +421,7 @@
                                                                  <Setter Property="Visibility" Value="Collapsed"/>
                                                              </DataTrigger>
                                                              <DataTrigger Binding="{Binding OrderWarning}" Value="5">
-                                                                 <Setter Property="MinWidth" Value="16"/>
+                                                                 <Setter Property="MinWidth" Value="34"/>
                                                                  <Setter Property="BorderBrush" Value="{StaticResource UpBrush}"/>
                                                                  <Setter Property="Background" Value="#351818"/>
                                                              </DataTrigger>
@@ -476,23 +582,20 @@
                                           Height="24"
                                           Margin="4,0,0,0"
                                           SelectedValuePath="Tag"
+                                          SelectedIndex="0"
                                           SelectionChanged="MinuteChartComboBox_SelectionChanged"
-                                          Background="#333333"
-                                          Foreground="{StaticResource WhiteValueBrush}">
-                                    <ComboBox.Resources>
-                                        <Style TargetType="ComboBoxItem">
-                                            <Setter Property="Background" Value="#333333"/>
-                                            <Setter Property="Foreground" Value="{StaticResource WhiteValueBrush}"/>
-                                            <Setter Property="Padding" Value="8,3"/>
-                                        </Style>
-                                    </ComboBox.Resources>
-                                    <ComboBoxItem Content="분봉" Tag=""/>
+                                          DropDownOpened="MinuteChartComboBox_DropDownOpened"
+                                          DropDownClosed="MinuteChartComboBox_DropDownClosed"
+                                          Style="{StaticResource DarkMinuteComboBoxStyle}">
+                                    <ComboBoxItem x:Name="MinuteChartPlaceholderItem" Content="분봉" Tag=""/>
                                     <ComboBoxItem Content="1분" Tag="Minute1"/>
                                     <ComboBoxItem Content="3분" Tag="Minute3"/>
                                     <ComboBoxItem Content="5분" Tag="Minute5"/>
                                     <ComboBoxItem Content="10분" Tag="Minute10"/>
                                     <ComboBoxItem Content="15분" Tag="Minute15"/>
                                     <ComboBoxItem Content="30분" Tag="Minute30"/>
+                                    <ComboBoxItem Content="60분" Tag="Minute60"/>
+                                    <ComboBoxItem Content="120분" Tag="Minute120"/>
                                 </ComboBox>
                             </StackPanel>
                         </Grid>
@@ -502,8 +605,76 @@
                             BorderBrush="{StaticResource LineBrush}"
                             BorderThickness="0,0,0,1"
                             Padding="10">
-                        <Grid x:Name="MainChartHost"
-                              Background="{StaticResource BgMainBrush}"/>
+                        <Grid>
+                            <Grid x:Name="MainChartHost"
+                                  Background="{StaticResource BgMainBrush}"/>
+
+                            <Border x:Name="StartupLoadingOverlay"
+                                    Panel.ZIndex="10"
+                                    Visibility="Collapsed"
+                                    Background="#A0101010">
+                                <Grid>
+                                    <Border Width="230"
+                                            Height="132"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Background="#202020"
+                                            BorderBrush="{StaticResource LineBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="18">
+                                        <StackPanel HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center">
+                                            <Grid Width="48"
+                                                  Height="48"
+                                                  HorizontalAlignment="Center">
+                                                <Ellipse Stroke="#343434"
+                                                         StrokeThickness="4"/>
+                                                <Path x:Name="StartupSpinnerArc"
+                                                      Data="M 24,4 A20,20 0 0 1 44,24"
+                                                      Stroke="{StaticResource PaletteSkyBlue}"
+                                                      StrokeThickness="4"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round">
+                                                    <Path.RenderTransform>
+                                                        <RotateTransform CenterX="24"
+                                                                         CenterY="24"/>
+                                                    </Path.RenderTransform>
+                                                    <Path.Triggers>
+                                                        <EventTrigger RoutedEvent="Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever">
+                                                                    <DoubleAnimation Storyboard.TargetName="StartupSpinnerArc"
+                                                                                     Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                     From="0"
+                                                                                     To="360"
+                                                                                     Duration="0:0:0.9"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Path.Triggers>
+                                                </Path>
+                                            </Grid>
+
+                                            <TextBlock x:Name="StartupLoadingText"
+                                                       Text="준비 중..."
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="13"
+                                                       FontWeight="Bold"
+                                                       TextAlignment="Center"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,14,0,0"/>
+
+                                            <TextBlock Text="잠시만 기다려줘"
+                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       FontSize="11"
+                                                       HorizontalAlignment="Center"
+                                                       Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </Grid>
                     </Border>
 
                     <Border Grid.Row="2"
@@ -812,7 +983,7 @@
                                     Padding="8">
                                 <Grid>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="18"/>
+                                        <RowDefinition Height="22"/>
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
 
@@ -825,13 +996,13 @@
                                         <TextBlock Grid.Column="0"
                                                    Text="체결가"
                                                    Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="10"
+                                                   FontSize="12"
                                                    VerticalAlignment="Center"/>
 
                                         <TextBlock Grid.Column="1"
                                                    Text="수량"
                                                    Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="10"
+                                                   FontSize="12"
                                                    VerticalAlignment="Center"
                                                    HorizontalAlignment="Right"/>
                                     </Grid>
@@ -856,7 +1027,7 @@
                                                         <TextBlock Grid.Column="0"
                                                                    Text="{Binding PriceText}"
                                                                    Foreground="{Binding Color}"
-                                                                   FontSize="10"
+                                                                   FontSize="12"
                                                                    VerticalAlignment="Center"
                                                                    Margin="0,0,8,0"/>
                                                         <Border Grid.Column="1"
@@ -865,7 +1036,7 @@
                                                         <TextBlock Grid.Column="2"
                                                                    Text="{Binding QuantityText}"
                                                                    Foreground="{Binding QuantityColor}"
-                                                                   FontSize="10"
+                                                                   FontSize="12"
                                                                    VerticalAlignment="Center"
                                                                    HorizontalAlignment="Right"
                                                                    Margin="8,0,0,0"/>
@@ -900,40 +1071,40 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="시가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoOpenPriceText" Grid.Row="0" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="시가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoOpenPriceText" Grid.Row="0" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="고가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoHighPriceText" Grid.Row="1" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="고가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoHighPriceText" Grid.Row="1" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="저가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoLowPriceText" Grid.Row="2" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="저가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoLowPriceText" Grid.Row="2" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="기준가" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoBasePriceText" Grid.Row="3" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="기준가" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoBasePriceText" Grid.Row="3" Grid.Column="1" Text="-" Foreground="{StaticResource WhiteValueBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="거래대금" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoTradingValueText" Grid.Row="4" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="거래대금" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoTradingValueText" Grid.Row="4" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
                                     <TextBlock x:Name="InfoVolumeText" Grid.Row="4" Grid.Column="1" Text="-" Visibility="Collapsed"/>
 
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="회전율" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoTurnoverRateText" Grid.Row="5" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="회전율" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoTurnoverRateText" Grid.Row="5" Grid.Column="1" Text="-" Foreground="{StaticResource TextMainBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="전일동시" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoPrevTimeVolumeRatioText" Grid.Row="6" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="전일동시" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoPrevTimeVolumeRatioText" Grid.Row="6" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="매수체결" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoBuyTradeVolumeText" Grid.Row="7" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="매수체결" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoBuyTradeVolumeText" Grid.Row="7" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="매도체결" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoSellTradeVolumeText" Grid.Row="8" Grid.Column="1" Text="-" Foreground="{StaticResource DownBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="매도체결" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoSellTradeVolumeText" Grid.Row="8" Grid.Column="1" Text="-" Foreground="{StaticResource DownBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="9" Grid.Column="0" Text="매수비율" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoBuyRatioText" Grid.Row="9" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="9" Grid.Column="0" Text="매수비율" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoBuyRatioText" Grid.Row="9" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
-                                    <TextBlock Grid.Row="10" Grid.Column="0" Text="프로그램" Foreground="{StaticResource TextSubBrush}" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="InfoProgramText" Grid.Row="10" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="10" Grid.Column="0" Text="프로그램" Foreground="{StaticResource TextSubBrush}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="InfoProgramText" Grid.Row="10" Grid.Column="1" Text="-" Foreground="{StaticResource UpBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                 </Grid>
                             </Border>
                         </Grid>

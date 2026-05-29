@@ -12,12 +12,12 @@
     "StockState": "\uC99D\uAC70\uAE0820%|\uB2F4\uBCF4\uB300\uCD9C|\uC2E0\uC6A9\uAC00\uB2A5",
     "SectorName": "\uAE08\uC735",
     "SupportsNxt": true,
-    "BasePrice": 115800,
-    "BasePriceDate": "20260529",
-    "BasePriceSource": "KRX_PREV_CLOSE",
+    "BasePrice": 0,
+    "BasePriceDate": "",
+    "BasePriceSource": "",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:27.0307204+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4093131+09:00"
   },
   {
     "Code": "006660",
@@ -37,7 +37,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.9291355+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4095224+09:00"
   },
   {
     "Code": "009420",
@@ -57,7 +57,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.929233+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096234+09:00"
   },
   {
     "Code": "018260",
@@ -77,7 +77,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.9292347+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096247+09:00"
   },
   {
     "Code": "090360",
@@ -97,7 +97,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:46.9662752+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096253+09:00"
   },
   {
     "Code": "125020",
@@ -117,7 +117,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.9292367+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096262+09:00"
   },
   {
     "Code": "307950",
@@ -137,7 +137,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.9292373+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096268+09:00"
   },
   {
     "Code": "330860",
@@ -157,7 +157,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.9292384+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096283+09:00"
   },
   {
     "Code": "356680",
@@ -177,7 +177,7 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.9292388+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096288+09:00"
   },
   {
     "Code": "457370",
@@ -197,6 +197,26 @@
     "BasePriceSource": "KRX_PREV_CLOSE",
     "SnapshotDate": "20260529",
     "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T13:23:26.9292399+09:00"
+    "LastUsedAt": "2026-05-29T14:24:25.4096296+09:00"
+  },
+  {
+    "Code": "486990",
+    "Name": "\uB178\uD0C0",
+    "Market": "KRX,NXT",
+    "MarketTypeCode": "10",
+    "MarketName": "\uCF54\uC2A4\uB2E5",
+    "ProgramMarketType": "P10102",
+    "LastPrice": 34600,
+    "OrderWarning": "0",
+    "AuditInfo": "\uC815\uC0C1",
+    "StockState": "\uC99D\uAC70\uAE08100%",
+    "SectorName": "IT \uC11C\uBE44\uC2A4",
+    "SupportsNxt": true,
+    "BasePrice": 34600,
+    "BasePriceDate": "20260529",
+    "BasePriceSource": "KRX_PREV_CLOSE",
+    "SnapshotDate": "20260529",
+    "LastSeenConditionDate": "20260529",
+    "LastUsedAt": "2026-05-29T14:24:25.4096301+09:00"
   }
 ]

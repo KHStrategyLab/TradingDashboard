@@ -180,11 +180,11 @@ namespace TradingDashboard.Models
         public string LastPriceText => LastPrice > 0 ? LastPrice.ToString("N0") : "-";
         public string MarketBadgeText => string.IsNullOrWhiteSpace(MarketName) ? MarketTypeCode : NormalizeMarketName(MarketName);
         public string OrderWarningBadgeText => FormatOrderWarning(OrderWarning);
-        public string OrderWarningListBadgeText => NormalizeText(OrderWarning) == "5" ? "경" : OrderWarningBadgeText;
+        public string OrderWarningListBadgeText => NormalizeText(OrderWarning) == "5" ? "경고" : OrderWarningBadgeText;
         public string AuditInfoBadgeText => FormatAuditInfo(AuditInfo);
         public string AlertListBadgeText => !string.IsNullOrWhiteSpace(OrderWarningListBadgeText)
             ? OrderWarningListBadgeText
-            : AuditInfoBadgeText == "투자주의" ? "주" : AuditInfoBadgeText;
+            : AuditInfoBadgeText == "투자주의" ? "주의" : AuditInfoBadgeText;
         public string MetaBadgeText
         {
             get

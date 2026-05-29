@@ -35,6 +35,18 @@ namespace TradingDashboard
             }
         }
 
+        private void MinuteChartComboBox_DropDownOpened(object sender, EventArgs e)
+        {
+            if (MinuteChartPlaceholderItem != null)
+                MinuteChartPlaceholderItem.Visibility = Visibility.Collapsed;
+        }
+
+        private void MinuteChartComboBox_DropDownClosed(object sender, EventArgs e)
+        {
+            if (MinuteChartPlaceholderItem != null)
+                MinuteChartPlaceholderItem.Visibility = Visibility.Visible;
+        }
+
         private void ResetMinuteChartComboSelection()
         {
             if (MinuteChartComboBox != null && !IsMinuteChartPeriod(_currentChartPeriod))
@@ -312,14 +324,15 @@ namespace TradingDashboard
                 }
             }
 
-            DrawMovingAverage(canvas, candles, 5, (Brush)FindResource("Ma5Brush"), chartW, h, min, max);
-            DrawMovingAverage(canvas, candles, 10, (Brush)FindResource("Ma10Brush"), chartW, h, min, max);
-            DrawMovingAverage(canvas, candles, 20, (Brush)FindResource("Ma20Brush"), chartW, h, min, max);
-            DrawMovingAverage(canvas, candles, 60, (Brush)FindResource("Ma60Brush"), chartW, h, min, max);
+            int visibleStartIndex = GetVisibleChartStartIndex();
+            DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 5, (Brush)FindResource("Ma5Brush"), chartW, h, min, max);
+            DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 10, (Brush)FindResource("Ma10Brush"), chartW, h, min, max);
+            DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 20, (Brush)FindResource("Ma20Brush"), chartW, h, min, max);
+            DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 60, (Brush)FindResource("Ma60Brush"), chartW, h, min, max);
             if (IsMinuteChartPeriod(_currentChartDataPeriod))
             {
-                DrawMovingAverage(canvas, candles, 240, (Brush)FindResource("Ma240Brush"), chartW, h, min, max);
-                DrawMovingAverage(canvas, candles, 480, (Brush)FindResource("Ma480Brush"), chartW, h, min, max);
+                DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 240, (Brush)FindResource("Ma240Brush"), chartW, h, min, max);
+                DrawMovingAverage(canvas, candles.Count, visibleStartIndex, 480, (Brush)FindResource("Ma480Brush"), chartW, h, min, max);
             }
 
             DrawRightPriceAxis(canvas, chartW + ChartRightPadding, axisWidth, h, min, max, tick);
@@ -702,8 +715,10 @@ namespace TradingDashboard
                 }
             }
 
-            int bucketMinute = now.Minute - (now.Minute % Math.Max(1, minute));
-            DateTime bucket = new DateTime(now.Year, now.Month, now.Day, now.Hour, bucketMinute, 0);
+            int interval = Math.Max(1, minute);
+            int totalMinutes = now.Hour * 60 + now.Minute;
+            int bucketTotalMinutes = totalMinutes - (totalMinutes % interval);
+            DateTime bucket = now.Date.AddMinutes(bucketTotalMinutes);
             return bucket.ToString("yyyyMMddHHmmss");
         }
 
@@ -714,7 +729,9 @@ namespace TradingDashboard
                 period == ChartPeriod.Minute5 ||
                 period == ChartPeriod.Minute10 ||
                 period == ChartPeriod.Minute15 ||
-                period == ChartPeriod.Minute30;
+                period == ChartPeriod.Minute30 ||
+                period == ChartPeriod.Minute60 ||
+                period == ChartPeriod.Minute120;
         }
 
         private static bool IsCalendarChartPeriod(ChartPeriod period)
@@ -734,6 +751,8 @@ namespace TradingDashboard
                 ChartPeriod.Minute10 => 10,
                 ChartPeriod.Minute15 => 15,
                 ChartPeriod.Minute30 => 30,
+                ChartPeriod.Minute60 => 60,
+                ChartPeriod.Minute120 => 120,
                 _ => 0
             };
         }
@@ -760,6 +779,8 @@ namespace TradingDashboard
                 ChartPeriod.Minute10 => "10분봉",
                 ChartPeriod.Minute15 => "15분봉",
                 ChartPeriod.Minute30 => "30분봉",
+                ChartPeriod.Minute60 => "60분봉",
+                ChartPeriod.Minute120 => "120분봉",
                 ChartPeriod.Daily => "일봉",
                 ChartPeriod.Weekly => "주봉",
                 ChartPeriod.Monthly => "월봉",
@@ -910,25 +931,31 @@ namespace TradingDashboard
             _currentPriceMarkerText = markerText;
         }
 
-        private void DrawMovingAverage(Canvas canvas, List<ChartCandle> candles, int period, Brush color, double w, double h, double min, double max)
+        private void DrawMovingAverage(Canvas canvas, int visibleCount, int visibleStartIndex, int period, Brush color, double w, double h, double min, double max)
         {
-            if (candles.Count < period) return;
+            if (_currentChartCandles.Count < period || visibleCount <= 0)
+                return;
 
             double range = Math.Max(1, max - min);
-            double gap = w / candles.Count;
+            double gap = w / visibleCount;
             var points = new PointCollection();
             double sum = 0;
 
-            for (int i = 0; i < candles.Count; i++)
+            int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, visibleStartIndex + visibleCount - 1);
+            for (int i = 0; i < _currentChartCandles.Count; i++)
             {
-                sum += candles[i].Close;
+                sum += _currentChartCandles[i].Close;
                 if (i >= period)
-                    sum -= candles[i - period].Close;
+                    sum -= _currentChartCandles[i - period].Close;
                 if (i < period - 1)
                     continue;
+                if (i < visibleStartIndex)
+                    continue;
+                if (i > visibleEndIndex)
+                    break;
 
                 double avg = sum / period;
-                double x = i * gap + gap / 2;
+                double x = (i - visibleStartIndex) * gap + gap / 2;
                 double y = (max - avg) / range * (h - 4) + 2;
                 points.Add(new Point(x, y));
             }
@@ -1067,6 +1094,8 @@ namespace TradingDashboard
             Minute10,
             Minute15,
             Minute30,
+            Minute60,
+            Minute120,
             Daily,
             Weekly,
             Monthly

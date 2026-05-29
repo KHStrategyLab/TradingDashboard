@@ -147,8 +147,18 @@ namespace TradingDashboard
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             AppendLog("앱 시작");
-            await PrimeMarketStatusBeforeWatchlistAsync();
-            await LoadWatchListFromKiwoomConditionAsync();
+            try
+            {
+                SetStartupLoading(true, "장구분 확인 중...");
+                await PrimeMarketStatusBeforeWatchlistAsync();
+
+                SetStartupLoading(true, "검색식 01번에서 종목 불러오는 중...");
+                await LoadWatchListFromKiwoomConditionAsync();
+            }
+            finally
+            {
+                SetStartupLoading(false, string.Empty);
+            }
 
             if (WatchListBox.SelectedItem is not ListBoxItem)
             {
@@ -1323,6 +1333,18 @@ namespace TradingDashboard
 
             LeftLogTextBox.Text = string.Join(Environment.NewLine, _logLines);
             LeftLogTextBox.ScrollToEnd();
+        }
+
+        private void SetStartupLoading(bool isVisible, string message)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => SetStartupLoading(isVisible, message));
+                return;
+            }
+
+            StartupLoadingOverlay.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+            StartupLoadingText.Text = string.IsNullOrWhiteSpace(message) ? "준비 중..." : message;
         }
 
         private void MainWindow_Closed(object? sender, EventArgs e)
