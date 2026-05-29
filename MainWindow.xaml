@@ -225,6 +225,47 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <Style x:Key="RightPanelTabControlStyle" TargetType="{x:Type TabControl}">
+            <Setter Property="Background" Value="{StaticResource BgPanelBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <Style x:Key="RightPanelTabItemStyle" TargetType="{x:Type TabItem}">
+            <Setter Property="Background" Value="{StaticResource BgHeaderBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSubBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type TabItem}">
+                        <Border x:Name="TabBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource BgPanelBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource WhiteValueBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#303030"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -699,6 +740,17 @@
             <!-- 오른쪽 호가 / 체결 / 뉴스 -->
             <Border Grid.Column="2"
                     Background="{StaticResource BgPanelBrush}">
+                <TabControl Style="{StaticResource RightPanelTabControlStyle}"
+                            ItemContainerStyle="{StaticResource RightPanelTabItemStyle}">
+                    <TabItem Header="전략">
+                        <Grid Background="{StaticResource BgPanelBrush}">
+                            <TextBlock Text="전략 선택 / 사용 여부 / 신호 표시 준비 영역"
+                                       Style="{StaticResource PlaceholderTextStyle}"/>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="호가"
+                             IsSelected="True">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="35"/>
@@ -1205,6 +1257,22 @@
                         </Grid>
                     </Border>
                 </Grid>
+                    </TabItem>
+
+                    <TabItem Header="뉴스">
+                        <Grid Background="{StaticResource BgPanelBrush}">
+                            <TextBlock Text="뉴스 전문판 준비 영역"
+                                       Style="{StaticResource PlaceholderTextStyle}"/>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="테마">
+                        <Grid Background="{StaticResource BgPanelBrush}">
+                            <TextBlock Text="테마 분석 준비 영역"
+                                       Style="{StaticResource PlaceholderTextStyle}"/>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
             </Border>
         </Grid>
 

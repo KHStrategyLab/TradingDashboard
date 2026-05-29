@@ -82,6 +82,7 @@ namespace TradingDashboard
         private StockStatusMetrics _currentStatusMetrics = new StockStatusMetrics();
         private long _krxPrevClosePrice;
         private long _selectedPreviousVolume;
+        private bool _selectedUsesUnifiedDailyVolume;
         private int _selectionVersion;
         private DateTime _last0DReceivedAt = DateTime.MinValue;
         private string _lastMarketStatusCode = string.Empty;
@@ -195,7 +196,7 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(status.Code))
                 {
                     MarkMarketStatusUnknown();
-                    AppendLog("0s 장운영구분 선조회값 없음, 장상태 미확인(KRX 우선)");
+                    AppendLog($"0s 장운영구분 선조회값 없음, 장상태 미확인({(IsNxtMarketWindow() ? "시간대 기준 NXT" : "KRX 우선")})");
                     return;
                 }
 
@@ -205,7 +206,7 @@ namespace TradingDashboard
             catch (OperationCanceledException)
             {
                 MarkMarketStatusUnknown();
-                AppendLog("0s 장운영구분 선조회 시간초과, 장상태 미확인(KRX 우선)");
+                AppendLog($"0s 장운영구분 선조회 시간초과, 장상태 미확인({(IsNxtMarketWindow() ? "시간대 기준 NXT" : "KRX 우선")})");
             }
             catch (Exception ex)
             {
@@ -222,7 +223,7 @@ namespace TradingDashboard
             _lastMarketStatusText = "장상태 미확인";
             _lastMarketStatusAt = DateTime.MinValue;
             _marketStatusUnknownUntil = DateTime.Now.AddMinutes(2);
-            _isNxtMarketMode = false;
+            _isNxtMarketMode = IsNxtMarketWindow();
         }
 
         private async Task LoadWatchListFromKiwoomConditionAsync()
@@ -669,6 +670,7 @@ namespace TradingDashboard
             _buyTradeVolume = 0;
             _sellTradeVolume = 0;
             _selectedPreviousVolume = 0;
+            _selectedUsesUnifiedDailyVolume = false;
             _krxPrevClosePrice = 0;
             _lastTickPriceByCode.Clear();
             _currentChartCandles.Clear();
@@ -855,11 +857,9 @@ namespace TradingDashboard
 
                 if (!HasAnyHogaLevel(snapshot) && useNxtMarket && !IsNxtFrozenWindow())
                 {
-                    AppendLog($"NXT 호가 조회값 없음, KRX로 재조회: {stockCode}");
-                    snapshot = await _kiwoomConditionService.GetOrderBookSnapshotAsync(stockCode, false, cancellationToken);
-                    useNxtMarket = false;
-                    if (selectionVersion != _selectionVersion || stockCode != _selectedStockCode)
-                        return;
+                    // NXT/SOR 표시 중에는 KRX 전일종가만 기준가로 사용한다.
+                    // KRX 호가 fallback은 MTS의 NXT 호가 화면과 다른 값을 섞으므로 적용하지 않는다.
+                    AppendLog($"NXT 호가 조회값 없음, KRX fallback 생략: {stockCode}");
                 }
 
                 if (!HasAnyHogaLevel(snapshot))
@@ -900,13 +900,15 @@ namespace TradingDashboard
                     return;
                 }
 
+                // MTS 기준: 기준가는 항상 KRX 전일종가를 쓰지만,
+                // NXT 종목을 NXT 시간대에 보고 있을 때 시가/고가/저가/현재가는 NXT 시세를 표시한다.
                 bool useNxtMarket = ShouldUseNxtDataForStock(stockCode);
                 StockStatusMetrics m = await _kiwoomConditionService.GetStockStatusMetricsByGuideAsync(stockCode, useNxtMarket, cancellationToken);
                 if (useNxtMarket && IsEmptyStockStatus(m) && !IsNxtFrozenWindow())
                 {
-                    AppendLog($"NXT 조회값 없음, KRX로 재조회: {stockCode}");
-                    useNxtMarket = false;
-                    m = await _kiwoomConditionService.GetStockStatusMetricsByGuideAsync(stockCode, false, cancellationToken);
+                    // NXT/SOR 표시 중에는 KRX 전일종가만 기준가로 사용한다.
+                    // 시/고/저/종/현재가를 KRX로 재조회해 채우면 MTS SOR ON 화면과 어긋난다.
+                    AppendLog($"NXT 종목정보 조회값 없음, KRX fallback 생략: {stockCode}");
                 }
 
                 if (IsEmptyStockStatus(m))
@@ -914,6 +916,15 @@ namespace TradingDashboard
                     AppendLog($"종목정보 조회값 없음, 기존 정보 유지: {stockCode}");
                     return;
                 }
+
+                string statusRequestCode = useNxtMarket ? $"{NormalizeStockCode(stockCode)}_NX" : NormalizeStockCode(stockCode);
+                _selectedUsesUnifiedDailyVolume = false;
+                AppendLog(
+                    $"종목정보 TR: {statusRequestCode} / {(useNxtMarket ? "NXT" : "KRX")} / " +
+                    $"화면기준가(KRX) {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} / " +
+                    $"응답기준가 {m.BasePriceText} / 시가 {m.OpenPriceText} / 고가 {m.HighPriceText} / 저가 {m.LowPriceText} / 종가 {m.ClosePriceText} / 거래량 {m.VolumeText}");
+                if (_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selectedForCompare) && selectedForCompare.SupportsNxt)
+                    await LogStockStatusCompareAsync(stockCode, selectionVersion, cancellationToken);
 
                 _currentStatusMetrics = m;
                 ApplySelectedWatchStockPriceInfo(stockCode, m);
@@ -929,6 +940,8 @@ namespace TradingDashboard
                 InfoOpenPriceText.Text = m.OpenPriceText;
                 InfoHighPriceText.Text = m.HighPriceText;
                 InfoLowPriceText.Text = m.LowPriceText;
+                // 이 값은 StockStatusMetrics.BasePriceText를 쓰지 않는다.
+                // NXT 응답의 기준가가 섞이면 안 되므로 선택 시작부에서 잠근 KRX 전일종가만 표시한다.
                 InfoBasePriceText.Text = _krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-";
                 ApplySelectedPriceInfoColors(m);
                 InfoTradingValueText.Text = m.TradingValueText;
@@ -964,6 +977,7 @@ namespace TradingDashboard
                     InfoTurnoverRateText.Text = m.TurnoverRateText;
                     (string verifiedVolumeRatioText, Brush verifiedVolumeRatioBrush) = FormatDailyVolumeRatio(verifiedVolume);
                     m.VolumeRatioText = verifiedVolumeRatioText;
+                    _selectedUsesUnifiedDailyVolume = true;
                     InfoPrevTimeVolumeRatioText.Text = verifiedVolumeRatioText;
                     InfoPrevTimeVolumeRatioText.Foreground = verifiedVolumeRatioBrush;
                     AppendLog($"일별거래상세 통합 합계: 총 {verifiedVolume:N0} / 장전 {exec.BeforeMarketTradeQty:N0} / 장중 {exec.RegularMarketTradeQty:N0} / 장후 {exec.AfterMarketTradeQty:N0}");
@@ -1009,6 +1023,35 @@ namespace TradingDashboard
             return orderedCandles.Count > 1 ? orderedCandles[1] : null;
         }
 
+        private async Task LogStockStatusCompareAsync(string stockCode, int selectionVersion, CancellationToken cancellationToken)
+        {
+            try
+            {
+                IReadOnlyList<(string RequestCode, StockStatusMetrics Metrics)> rows =
+                    await _kiwoomConditionService.GetStockStatusMetricsCompareAsync(stockCode, cancellationToken);
+
+                if (selectionVersion != _selectionVersion || stockCode != _selectedStockCode)
+                    return;
+
+                foreach ((string requestCode, StockStatusMetrics metrics) in rows)
+                {
+                    AppendLog(
+                        $"종목정보 비교: {requestCode} / 기준 {metrics.BasePriceText} / " +
+                        $"시 {metrics.OpenPriceText} / 고 {metrics.HighPriceText} / 저 {metrics.LowPriceText} / 종 {metrics.ClosePriceText} / " +
+                        $"거래량 {metrics.VolumeText} / 거래대금 {metrics.TradingValueText}");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // selection changed
+            }
+            catch (Exception ex)
+            {
+                if (selectionVersion == _selectionVersion && stockCode == _selectedStockCode)
+                    AppendLog($"종목정보 비교 로그 오류: {stockCode} / {ex.Message}");
+            }
+        }
+
         private async Task<StockStatusMetrics> LoadExecutionSummaryByMarketAsync(string stockCode, bool useNxtMarketNow, CancellationToken cancellationToken)
         {
             bool supportsNxt = _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selected) && selected.SupportsNxt;
@@ -1018,32 +1061,20 @@ namespace TradingDashboard
             if (!useNxtExecution || HasAnyExecutionSummaryValue(exec) || IsNxtFrozenWindow())
                 return exec;
 
-            AppendLog($"NXT 체결량 조회값 없음, KRX로 재조회: {stockCode}");
-            StockStatusMetrics krxExec = await _kiwoomConditionService.GetTodayExecutionSummaryAsync(stockCode, false, programMarketType, cancellationToken);
-            if (!krxExec.HasProgramTrade && exec.HasProgramTrade)
-            {
-                krxExec.ProgramBuyText = exec.ProgramBuyText;
-                krxExec.ProgramNetQuantity = exec.ProgramNetQuantity;
-                krxExec.HasProgramTrade = true;
-            }
-            if (krxExec.DailyTradeQty <= 0 && exec.DailyTradeQty > 0)
-                krxExec.DailyTradeQty = exec.DailyTradeQty;
-            if (krxExec.BeforeMarketTradeQty <= 0 && exec.BeforeMarketTradeQty > 0)
-                krxExec.BeforeMarketTradeQty = exec.BeforeMarketTradeQty;
-            if (krxExec.RegularMarketTradeQty <= 0 && exec.RegularMarketTradeQty > 0)
-                krxExec.RegularMarketTradeQty = exec.RegularMarketTradeQty;
-            if (krxExec.AfterMarketTradeQty <= 0 && exec.AfterMarketTradeQty > 0)
-                krxExec.AfterMarketTradeQty = exec.AfterMarketTradeQty;
-            if (krxExec.DailySectionTradeQty <= 0 && exec.DailySectionTradeQty > 0)
-                krxExec.DailySectionTradeQty = exec.DailySectionTradeQty;
-            return krxExec;
+            // NXT/SOR 표시 중에는 KRX 전일종가 외의 KRX 체결/시세값을 섞지 않는다.
+            AppendLog($"NXT 체결량 조회값 없음, KRX fallback 생략: {stockCode}");
+            return exec;
         }
 
         private bool ShouldUseFinalDailyVolumeForRatio(string stockCode, bool useNxtMarket)
         {
             bool supportsNxt = IsNxtSupportedStock(stockCode);
             if (supportsNxt && useNxtMarket)
-                return IsNxtFrozenWindow();
+            {
+                // MTS SOR ON 기준: NXT 시간대 시/고/저/종은 NXT 계열을 표시하되,
+                // 거래량/거래대금/전일거래량비율은 _AL 통합 일별거래상세를 우선한다.
+                return IsNxtMarketWindow() || IsNxtFrozenWindow();
+            }
 
             return IsKrxRegularClosedWindow();
         }
@@ -1120,9 +1151,15 @@ namespace TradingDashboard
                 if (selectionVersion != _selectionVersion)
                     return;
 
-                bool useNxtSnapshot = _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selected)
-                    && selected.SupportsNxt
-                    && IsNxtFrozenWindow();
+                bool supportsNxt = _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selected)
+                    && selected.SupportsNxt;
+                bool useNxtSnapshot = supportsNxt && IsNxtFrozenWindow();
+
+                if (supportsNxt && IsNxtMarketWindow() && !useNxtSnapshot)
+                {
+                    AppendLog($"NXT 장중: KRX 종가 스냅샷 적용 생략: {stockCode}");
+                    return;
+                }
 
                 if (!IsKrxRegularClosedWindow() && !useNxtSnapshot)
                     return;

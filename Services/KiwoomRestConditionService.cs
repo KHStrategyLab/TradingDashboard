@@ -184,6 +184,9 @@ namespace TradingDashboard.Services
             if (string.IsNullOrWhiteSpace(baseCode))
                 return new List<DailyCandle>();
 
+            // MTS 표시 규칙과 맞춘다.
+            // useNxtMarket=true이면 OHLC/현재가/거래량 계열은 NXT 코드로 조회한다.
+            // 단, 화면 기준가와 색상 기준은 MainWindow에서 별도로 잠근 KRX 전일종가만 사용한다.
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/chart");
@@ -367,6 +370,128 @@ namespace TradingDashboard.Services
                 return new StockStatusMetrics();
 
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
+            JsonElement root10100 = await PostStkInfoRootAsync(token, "ka10100", requestCode, cancellationToken).ConfigureAwait(false);
+            JsonElement root10007 = await PostApiRootAsync(token, "ka10007", "/api/dostk/mrkcond", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
+            JsonElement root10095 = await PostStkInfoRootAsync(token, "ka10095", requestCode, cancellationToken).ConfigureAwait(false);
+            JsonElement atn = FindFirstArrayItemSafe(root10095, "atn_stk_infr");
+
+            long price = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "cur_prc", "curPrc", "price", "now_prc", "10")));
+            if (price <= 0)
+                price = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "lastPrice", "cur_prc", "curPrc", "price", "now_prc", "10")));
+            long open = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "open_pric", "open", "stck_oprc", "16")));
+            if (open <= 0)
+                open = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "open_pric", "open", "stck_oprc", "16")));
+            long high = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "high_pric", "high", "stck_hgpr", "17")));
+            if (high <= 0)
+                high = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "high_pric", "high", "stck_hgpr", "17")));
+            long low = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "low_pric", "low", "stck_lwpr", "18")));
+            if (low <= 0)
+                low = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "low_pric", "low", "stck_lwpr", "18")));
+            long dayDiff = ParseLongSafe(ReadAnyDeep(root10007, "pred_pre", "predPre", "change", "chg_val", "11"));
+            if (dayDiff == 0)
+                dayDiff = ParseLongSafe(ReadAnyDeep(root10100, "pred_pre", "predPre", "change", "chg_val", "11"));
+            long basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10007, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+            if (basePrice <= 0)
+                basePrice = Math.Abs(ParseLongSafe(ReadAnyDeep(root10100, "base_prc", "basePrc", "std_prc", "yday_prc", "기준가")));
+            long previousClosePrice = ResolvePreviousClosePrice(root10007);
+            if (previousClosePrice <= 0)
+                previousClosePrice = ResolvePreviousClosePrice(root10100);
+            if (previousClosePrice > 0)
+                basePrice = previousClosePrice;
+            if (basePrice <= 0 && price > 0 && dayDiff != 0)
+                basePrice = price - dayDiff;
+            if (basePrice > 0 && price > 0)
+                dayDiff = price - basePrice;
+
+            string changeRate = ReadAnyDeep(root10007, "flu_rt", "fluRt", "chg_rt", "change_rate", "12");
+            if (string.IsNullOrWhiteSpace(changeRate))
+                changeRate = ReadAnyDeep(root10100, "flu_rt", "fluRt", "chg_rt", "change_rate", "12");
+            if (string.IsNullOrWhiteSpace(changeRate))
+                changeRate = ReadAnyDeep(atn, "flu_rt", "chg_rt", "change_rate", "12");
+            if (string.IsNullOrWhiteSpace(changeRate) && basePrice > 0 && price > 0)
+                changeRate = $"{(price - basePrice) / (decimal)basePrice * 100m:0.00}";
+
+            long volume = ParseLongSafe(ReadAnyDeep(root10007, "trde_qty", "trdeQty", "acc_trde_qty", "acml_vol", "volume", "13"));
+            if (volume <= 0)
+                volume = ParseLongSafe(ReadAnyDeep(atn, "trde_qty", "trdeQty", "acc_trde_qty", "acml_vol", "volume", "13"));
+            long tradingValue = ParseLongSafe(ReadAnyDeep(root10007, "trde_prica", "trde_amt", "acc_trde_prica", "acc_trde_amt", "acml_tr_pbmn", "14"));
+            if (tradingValue <= 0)
+                tradingValue = ParseLongSafe(ReadAnyDeep(atn, "trde_prica", "trde_amt", "acc_trde_prica", "acc_trde_amt", "acml_tr_pbmn", "14"));
+            bool tradingValueFromApi = tradingValue > 0;
+            long marketCap = ParseLongSafe(ReadAnyDeep(atn, "mac", "market_cap"));
+            bool marketCapFromApi = marketCap > 0;
+            long totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root10100, "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
+            if (totalShares <= 0)
+                totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(atn, "stkcnt", "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
+            long floatShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root10007, "flo_stkcnt", "float_stkcnt", "floating_shares", "distb_stkcnt")));
+            if (floatShares <= 0)
+                floatShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(atn, "flo_stkcnt", "float_stkcnt", "floating_shares", "distb_stkcnt")));
+            long displayShares = floatShares > 0 ? floatShares : totalShares;
+
+            string turnoverRate = ReadAnyDeep(atn, "turnover_rt", "trde_rt", "turnoverRate");
+            string volumeRatio = ReadAnyDeep(atn, "vol_rt", "volume_rt", "volRatio");
+
+            if (!string.IsNullOrWhiteSpace(changeRate) && !changeRate.Contains("%")) changeRate += "%";
+            if (!string.IsNullOrWhiteSpace(turnoverRate) && !turnoverRate.Contains("%")) turnoverRate += "%";
+            if (!string.IsNullOrWhiteSpace(volumeRatio) && !volumeRatio.Contains("%")) volumeRatio += "%";
+
+            if (tradingValue <= 0 && price > 0 && volume > 0)
+                tradingValue = price * volume;
+            if (marketCap <= 0 && price > 0 && totalShares > 0)
+                marketCap = price * totalShares;
+            string calculatedTurnoverRate = FormatTurnoverRate(volume, displayShares);
+            if (string.IsNullOrWhiteSpace(turnoverRate))
+                turnoverRate = calculatedTurnoverRate;
+
+            return new StockStatusMetrics
+            {
+                OpenPriceText = open > 0 ? open.ToString("N0") : "-",
+                HighPriceText = high > 0 ? high.ToString("N0") : "-",
+                LowPriceText = low > 0 ? low.ToString("N0") : "-",
+                ClosePriceText = price > 0 ? price.ToString("N0") : "-",
+                BasePriceText = basePrice > 0 ? basePrice.ToString("N0") : "-",
+                VolumeText = volume > 0 ? volume.ToString("N0") : "-",
+                TradingValueText = tradingValueFromApi ? FormatMillionWonUnit(tradingValue) : FormatKoreanMoney(tradingValue),
+                MarketCapText = marketCapFromApi ? FormatHundredMillionWonUnit(marketCap) : FormatKoreanMoney(marketCap),
+                ListedSharesText = displayShares > 0 ? displayShares.ToString("N0") : "-",
+                TurnoverRateText = string.IsNullOrWhiteSpace(turnoverRate) ? "-" : turnoverRate,
+                ChangeRateText = string.IsNullOrWhiteSpace(changeRate) ? "-" : changeRate,
+                PrevDiffText = dayDiff == 0 ? "0" : (dayDiff > 0 ? $"+{dayDiff:N0}" : $"{dayDiff:N0}"),
+                VolumeRatioText = string.IsNullOrWhiteSpace(volumeRatio) ? "-" : volumeRatio
+            };
+        }
+
+        public async Task<IReadOnlyList<(string RequestCode, StockStatusMetrics Metrics)>> GetStockStatusMetricsCompareAsync(string code, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            string baseCode = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(baseCode))
+                return Array.Empty<(string, StockStatusMetrics)>();
+
+            var results = new List<(string RequestCode, StockStatusMetrics Metrics)>();
+            foreach (string requestCode in new[] { baseCode, $"{baseCode}_NX", $"{baseCode}_AL" })
+            {
+                try
+                {
+                    StockStatusMetrics metrics = await GetStockStatusMetricsByRequestCodeAsync(token, requestCode, cancellationToken).ConfigureAwait(false);
+                    results.Add((requestCode, metrics));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    results.Add((requestCode, new StockStatusMetrics()));
+                }
+            }
+
+            return results;
+        }
+
+        private async Task<StockStatusMetrics> GetStockStatusMetricsByRequestCodeAsync(string token, string requestCode, CancellationToken cancellationToken)
+        {
             JsonElement root10100 = await PostStkInfoRootAsync(token, "ka10100", requestCode, cancellationToken).ConfigureAwait(false);
             JsonElement root10007 = await PostApiRootAsync(token, "ka10007", "/api/dostk/mrkcond", new { stk_cd = requestCode }, cancellationToken).ConfigureAwait(false);
             JsonElement root10095 = await PostStkInfoRootAsync(token, "ka10095", requestCode, cancellationToken).ConfigureAwait(false);

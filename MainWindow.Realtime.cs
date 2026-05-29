@@ -184,7 +184,7 @@ namespace TradingDashboard
         {
             DateTime now = DateTime.Now;
             if (now < _marketStatusUnknownUntil)
-                return false;
+                return IsNxtMarketWindow();
 
             if ((now - _lastMarketStatusAt).TotalSeconds <= 180)
             {
@@ -866,9 +866,15 @@ namespace TradingDashboard
                     InfoSellTradeVolumeText.Foreground = _downColorBrush;
                     InfoBuyRatioText.Text = total > 0 ? $"{buyRatio:0}%" : "-";
                     ApplyProgramTradeInfo(_currentStatusMetrics);
-                    InfoVolumeText.Text = stock.VolumeText;
-                    _currentStatusMetrics.VolumeText = stock.VolumeText;
-                    long currentVolume = ParseLongAbs(stock.VolumeText);
+                    bool keepUnifiedDailyVolume = _selectedUsesUnifiedDailyVolume && IsNxtSupportedStock(code);
+                    long currentVolume = keepUnifiedDailyVolume
+                        ? ParseLongAbs(_currentStatusMetrics.VolumeText)
+                        : ParseLongAbs(stock.VolumeText);
+                    if (!keepUnifiedDailyVolume)
+                    {
+                        InfoVolumeText.Text = stock.VolumeText;
+                        _currentStatusMetrics.VolumeText = stock.VolumeText;
+                    }
                     _currentStatusMetrics.TurnoverRateText = FormatTurnoverRate(currentVolume, ParseLongAbs(_currentStatusMetrics.ListedSharesText));
                     (string dailyVolumeRatioText, Brush dailyVolumeRatioBrush) = FormatDailyVolumeRatio(currentVolume);
                     _currentStatusMetrics.VolumeRatioText = dailyVolumeRatioText;
