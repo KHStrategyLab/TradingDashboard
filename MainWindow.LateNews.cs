@@ -127,12 +127,16 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(item.Link))
                     continue;
 
+                string safeTitle = EscapeTelegramHtml(ShortenTelegramText(item.Title));
                 string safeLink = EscapeTelegramHtml(item.Link);
                 if (!previewLinkAdded)
                 {
                     lines.Add($"<a href=\"{safeLink}\">&#8203;</a>");
                     previewLinkAdded = true;
                 }
+
+                if (!string.IsNullOrWhiteSpace(safeTitle))
+                    lines.Add(safeTitle);
 
                 lines.Add($"<a href=\"{safeLink}\">기사보기 {index}</a>");
                 index++;

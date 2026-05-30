@@ -173,16 +173,35 @@ namespace TradingDashboard
             AppendLog("App started");
             try
             {
-                SetStartupLoading(true, "Checking market status...");
+                SetStartupLoading(
+                    true,
+                    "Starting TradingDashboard...",
+                    $"Watchlist cache ready: {_watchlistMemoryCache.Count} items",
+                    "Preparing Kiwoom/DART/Naver workers");
+
+                SetStartupLoading(
+                    true,
+                    "Checking market status...",
+                    "Opening Kiwoom 0s status channel",
+                    "Choosing KRX/NXT mode before loading watchlist");
                 await PrimeMarketStatusBeforeWatchlistAsync();
 
-                SetStartupLoading(true, "Loading condition 01 watchlist...");
+                SetStartupLoading(
+                    true,
+                    "Loading condition 01 watchlist...",
+                    "Requesting Kiwoom condition search results",
+                    "Realtime registration will start after the list is ready");
                 await LoadWatchListFromKiwoomConditionAsync();
+                SetStartupLoading(
+                    true,
+                    "Starting realtime feeds...",
+                    $"{_watchStocks.Count} watchlist stocks ready",
+                    "News and filings will continue in the background");
                 _ = LoadMarketNewsAfterStartupDelayAsync();
             }
             finally
             {
-                SetStartupLoading(false, string.Empty);
+                SetStartupLoading(false, string.Empty, string.Empty, string.Empty);
             }
 
             if (WatchListBox.SelectedItem is not ListBoxItem)
@@ -261,21 +280,41 @@ namespace TradingDashboard
             {
                 if (!_config.Kiwoom.UseRestApi)
                 {
+                    SetStartupLoading(
+                        true,
+                        "Loading cached watchlist...",
+                        "Kiwoom REST is disabled",
+                        "Using local data only");
                     AppendLog("Kiwoom REST disabled(UseRestApi=false)");
                     _krxPrevClosePrice = 0;
                     return;
                 }
 
+                SetStartupLoading(
+                    true,
+                    "Loading condition 01 watchlist...",
+                    "Kiwoom condition request in progress",
+                    "Waiting for candidate stocks");
                 AppendLog("Kiwoom condition 01 query started");
 
                 List<WatchStockItem> stocks = await _kiwoomConditionService.GetConditionStocksAsync();
                 if (stocks.Count == 0)
                 {
+                    SetStartupLoading(
+                        true,
+                        "Condition result is empty",
+                        "Trying local watchlist cache",
+                        "Realtime will start if cached stocks exist");
                     AppendLog("condition result 0 items");
                     ApplyCachedWatchListFallback("condition result 0 items");
                     return;
                 }
 
+                SetStartupLoading(
+                    true,
+                    "Applying condition result...",
+                    $"{stocks.Count} stocks received from condition 01",
+                    "Saving cache and preparing realtime registration");
                 ApplyWatchList(stocks);
                 SaveDailyWatchlistSnapshot(stocks);
                 AppendLog($"condition result {stocks.Count}items applied");
@@ -284,6 +323,11 @@ namespace TradingDashboard
             }
             catch (Exception ex)
             {
+                SetStartupLoading(
+                    true,
+                    "Condition request failed",
+                    "Trying local watchlist cache",
+                    ex.Message);
                 AppendLog($"condition query error: {ex.Message}");
                 if (!ApplyCachedWatchListFallback("condition query failed"))
                     MessageBox.Show($"Kiwoom condition(01) query error: {ex.Message}");
@@ -295,10 +339,20 @@ namespace TradingDashboard
             List<WatchStockItem> cachedStocks = BuildWatchListFromCache();
             if (cachedStocks.Count == 0)
             {
+                SetStartupLoading(
+                    true,
+                    "No cached watchlist available",
+                    reason,
+                    "Waiting for a usable condition result");
                 AppendLog($"{reason}, no usable watchlist cache");
                 return false;
             }
 
+            SetStartupLoading(
+                true,
+                "Applying cached watchlist...",
+                $"{cachedStocks.Count} cached stocks ready",
+                "Realtime registration will use cached candidates");
             ApplyWatchList(cachedStocks);
             AppendLog($"{reason}, watchlist cache {cachedStocks.Count}items applied");
             ScheduleWatchlistBasePriceRefresh(cachedStocks, TimeSpan.FromSeconds(30));
@@ -1634,16 +1688,18 @@ namespace TradingDashboard
             LeftLogTextBox.ScrollToEnd();
         }
 
-        private void SetStartupLoading(bool isVisible, string message)
+        private void SetStartupLoading(bool isVisible, string message, string statusLine1 = "", string statusLine2 = "")
         {
             if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.Invoke(() => SetStartupLoading(isVisible, message));
+                Dispatcher.Invoke(() => SetStartupLoading(isVisible, message, statusLine1, statusLine2));
                 return;
             }
 
             StartupLoadingOverlay.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
             StartupLoadingText.Text = string.IsNullOrWhiteSpace(message) ? "Loading..." : message;
+            StartupStatusLine1Text.Text = string.IsNullOrWhiteSpace(statusLine1) ? "Working..." : statusLine1;
+            StartupStatusLine2Text.Text = string.IsNullOrWhiteSpace(statusLine2) ? "Please wait" : statusLine2;
         }
 
         private void MainWindow_Closed(object? sender, EventArgs e)

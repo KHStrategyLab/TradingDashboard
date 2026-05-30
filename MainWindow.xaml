@@ -27,6 +27,29 @@
         <SolidColorBrush x:Key="PaletteOrange" Color="#f09b3f"/>
         <SolidColorBrush x:Key="PaletteViolet" Color="#8B5CF6"/>
 
+        <LinearGradientBrush x:Key="OffToggleTrackBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#666666" Offset="0"/>
+            <GradientStop Color="#555555" Offset="0.52"/>
+            <GradientStop Color="#444444" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="SkyToggleTrackBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#6ED7FF" Offset="0"/>
+            <GradientStop Color="#3EC3FA" Offset="0.52"/>
+            <GradientStop Color="#229FD1" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="RedToggleTrackBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FF6964" Offset="0"/>
+            <GradientStop Color="#F0332F" Offset="0.52"/>
+            <GradientStop Color="#C82320" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="YellowToggleTrackBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFECA8" Offset="0"/>
+            <GradientStop Color="#EAB308" Offset="0.52"/>
+            <GradientStop Color="#B77905" Offset="1"/>
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="PowerPanelActiveBrush" Color="#801B1212"/>
+        <SolidColorBrush x:Key="VirtualPanelActiveBrush" Color="#55302509"/>
+
         <!-- Price direction colors -->
         <SolidColorBrush x:Key="UpBrush" Color="#D92121"/>
         <SolidColorBrush x:Key="DownBrush" Color="#1261C4"/>
@@ -333,9 +356,9 @@
                                       HorizontalAlignment="Right"
                                       VerticalAlignment="Top">
                                     <Border x:Name="SwitchTrack"
-                                            Background="#2A2020"
-                                            BorderBrush="#4A3434"
-                                            BorderThickness="1"
+                                            Background="{StaticResource OffToggleTrackBrush}"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="0"
                                             CornerRadius="14"/>
                                     <TextBlock x:Name="SwitchText"
                                                Text="OFF"
@@ -351,7 +374,7 @@
                                             HorizontalAlignment="Left"
                                             VerticalAlignment="Center"
                                             Margin="3,0,0,0"
-                                            Background="#6B7280"
+                                            Background="{StaticResource PaletteWhite}"
                                             CornerRadius="11"/>
                                 </Grid>
 
@@ -368,16 +391,15 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="SlotBorder" Property="BorderBrush" Value="#2E7D64"/>
-                                <Setter TargetName="SwitchTrack" Property="Background" Value="#0F3A2C"/>
-                                <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{StaticResource PaletteGreen}"/>
+                                <Setter TargetName="SlotBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource SkyToggleTrackBrush}"/>
                                 <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
-                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteLightGreen}"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteWhite}"/>
                                 <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
                                 <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
                                 <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
                                 <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
-                                <Setter TargetName="SwitchThumb" Property="Background" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="SwitchThumb" Property="Background" Value="{StaticResource PaletteWhite}"/>
                                 <Setter TargetName="SlotDisabledText" Property="Visibility" Value="Collapsed"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="False">
@@ -514,8 +536,8 @@
         <Style x:Key="PolicyToggleSwitchStyle" TargetType="{x:Type ToggleButton}">
             <Setter Property="Width" Value="64"/>
             <Setter Property="Height" Value="28"/>
-            <Setter Property="Background" Value="#2A2020"/>
-            <Setter Property="BorderBrush" Value="#4A3434"/>
+            <Setter Property="Background" Value="{StaticResource OffToggleTrackBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -524,7 +546,7 @@
                             <Border x:Name="SwitchTrack"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="1"
+                                    BorderThickness="0"
                                     CornerRadius="14"/>
                             <TextBlock x:Name="SwitchText"
                                        Text="OFF"
@@ -540,28 +562,357 @@
                                     HorizontalAlignment="Left"
                                     VerticalAlignment="Center"
                                     Margin="3,0,0,0"
-                                    Background="#6B7280"
+                                    Background="{StaticResource PaletteWhite}"
                                     CornerRadius="11"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="SwitchTrack" Property="Background" Value="#0F3A2C"/>
-                                <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{StaticResource PaletteGreen}"/>
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource SkyToggleTrackBrush}"/>
                                 <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
-                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteLightGreen}"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteWhite}"/>
                                 <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
                                 <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
                                 <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
                                 <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
-                                <Setter TargetName="SwitchThumb" Property="Background" Value="{StaticResource PaletteSkyBlue}"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="SwitchThumb" Property="Background" Value="{StaticResource PaletteWhite}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style x:Key="PowerToggleSwitchStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Width" Value="64"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Background" Value="{StaticResource OffToggleTrackBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Grid>
+                            <Border x:Name="SwitchTrack"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="0"
+                                    CornerRadius="14"/>
+                            <TextBlock x:Name="SwitchText"
+                                       Text="OFF"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,10,0"/>
+                            <Border x:Name="SwitchThumb"
+                                    Width="22"
+                                    Height="22"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Margin="3,0,0,0"
+                                    Background="{StaticResource PaletteWhite}"
+                                    CornerRadius="11"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource RedToggleTrackBrush}"/>
+                                <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteWhite}"/>
+                                <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
+                                <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
+                                <Setter TargetName="SwitchThumb" Property="Background" Value="{StaticResource PaletteWhite}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PowerCardToggleStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Background" Value="#151515"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="PowerCardBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="64"/>
+                                </Grid.ColumnDefinitions>
+
+                                <ContentPresenter Grid.Column="0"
+                                                  Margin="0,0,10,0"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"/>
+
+                                <Grid Grid.Column="1"
+                                      Width="64"
+                                      Height="28"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Center">
+                                    <Border x:Name="SwitchTrack"
+                                            Background="{StaticResource OffToggleTrackBrush}"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="0"
+                                            CornerRadius="14"/>
+                                    <TextBlock x:Name="SwitchText"
+                                               Text="OFF"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Margin="0,0,10,0"/>
+                                    <Border x:Name="SwitchThumb"
+                                            Width="22"
+                                            Height="22"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Margin="3,0,0,0"
+                                            Background="{StaticResource PaletteWhite}"
+                                            CornerRadius="11"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="PowerCardBorder" Property="Background" Value="{StaticResource PowerPanelActiveBrush}"/>
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource RedToggleTrackBrush}"/>
+                                <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteWhite}"/>
+                                <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
+                                <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="PowerCardBorder" Property="Background" Value="#1B1515"/>
+                                <Setter TargetName="PowerCardBorder" Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                <Setter TargetName="PowerCardBorder" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#F0332F"
+                                                          BlurRadius="9"
+                                                          ShadowDepth="0"
+                                                          Opacity="0.26"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PolicyCardToggleStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Background" Value="#151515"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="PolicyCardBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="64"/>
+                                </Grid.ColumnDefinitions>
+
+                                <ContentPresenter Grid.Column="0"
+                                                  Margin="0,0,10,0"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"/>
+
+                                <Grid Grid.Column="1"
+                                      Width="64"
+                                      Height="28"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Center">
+                                    <Border x:Name="SwitchTrack"
+                                            Background="{StaticResource OffToggleTrackBrush}"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="0"
+                                            CornerRadius="14"/>
+                                    <TextBlock x:Name="SwitchText"
+                                               Text="OFF"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Margin="0,0,10,0"/>
+                                    <Border x:Name="SwitchThumb"
+                                            Width="22"
+                                            Height="22"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Margin="3,0,0,0"
+                                            Background="{StaticResource PaletteWhite}"
+                                            CornerRadius="11"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="PolicyCardBorder" Property="Background" Value="#132838"/>
+                                <Setter TargetName="PolicyCardBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource SkyToggleTrackBrush}"/>
+                                <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteWhite}"/>
+                                <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
+                                <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="PolicyCardBorder" Property="Background" Value="#172532"/>
+                                <Setter TargetName="PolicyCardBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="PolicyCardBorder" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#3EC3FA"
+                                                          BlurRadius="9"
+                                                          ShadowDepth="0"
+                                                          Opacity="0.22"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="VirtualCardToggleStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Background" Value="#151515"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="VirtualCardBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="64"/>
+                                </Grid.ColumnDefinitions>
+
+                                <ContentPresenter Grid.Column="0"
+                                                  Margin="0,0,10,0"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"/>
+
+                                <Grid Grid.Column="1"
+                                      Width="64"
+                                      Height="28"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Center">
+                                    <Border x:Name="SwitchTrack"
+                                            Background="{StaticResource OffToggleTrackBrush}"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="0"
+                                            CornerRadius="14"/>
+                                    <TextBlock x:Name="SwitchText"
+                                               Text="OFF"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Margin="0,0,10,0"/>
+                                    <Border x:Name="SwitchThumb"
+                                            Width="22"
+                                            Height="22"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Margin="3,0,0,0"
+                                            Background="{StaticResource PaletteWhite}"
+                                            CornerRadius="11"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="VirtualCardBorder" Property="Background" Value="{StaticResource VirtualPanelActiveBrush}"/>
+                                <Setter TargetName="VirtualCardBorder" Property="BorderBrush" Value="{StaticResource PaletteYellow}"/>
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource YellowToggleTrackBrush}"/>
+                                <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteWhite}"/>
+                                <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
+                                <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="VirtualCardBorder" Property="Background" Value="#241F12"/>
+                                <Setter TargetName="VirtualCardBorder" Property="BorderBrush" Value="{StaticResource PaletteYellow}"/>
+                                <Setter TargetName="VirtualCardBorder" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#EAB308"
+                                                          BlurRadius="9"
+                                                          ShadowDepth="0"
+                                                          Opacity="0.24"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="VirtualCardBorder" Property="Opacity" Value="0.42"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CardMutedTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource TextSubBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CardSubTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{StaticResource TextSubBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                    <Setter Property="Foreground" Value="#A8A8A8"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -996,7 +1347,7 @@
                                             </Grid>
 
                                             <TextBlock x:Name="StartupLoadingText"
-                                       Text="Loading..."
+                                                       Text="Loading..."
                                                        Foreground="{StaticResource TextMainBrush}"
                                                        FontSize="18"
                                                        FontWeight="Bold"
@@ -1004,11 +1355,22 @@
                                                        TextWrapping="Wrap"
                                                        Margin="0,24,0,0"/>
 
-                            <TextBlock Text="Please wait"
-                                                       Foreground="{StaticResource TextSubBrush}"
-                                                       FontSize="14"
-                                                       HorizontalAlignment="Center"
-                                                       Margin="0,8,0,0"/>
+                                            <StackPanel Margin="0,12,0,0"
+                                                        Width="360">
+                                                <TextBlock x:Name="StartupStatusLine1Text"
+                                                           Text="Preparing workspace..."
+                                                           Foreground="{StaticResource TextSubBrush}"
+                                                           FontSize="12"
+                                                           TextAlignment="Center"
+                                                           TextWrapping="Wrap"/>
+                                                <TextBlock x:Name="StartupStatusLine2Text"
+                                                           Text="Waiting for first market data"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"
+                                                           TextAlignment="Center"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
@@ -1049,16 +1411,36 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0"
-                                    BorderBrush="{StaticResource LineBrush}"
                                     BorderThickness="1"
-                                    Background="{StaticResource BgInnerBrush}"
                                     CornerRadius="6"
                                     Padding="14"
                                     MinHeight="126"
                                     Margin="0,0,0,12">
+                                <Border.Style>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="Background" Value="{StaticResource BgInnerBrush}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+                                        <Setter Property="Effect" Value="{x:Null}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsChecked, ElementName=AutoTradingEnabledToggle}" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource PowerPanelActiveBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                <Setter Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect Color="#F0332F"
+                                                                          BlurRadius="10"
+                                                                          ShadowDepth="0"
+                                                                          Opacity="0.32"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -1067,66 +1449,117 @@
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="76"/>
+                                        <ColumnDefinition Width="64"/>
                                     </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Row="0"
-                                                Grid.Column="0">
-                                        <TextBlock Text="Auto Trading"
-                                                   Foreground="{StaticResource TextMainBrush}"
-                                                   FontSize="13"
-                                                   FontWeight="Bold"/>
-                                        <TextBlock Text="Enable switch locks budget and slot inputs while running."
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="11"
-                                                   Margin="0,4,0,0"
-                                                   TextWrapping="Wrap"/>
-                                    </StackPanel>
 
                                     <ToggleButton x:Name="AutoTradingEnabledToggle"
                                                   Grid.Row="0"
-                                                  Grid.Column="1"
+                                                  Grid.ColumnSpan="2"
                                                   IsChecked="False"
-                                                  Style="{StaticResource PolicyToggleSwitchStyle}"
+                                                  Style="{StaticResource PowerCardToggleStyle}"
+                                                  Checked="StrategyControlBoard_Changed"
+                                                  Unchecked="StrategyControlBoard_Changed">
+                                        <StackPanel>
+                                                <Border HorizontalAlignment="Left"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Padding="6,1">
+                                                    <Border.Style>
+                                                        <Style TargetType="{x:Type Border}">
+                                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                    <Setter Property="Background" Value="#2A1515"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsChecked, ElementName=AutoTradingEnabledToggle}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                    <Setter Property="Background" Value="#2A1515"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="Engine Start"
+                                                               FontSize="15"
+                                                               FontWeight="Bold">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="{x:Type TextBlock}">
+                                                                <Setter Property="Foreground" Value="#9A3A3A"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{StaticResource PaletteRed}"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsChecked, ElementName=AutoTradingEnabledToggle}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{StaticResource PaletteRed}"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+                                                <TextBlock Text="Starts the strategy signal engine. Orders stay blocked until Live Orders is ON."
+                                                           Style="{StaticResource CardMutedTextStyle}"
+                                                           FontSize="11"
+                                                           Margin="0,4,0,0"
+                                                           TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+
+                                    <ToggleButton x:Name="LiveBuyEnabledToggle"
+                                                  Grid.Row="1"
+                                                  Grid.ColumnSpan="2"
+                                                  IsChecked="False"
+                                                  Style="{StaticResource PowerCardToggleStyle}"
                                                   Checked="StrategyControlBoard_Changed"
                                                   Unchecked="StrategyControlBoard_Changed"
-                                                  VerticalAlignment="Top"
-                                                  HorizontalAlignment="Right"/>
-
-                                    <Border Grid.Row="1"
-                                            Grid.ColumnSpan="2"
-                                            Background="#151515"
-                                            BorderBrush="{StaticResource LineSoftBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="6"
-                                            Padding="9"
-                                            Margin="0,14,0,0">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="76"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <TextBlock Text="전략 테스트 모드"
-                                                           Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="11"
-                                                           FontWeight="SemiBold"/>
-                                                <TextBlock Text="ON이면 자동매매 ON이어도 실주문을 차단하고 가상 포지션만 추적"
-                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                  Margin="0,14,0,0">
+                                        <StackPanel>
+                                                <Border HorizontalAlignment="Left"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Padding="6,1">
+                                                    <Border.Style>
+                                                        <Style TargetType="{x:Type Border}">
+                                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                    <Setter Property="Background" Value="#2A1515"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsChecked, ElementName=LiveBuyEnabledToggle}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                    <Setter Property="Background" Value="#2A1515"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="Live Orders"
+                                                               FontSize="15"
+                                                               FontWeight="Bold">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="{x:Type TextBlock}">
+                                                                <Setter Property="Foreground" Value="#9A3A3A"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{StaticResource PaletteRed}"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsChecked, ElementName=LiveBuyEnabledToggle}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{StaticResource PaletteRed}"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+                                                <TextBlock Text="ON sends strategy signals to the live order layer. OFF keeps alerts and records only."
+                                                           Style="{StaticResource CardMutedTextStyle}"
                                                            FontSize="10"
                                                            Margin="0,3,0,0"
                                                            TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                            <ToggleButton x:Name="PaperTradingModeToggle"
-                                                          Grid.Column="1"
-                                                          IsChecked="False"
-                                                          Style="{StaticResource PolicyToggleSwitchStyle}"
-                                                          Checked="StrategyControlBoard_Changed"
-                                                          Unchecked="StrategyControlBoard_Changed"
-                                                          Margin="0"
-                                                          VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </Border>
+                                        </StackPanel>
+                                    </ToggleButton>
 
                                     <Grid Grid.Row="2"
                                           Grid.ColumnSpan="2"
@@ -1157,8 +1590,45 @@
                                                         <Setter Property="BorderThickness" Value="1"/>
                                                         <Setter Property="FontSize" Value="13"/>
                                                         <Setter Property="FontWeight" Value="SemiBold"/>
-                                                        <Setter Property="CaretBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                                        <Setter Property="CaretBrush" Value="{StaticResource PaletteRed}"/>
+                                                        <Setter Property="SelectionBrush" Value="{StaticResource PaletteRed}"/>
+                                                        <Setter Property="SelectionOpacity" Value="0.35"/>
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="{x:Type TextBox}">
+                                                                    <Border x:Name="TextBoxChrome"
+                                                                            Background="{TemplateBinding Background}"
+                                                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                                                            CornerRadius="3"
+                                                                            SnapsToDevicePixels="True">
+                                                                        <ScrollViewer x:Name="PART_ContentHost"
+                                                                                      Margin="{TemplateBinding Padding}"
+                                                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                                                    </Border>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                                            <Setter TargetName="TextBoxChrome" Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                        </Trigger>
+                                                                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                            <Setter TargetName="TextBoxChrome" Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                        </Trigger>
+                                                                        <Trigger Property="IsEnabled" Value="False">
+                                                                            <Setter TargetName="TextBoxChrome" Property="Opacity" Value="0.45"/>
+                                                                        </Trigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
                                                         <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                            </Trigger>
                                                             <DataTrigger Binding="{Binding IsChecked, ElementName=AutoTradingEnabledToggle}" Value="True">
                                                                 <Setter Property="IsEnabled" Value="False"/>
                                                                 <Setter Property="Opacity" Value="0.45"/>
@@ -1190,8 +1660,45 @@
                                                         <Setter Property="BorderThickness" Value="1"/>
                                                         <Setter Property="FontSize" Value="13"/>
                                                         <Setter Property="FontWeight" Value="SemiBold"/>
-                                                        <Setter Property="CaretBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                                        <Setter Property="CaretBrush" Value="{StaticResource PaletteRed}"/>
+                                                        <Setter Property="SelectionBrush" Value="{StaticResource PaletteRed}"/>
+                                                        <Setter Property="SelectionOpacity" Value="0.35"/>
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="{x:Type TextBox}">
+                                                                    <Border x:Name="TextBoxChrome"
+                                                                            Background="{TemplateBinding Background}"
+                                                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                                                            CornerRadius="3"
+                                                                            SnapsToDevicePixels="True">
+                                                                        <ScrollViewer x:Name="PART_ContentHost"
+                                                                                      Margin="{TemplateBinding Padding}"
+                                                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                                                    </Border>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                                            <Setter TargetName="TextBoxChrome" Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                        </Trigger>
+                                                                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                            <Setter TargetName="TextBoxChrome" Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                                        </Trigger>
+                                                                        <Trigger Property="IsEnabled" Value="False">
+                                                                            <Setter TargetName="TextBoxChrome" Property="Opacity" Value="0.45"/>
+                                                                        </Trigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
                                                         <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{StaticResource PaletteRed}"/>
+                                                            </Trigger>
                                                             <DataTrigger Binding="{Binding IsChecked, ElementName=AutoTradingEnabledToggle}" Value="True">
                                                                 <Setter Property="IsEnabled" Value="False"/>
                                                                 <Setter Property="Opacity" Value="0.45"/>
@@ -1205,7 +1712,59 @@
                                 </Grid>
                             </Border>
 
-                            <Border Grid.Row="1"
+                            <ToggleButton x:Name="VirtualTradingPreviewToggle"
+                                          Grid.Row="1"
+                                          IsChecked="False"
+                                          Style="{StaticResource VirtualCardToggleStyle}"
+                                          Margin="0,0,0,12">
+                                <StackPanel>
+                                    <Border HorizontalAlignment="Left"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="6,1">
+                                        <Border.Style>
+                                            <Style TargetType="{x:Type Border}">
+                                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                                                        <Setter Property="BorderBrush" Value="{StaticResource PaletteYellow}"/>
+                                                        <Setter Property="Background" Value="#302509"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsChecked, ElementName=VirtualTradingPreviewToggle}" Value="True">
+                                                        <Setter Property="BorderBrush" Value="{StaticResource PaletteYellow}"/>
+                                                        <Setter Property="Background" Value="#302509"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="Paper Trading"
+                                                   FontSize="15"
+                                                   FontWeight="Bold">
+                                            <TextBlock.Style>
+                                                <Style TargetType="{x:Type TextBlock}">
+                                                    <Setter Property="Foreground" Value="#9B7A20"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource PaletteYellow}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsChecked, ElementName=VirtualTradingPreviewToggle}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource PaletteYellow}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                    <TextBlock Text="Simulated tracking without live orders. Available only when Engine Start is OFF."
+                                               Style="{StaticResource CardMutedTextStyle}"
+                                               FontSize="10"
+                                               Margin="0,3,0,0"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </ToggleButton>
+
+                            <Border Grid.Row="2"
                                     BorderBrush="{StaticResource LineBrush}"
                                     BorderThickness="1"
                                     Background="{StaticResource BgInnerBrush}"
@@ -1221,7 +1780,7 @@
                                     <StackPanel>
                                         <TextBlock Text="Strategy Slots"
                                                    Foreground="{StaticResource TextMainBrush}"
-                                                   FontSize="13"
+                                                   FontSize="15"
                                                    FontWeight="Bold"/>
                                         <TextBlock Text="Disabled slots are ignored by signal evaluation."
                                                    Foreground="{StaticResource TextMutedBrush}"
@@ -1237,7 +1796,7 @@
                                 </Grid>
                             </Border>
 
-                            <ScrollViewer Grid.Row="2"
+                            <ScrollViewer Grid.Row="3"
                                           Margin="0,10,0,0"
                                           VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
@@ -1254,8 +1813,8 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Slot 1 · 10min Base Candle Chase"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="12"
-                                                           FontWeight="SemiBold"
+                                                           FontSize="15"
+                                                           FontWeight="Bold"
                                                            VerticalAlignment="Center"/>
                                                 <Button Grid.Column="1"
                                                         Content="설명"
@@ -1276,12 +1835,12 @@
                                                            FontWeight="SemiBold"/>
                                             </Border>
                                             <TextBlock Text="10min volume/value burst, high breakout, not overextended"
-                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
                                             <TextBlock Text="Stop: base mid or breakout -1.5% · Target: base range extension"
-                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
@@ -1301,8 +1860,8 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Slot 2 · 3min Pullback"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="12"
-                                                           FontWeight="SemiBold"
+                                                           FontSize="15"
+                                                           FontWeight="Bold"
                                                            VerticalAlignment="Center"/>
                                                 <Button Grid.Column="1"
                                                         Content="설명"
@@ -1323,12 +1882,12 @@
                                                            FontWeight="SemiBold"/>
                                             </Border>
                                             <TextBlock Text="After base candle, wait for pullback, reaction, confirmation"
-                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
                                             <TextBlock Text="Stop: reaction candle low · Target: base high recovery first"
-                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
@@ -1348,8 +1907,8 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Slot 3 · Prev Limit Body Recovery"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="12"
-                                                           FontWeight="SemiBold"
+                                                           FontSize="15"
+                                                           FontWeight="Bold"
                                                            VerticalAlignment="Center"/>
                                                 <Button Grid.Column="1"
                                                         Content="설명"
@@ -1370,12 +1929,12 @@
                                                            FontWeight="SemiBold"/>
                                             </Border>
                                             <TextBlock Text="KRX base candle, body pullback, open recovery signal"
-                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
                                             <TextBlock Text="Reserved for KHStrategyLab strategy import"
-                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
@@ -1395,8 +1954,8 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Slot 4 · Theme / Disclosure Assist"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="12"
-                                                           FontWeight="SemiBold"
+                                                           FontSize="15"
+                                                           FontWeight="Bold"
                                                            VerticalAlignment="Center"/>
                                                 <Button Grid.Column="1"
                                                         Content="설명"
@@ -1417,12 +1976,12 @@
                                                            FontWeight="SemiBold"/>
                                             </Border>
                                             <TextBlock Text="News, disclosure, and theme tags only; no buy signal yet"
-                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
                                             <TextBlock Text="Low priority assistant slot"
-                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
@@ -1431,7 +1990,7 @@
                                 </StackPanel>
                             </ScrollViewer>
 
-                            <Border Grid.Row="3"
+                            <Border Grid.Row="4"
                                     BorderBrush="{StaticResource LineBrush}"
                                     BorderThickness="1"
                                     Background="{StaticResource BgInnerBrush}"
@@ -1449,74 +2008,46 @@
                                                Margin="0,3,0,8"
                                                TextWrapping="Wrap"/>
 
-                                    <Border Background="#151515"
-                                            BorderBrush="{StaticResource LineSoftBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="6"
-                                            Padding="9"
-                                            Margin="0,0,0,7">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="76"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <TextBlock Text="겹침 매수"
-                                                           Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="11"
-                                                           FontWeight="SemiBold"/>
-                                                <TextBlock Text="같은 종목이 다른 전략에 이미 걸렸을 때 OFF = 안 산다, ON = 또 산다"
-                                                           Foreground="{StaticResource TextMutedBrush}"
-                                                           FontSize="10"
-                                                           Margin="0,3,0,0"
-                                                           TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                            <ToggleButton x:Name="DuplicateBuyPolicyToggle"
-                                                              Grid.Column="1"
-                                                              IsChecked="False"
-                                                              Style="{StaticResource PolicyToggleSwitchStyle}"
-                                                              Checked="StrategyControlBoard_Changed"
-                                                              Unchecked="StrategyControlBoard_Changed"
-                                                              Margin="0"
-                                                          VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </Border>
+                                    <ToggleButton x:Name="DuplicateBuyPolicyToggle"
+                                                  IsChecked="False"
+                                                  Style="{StaticResource PolicyCardToggleStyle}"
+                                                  Checked="StrategyControlBoard_Changed"
+                                                  Unchecked="StrategyControlBoard_Changed"
+                                                  Margin="0,0,0,7">
+                                        <StackPanel>
+                                            <TextBlock Text="겹침 매수"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="15"
+                                                       FontWeight="Bold"/>
+                                            <TextBlock Text="같은 종목이 다른 전략에 이미 걸렸을 때 OFF = 안 산다, ON = 또 산다"
+                                                       Style="{StaticResource CardMutedTextStyle}"
+                                                       FontSize="10"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
 
-                                    <Border Background="#151515"
-                                            BorderBrush="{StaticResource LineSoftBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="6"
-                                            Padding="9">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="76"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <TextBlock Text="겹침 알림"
-                                                           Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="11"
-                                                           FontWeight="SemiBold"/>
-                                                <TextBlock Text="같은 종목이 여러 전략에 걸렸을 때 ON = 알린다, OFF = 기록만 한다"
-                                                           Foreground="{StaticResource TextMutedBrush}"
-                                                           FontSize="10"
-                                                           Margin="0,3,0,0"
-                                                           TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                            <ToggleButton x:Name="DuplicateAlertPolicyToggle"
-                                                              Grid.Column="1"
-                                                              IsChecked="True"
-                                                              Style="{StaticResource PolicyToggleSwitchStyle}"
-                                                              Checked="StrategyControlBoard_Changed"
-                                                              Unchecked="StrategyControlBoard_Changed"
-                                                              Margin="0"
-                                                          VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </Border>
+                                    <ToggleButton x:Name="DuplicateAlertPolicyToggle"
+                                                  IsChecked="True"
+                                                  Style="{StaticResource PolicyCardToggleStyle}"
+                                                  Checked="StrategyControlBoard_Changed"
+                                                  Unchecked="StrategyControlBoard_Changed">
+                                        <StackPanel>
+                                            <TextBlock Text="겹침 알림"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="15"
+                                                       FontWeight="Bold"/>
+                                            <TextBlock Text="같은 종목이 여러 전략에 걸렸을 때 ON = 알린다, OFF = 기록만 한다"
+                                                       Style="{StaticResource CardMutedTextStyle}"
+                                                       FontSize="10"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
                                 </StackPanel>
                             </Border>
 
-                            <Border Grid.Row="4"
+                            <Border Grid.Row="5"
                                     BorderBrush="{StaticResource LineBrush}"
                                     BorderThickness="1,1,1,1"
                                     Background="{StaticResource BgInnerBrush}"
@@ -1558,7 +2089,7 @@
                                 </Grid>
                             </Border>
 
-                            <Border Grid.Row="5"
+                            <Border Grid.Row="6"
                                     BorderBrush="#123A25"
                                     BorderThickness="1"
                                     Background="#07140D"

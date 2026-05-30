@@ -13,6 +13,7 @@ namespace TradingDashboard
     public partial class MainWindow
     {
         private readonly StrategySlotRegistry _strategySlotRegistry = StrategySlotRegistry.CreateDefault();
+        private bool _isRevertingLockedStrategyToggle;
 
         private void InitializeStrategySlots()
         {
@@ -22,12 +23,23 @@ namespace TradingDashboard
 
         private void StrategySlotToggle_Changed(object sender, RoutedEventArgs e)
         {
+            if (TryRejectEngineLockedStrategyChange(sender))
+                return;
+
             UpdateStrategySlotSummary();
             UpdateStrategyControlBoard();
         }
 
         private void StrategyControlBoard_Changed(object sender, RoutedEventArgs e)
         {
+            if (TryRejectEngineLockedStrategyChange(sender))
+            {
+                SyncPaperTradingPreviewState();
+                UpdateStrategyControlBoard();
+                return;
+            }
+
+            SyncPaperTradingPreviewState();
             UpdateStrategyControlBoard();
         }
 
@@ -35,6 +47,63 @@ namespace TradingDashboard
         {
             UpdateStrategyControlBoard();
         }
+
+        private void SyncPaperTradingPreviewState()
+        {
+            if (AutoTradingEnabledToggle == null || VirtualTradingPreviewToggle == null)
+                return;
+
+            bool engineStarted = IsStrategyToggleOn(AutoTradingEnabledToggle);
+            if (engineStarted && VirtualTradingPreviewToggle.IsChecked == true)
+                VirtualTradingPreviewToggle.IsChecked = false;
+
+            VirtualTradingPreviewToggle.IsEnabled = !engineStarted;
+        }
+
+        private bool TryRejectEngineLockedStrategyChange(object sender)
+        {
+            if (_isRevertingLockedStrategyToggle)
+                return false;
+
+            if (!IsEngineConfigurationLocked())
+                return false;
+
+            if (sender is not ToggleButton toggle || !IsLockedStrategyConfigurationToggle(toggle))
+                return false;
+
+            _isRevertingLockedStrategyToggle = true;
+            try
+            {
+                toggle.IsChecked = toggle.IsChecked != true;
+            }
+            finally
+            {
+                _isRevertingLockedStrategyToggle = false;
+            }
+
+            AppendLog("띵띵: Engine Start 중에는 전략 설정을 변경할 수 없음. 전략은 켜기 전에 설정하라.");
+            try
+            {
+                global::System.Media.SystemSounds.Exclamation.Play();
+            }
+            catch
+            {
+                // Some Windows sound schemes may not provide a playable alert.
+            }
+
+            return true;
+        }
+
+        private bool IsEngineConfigurationLocked() =>
+            IsStrategyToggleOn(AutoTradingEnabledToggle);
+
+        private bool IsLockedStrategyConfigurationToggle(ToggleButton toggle) =>
+            ReferenceEquals(toggle, StrategySlotBaseCandleChaseToggle) ||
+            ReferenceEquals(toggle, StrategySlotPullbackToggle) ||
+            ReferenceEquals(toggle, StrategySlotPrevLimitToggle) ||
+            ReferenceEquals(toggle, StrategySlotThemeAssistToggle) ||
+            ReferenceEquals(toggle, DuplicateBuyPolicyToggle) ||
+            ReferenceEquals(toggle, DuplicateAlertPolicyToggle);
 
         private void StrategyDetailButton_Click(object sender, RoutedEventArgs e)
         {
@@ -104,7 +173,7 @@ namespace TradingDashboard
         private StrategyExecutionSettings GetStrategyExecutionSettings() =>
             new(
                 AutoTradingEnabled: IsStrategyToggleOn(AutoTradingEnabledToggle),
-                PaperTradingMode: IsStrategyToggleOn(PaperTradingModeToggle),
+                LiveBuyEnabled: IsStrategyToggleOn(LiveBuyEnabledToggle),
                 Budget: ParseLongInput(AutoTradeBudgetTextBox?.Text),
                 SlotCount: Math.Max(0, (int)ParseLongInput(AutoTradeSlotCountTextBox?.Text)));
 
@@ -141,12 +210,12 @@ namespace TradingDashboard
 
             StrategyControlBoardText.Text =
                 $"MODE {execution.ExecutionModeText} · " +
-                $"AUTO {(execution.AutoTradingEnabled ? "ON" : "OFF")} · " +
-                $"가상 {(execution.PaperTradingMode ? "ON(실주문차단)" : "OFF")} · " +
-                $"예산 {execution.Budget:N0} · 슬롯 {execution.SlotCount} · " +
-                $"전략 {settings.Count(x => x.IsEnabled)}/{settings.Count}: {enabledStrategies} · " +
-                $"키 겹침매수 {(duplicate.AllowAdditionalBuy ? "ON" : "OFF")} / " +
-                $"겹침알림 {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")}";
+                $"ENGINE {(execution.AutoTradingEnabled ? "ON" : "OFF")} · " +
+                $"LIVE ORDERS {(execution.LiveBuyEnabled ? "ON" : "OFF(alert only)")} · " +
+                $"BUDGET {execution.Budget:N0} · SLOTS {execution.SlotCount} · " +
+                $"STRATEGIES {settings.Count(x => x.IsEnabled)}/{settings.Count}: {enabledStrategies} · " +
+                $"DUP BUY {(duplicate.AllowAdditionalBuy ? "ON" : "OFF")} / " +
+                $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")}";
         }
 
         private static bool IsStrategyToggleOn(ToggleButton toggle) =>

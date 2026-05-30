@@ -2,15 +2,17 @@ namespace TradingDashboard.Services.Strategies
 {
     public sealed record StrategyExecutionSettings(
         bool AutoTradingEnabled,
-        bool PaperTradingMode,
+        bool LiveBuyEnabled,
         long Budget,
         int SlotCount)
     {
-        public bool BlocksLiveOrders => PaperTradingMode;
+        public bool AllowsLiveBuy => AutoTradingEnabled && LiveBuyEnabled;
+
+        public bool BlocksLiveOrders => !AllowsLiveBuy;
 
         public string ExecutionModeText =>
-            PaperTradingMode
-                ? "EXPERIMENT"
-                : AutoTradingEnabled ? "LIVE" : "OFF";
+            AllowsLiveBuy
+                ? "LIVE_ORDERS"
+                : AutoTradingEnabled ? "ENGINE_ONLY" : "OFF";
     }
 }
