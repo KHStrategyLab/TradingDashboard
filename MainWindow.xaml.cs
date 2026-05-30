@@ -31,6 +31,7 @@ namespace TradingDashboard
         private readonly NewsKeywordFilterService _newsKeywordFilterService = new();
         private readonly NewsThumbnailService _newsThumbnailService = new();
         private readonly DartDisclosureService _disclosureService;
+        private readonly DartDisclosureAlertService _disclosureAlertService;
         private readonly TelegramNotifier _telegramNotifier;
         private readonly KiwoomRestConditionService _kiwoomConditionService;
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
@@ -140,8 +141,11 @@ namespace TradingDashboard
             _newsService = new NaverNewsService(_config.NaverNews);
             _newsService.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _disclosureService = new DartDisclosureService(_config.Dart);
+            _disclosureService.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _telegramNotifier = new TelegramNotifier(_config.Telegram);
             _telegramNotifier.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
+            _disclosureAlertService = new DartDisclosureAlertService(_disclosureService, _telegramNotifier);
+            _disclosureAlertService.AlertLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _kiwoomConditionService = new KiwoomRestConditionService(_config.Kiwoom);
             _kiwoomConditionService.RestLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             LoadWatchlistCache();

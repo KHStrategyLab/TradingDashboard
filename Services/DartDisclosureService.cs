@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -19,10 +20,28 @@ namespace TradingDashboard.Services
         private static readonly HttpClient HttpClient = new();
 
         private readonly DartSettings _settings = settings ?? new DartSettings();
+        private readonly SemaphoreSlim _dartRequestGate = new(1, 1);
         private readonly string _corpCodeCachePath = ResolveCachePath();
         private Dictionary<string, string>? _corpCodeByStockCode;
+        private DateTime _lastDartRequestUtc = DateTime.MinValue;
+        private DateTime _dartBlockedUntilUtc = DateTime.MinValue;
+
+        private static readonly TimeSpan DartRequestInterval = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan DartLimitCooldown = TimeSpan.FromMinutes(1);
+
+        public event Action<string>? ApiLimitLog;
 
         public async Task<List<DisclosureItem>> GetLatestDisclosuresAsync(string stockCode, int? count = null, CancellationToken cancellationToken = default)
+        {
+            return await GetDisclosuresAsync(stockCode, _settings.LookbackDays, count, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<List<DisclosureItem>> GetRecentDisclosuresAsync(string stockCode, int lookbackDays, int? count = null, CancellationToken cancellationToken = default)
+        {
+            return await GetDisclosuresAsync(stockCode, lookbackDays, count, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<List<DisclosureItem>> GetDisclosuresAsync(string stockCode, int lookbackDays, int? count, CancellationToken cancellationToken)
         {
             if (!_settings.Enabled || string.IsNullOrWhiteSpace(_settings.ApiKey) || string.IsNullOrWhiteSpace(stockCode))
                 return [];
@@ -41,8 +60,8 @@ namespace TradingDashboard.Services
             if (displayCount > 100)
                 displayCount = 100;
 
-            int lookbackDays = _settings.LookbackDays <= 0 ? 180 : _settings.LookbackDays;
-            string beginDate = DateTime.Today.AddDays(-lookbackDays).ToString("yyyyMMdd");
+            int resolvedLookbackDays = lookbackDays <= 0 ? 180 : lookbackDays;
+            string beginDate = DateTime.Today.AddDays(-resolvedLookbackDays).ToString("yyyyMMdd");
             string endDate = DateTime.Today.ToString("yyyyMMdd");
             int pageCount = Math.Max(displayCount, 10);
             string url = "https://opendart.fss.or.kr/api/list.json"
@@ -61,6 +80,11 @@ namespace TradingDashboard.Services
             DartListResponse? result = JsonSerializer.Deserialize<DartListResponse>(json, options);
             if (result == null)
                 return [];
+            if (result.Status == "020")
+            {
+                ApplyDartLimitCooldown($"list.json/{normalizedStockCode}");
+                return [];
+            }
             if (!string.IsNullOrWhiteSpace(result.Status) && result.Status != "000")
                 return [];
             if (result.List == null || result.List.Count == 0)
@@ -70,6 +94,8 @@ namespace TradingDashboard.Services
                 .Take(displayCount)
                 .Select(item => new DisclosureItem
                 {
+                    ReceiptNo = item.ReceiptNo ?? string.Empty,
+                    ReceiptDate = item.ReceiptDate ?? string.Empty,
                     ReportName = item.ReportName ?? string.Empty,
                     Title = item.ReportName ?? string.Empty,
                     DateText = FormatDate(item.ReceiptDate),
@@ -98,6 +124,7 @@ namespace TradingDashboard.Services
             byte[] zipBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
             if (zipBytes.Length < 4 || zipBytes[0] != 'P' || zipBytes[1] != 'K')
             {
+                TryLogCorpCodeLimitResponse(zipBytes);
                 _corpCodeByStockCode = new Dictionary<string, string>(StringComparer.Ordinal);
                 return _corpCodeByStockCode;
             }
@@ -140,7 +167,7 @@ namespace TradingDashboard.Services
             return Path.Combine(configDir ?? Path.Combine(Directory.GetCurrentDirectory(), "Config"), "dart_corp_codes.json");
         }
 
-        private static Task<HttpResponseMessage> SendDartGetAsync(string url, CancellationToken cancellationToken)
+        private async Task<HttpResponseMessage> SendDartGetAsync(string url, CancellationToken cancellationToken)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, url)
             {
@@ -148,7 +175,63 @@ namespace TradingDashboard.Services
             };
             request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
             request.Headers.Accept.ParseAdd("application/json,application/zip,application/xml,*/*");
-            return HttpClient.SendAsync(request, cancellationToken);
+
+            await _dartRequestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await WaitDartSlotAsync(cancellationToken).ConfigureAwait(false);
+                HttpResponseMessage response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (response.StatusCode == (HttpStatusCode)429)
+                    ApplyDartLimitCooldown("HTTP 429");
+
+                return response;
+            }
+            finally
+            {
+                _dartRequestGate.Release();
+            }
+        }
+
+        private async Task WaitDartSlotAsync(CancellationToken cancellationToken)
+        {
+            DateTime now = DateTime.UtcNow;
+            if (now < _dartBlockedUntilUtc)
+                await Task.Delay(_dartBlockedUntilUtc - now, cancellationToken).ConfigureAwait(false);
+
+            now = DateTime.UtcNow;
+            if (_lastDartRequestUtc != DateTime.MinValue && now - _lastDartRequestUtc < DartRequestInterval)
+                await Task.Delay(DartRequestInterval - (now - _lastDartRequestUtc), cancellationToken).ConfigureAwait(false);
+
+            _lastDartRequestUtc = DateTime.UtcNow;
+        }
+
+        private void ApplyDartLimitCooldown(string tag)
+        {
+            _dartBlockedUntilUtc = DateTime.UtcNow + DartLimitCooldown;
+            ApiLimitLog?.Invoke($"DART limit: {tag} / wait {DartLimitCooldown.TotalSeconds:0}s");
+        }
+
+        private void TryLogCorpCodeLimitResponse(byte[] responseBytes)
+        {
+            try
+            {
+                string text = Encoding.UTF8.GetString(responseBytes);
+                using JsonDocument doc = JsonDocument.Parse(text);
+                string status = ReadString(doc.RootElement, "status");
+                if (status == "020")
+                    ApplyDartLimitCooldown("corpCode.xml/status 020");
+            }
+            catch
+            {
+                // corpCode.xml normally returns a zip. Non-json failures are handled as empty mapping.
+            }
+        }
+
+        private static string ReadString(JsonElement element, string propertyName)
+        {
+            return element.TryGetProperty(propertyName, out JsonElement value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? string.Empty
+                : string.Empty;
         }
 
         private static string? SearchUpwards(string startPath, string folderName)

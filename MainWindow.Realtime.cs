@@ -367,7 +367,10 @@ namespace TradingDashboard
                 if (handledFromCache)
                 {
                     if (addedFromCache != null)
+                    {
+                        await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(addedFromCache, _realtimeCts?.Token ?? CancellationToken.None);
                         await TrySendLateNewsAlertAsync(addedFromCache, _realtimeCts?.Token ?? CancellationToken.None);
+                    }
 
                     await RegisterRealtime0BForCurrentWatchlistAsync();
                     return;
@@ -401,7 +404,10 @@ namespace TradingDashboard
                 });
 
                 if (added)
+                {
+                    await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(stock, _realtimeCts?.Token ?? CancellationToken.None);
                     await TrySendLateNewsAlertAsync(stock, _realtimeCts?.Token ?? CancellationToken.None);
+                }
 
                 await RegisterRealtime0BForCurrentWatchlistAsync();
             }
