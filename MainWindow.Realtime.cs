@@ -676,6 +676,10 @@ namespace TradingDashboard
                 _sellHogaLevels[i].RawPrice = 0;
                 _sellHogaLevels[i].PriceBrush = _whiteBrush;
                 _sellHogaLevels[i].RateBrush = _whiteBrush;
+                _sellHogaLevels[i].IsCurrentPrice = false;
+                _sellHogaLevels[i].CurrentPriceBackgroundBrush = Brushes.Transparent;
+                _sellHogaLevels[i].CurrentPriceBorderBrush = Brushes.Transparent;
+                _sellHogaLevels[i].CurrentPriceBorderThickness = new Thickness(0);
 
                 _buyHogaLevels[i].PriceText = "-";
                 _buyHogaLevels[i].QtyText = "-";
@@ -683,6 +687,10 @@ namespace TradingDashboard
                 _buyHogaLevels[i].RawPrice = 0;
                 _buyHogaLevels[i].PriceBrush = _whiteBrush;
                 _buyHogaLevels[i].RateBrush = _whiteBrush;
+                _buyHogaLevels[i].IsCurrentPrice = false;
+                _buyHogaLevels[i].CurrentPriceBackgroundBrush = Brushes.Transparent;
+                _buyHogaLevels[i].CurrentPriceBorderBrush = Brushes.Transparent;
+                _buyHogaLevels[i].CurrentPriceBorderThickness = new Thickness(0);
             }
 
             for (int i = 0; i < sellDisplayRows.Count && i < 10; i++)
@@ -733,6 +741,10 @@ namespace TradingDashboard
                 _sellHogaLevels[i].RawPrice = 0;
                 _sellHogaLevels[i].PriceBrush = _whiteBrush;
                 _sellHogaLevels[i].RateBrush = _whiteBrush;
+                _sellHogaLevels[i].IsCurrentPrice = false;
+                _sellHogaLevels[i].CurrentPriceBackgroundBrush = Brushes.Transparent;
+                _sellHogaLevels[i].CurrentPriceBorderBrush = Brushes.Transparent;
+                _sellHogaLevels[i].CurrentPriceBorderThickness = new Thickness(0);
 
                 _buyHogaLevels[i].PriceText = "-";
                 _buyHogaLevels[i].QtyText = "-";
@@ -740,6 +752,10 @@ namespace TradingDashboard
                 _buyHogaLevels[i].RawPrice = 0;
                 _buyHogaLevels[i].PriceBrush = _whiteBrush;
                 _buyHogaLevels[i].RateBrush = _whiteBrush;
+                _buyHogaLevels[i].IsCurrentPrice = false;
+                _buyHogaLevels[i].CurrentPriceBackgroundBrush = Brushes.Transparent;
+                _buyHogaLevels[i].CurrentPriceBorderBrush = Brushes.Transparent;
+                _buyHogaLevels[i].CurrentPriceBorderThickness = new Thickness(0);
             }
 
             _sellHogaLevels[9].PriceText = currentPrice.ToString("N0");
@@ -948,9 +964,10 @@ namespace TradingDashboard
             foreach (HogaLevel level in levels)
             {
                 bool isCurrentPrice = currentPrice > 0 && level.RawPrice == currentPrice;
-                level.CurrentPriceBorderBrush = isCurrentPrice ? _hogaCurrentPriceBorderBrush : Brushes.Transparent;
-                level.CurrentPriceBackgroundBrush = isCurrentPrice ? _hogaCurrentPriceBackgroundBrush : Brushes.Transparent;
-                level.CurrentPriceBorderThickness = isCurrentPrice ? new Thickness(1) : new Thickness(0);
+                level.IsCurrentPrice = isCurrentPrice;
+                level.CurrentPriceBorderBrush = Brushes.Transparent;
+                level.CurrentPriceBackgroundBrush = isCurrentPrice ? CreateHogaCurrentPriceBackground(level.RawPrice) : Brushes.Transparent;
+                level.CurrentPriceBorderThickness = new Thickness(0);
 
                 if (level.RawPrice > 0 && _krxPrevClosePrice > 0)
                 {
@@ -977,6 +994,21 @@ namespace TradingDashboard
             if (price < _krxPrevClosePrice)
                 return _downColorBrush;
             return _whiteBrush;
+        }
+
+        private Brush CreateHogaCurrentPriceBackground(long price)
+        {
+            Color color;
+            if (price > 0 && _krxPrevClosePrice > 0 && price > _krxPrevClosePrice)
+                color = Color.FromArgb(0x80, 0xD9, 0x21, 0x21);
+            else if (price > 0 && _krxPrevClosePrice > 0 && price < _krxPrevClosePrice)
+                color = Color.FromArgb(0x80, 0x12, 0x61, 0xC4);
+            else
+                color = Color.FromArgb(0x66, 0xB6, 0xCC, 0xD8);
+
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
         }
 
         private string FormatKrxPreviousCloseRate(long price)

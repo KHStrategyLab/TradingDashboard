@@ -16,6 +16,7 @@ namespace TradingDashboard.Models
         private Brush _currentPriceBackgroundBrush = Brushes.Transparent;
         private Brush _currentPriceBorderBrush = Brushes.Transparent;
         private Thickness _currentPriceBorderThickness = new(0);
+        private bool _isCurrentPrice;
 
         public string PriceText
         {
@@ -69,6 +70,12 @@ namespace TradingDashboard.Models
         {
             get => _currentPriceBorderThickness;
             set => SetField(ref _currentPriceBorderThickness, value);
+        }
+
+        public bool IsCurrentPrice
+        {
+            get => _isCurrentPrice;
+            set => SetField(ref _isCurrentPrice, value);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
