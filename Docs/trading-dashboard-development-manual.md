@@ -1009,6 +1009,14 @@ Engine Start OFF = no strategy execution
 - `StrategyProgressStep`
 - `StrategyProgressSnapshot`
 
+현재 화면 연결:
+
+- `Progress` 탭의 상단 필터는 전략 슬롯과 보유/미보유 상태를 고른다.
+- 하단 목록은 정적 샘플이 아니라 현재 선택 종목을 `EvaluateEnabledStrategySlots`로 평가한 결과를 표시한다.
+- 종목 선택, 전략 슬롯 토글, 진행 필터 토글, 잔고 새로고침, 선택 종목 상태 조회 이후 다시 그린다.
+- 보유/미보유 기준은 현재 잔고 목록의 종목코드와 선택 종목코드를 정규화해서 비교한다.
+- 아직 각 전략의 실제 단계 계산은 대기 상태이며, `StrategyProgressSnapshot`을 채우는 전략별 로직이 들어오면 같은 UI가 그대로 진행률과 상태를 받는다.
+
 예시:
 
 ```text

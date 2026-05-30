@@ -13,12 +13,15 @@ namespace TradingDashboard
     public partial class MainWindow
     {
         private readonly StrategySlotRegistry _strategySlotRegistry = StrategySlotRegistry.CreateDefault();
+        private readonly System.Collections.ObjectModel.ObservableCollection<StrategyProgressRow> _strategyProgressRows = [];
         private bool _isRevertingLockedStrategyToggle;
 
         private void InitializeStrategySlots()
         {
+            StrategyProgressItemsControl.ItemsSource = _strategyProgressRows;
             UpdateStrategySlotSummary();
             UpdateStrategyControlBoard();
+            UpdateStrategyProgressRows();
         }
 
         private void StrategySlotToggle_Changed(object sender, RoutedEventArgs e)
@@ -28,6 +31,7 @@ namespace TradingDashboard
 
             UpdateStrategySlotSummary();
             UpdateStrategyControlBoard();
+            UpdateStrategyProgressRows();
         }
 
         private void StrategyControlBoard_Changed(object sender, RoutedEventArgs e)
@@ -46,6 +50,11 @@ namespace TradingDashboard
         private void StrategyControlBoardInput_Changed(object sender, TextChangedEventArgs e)
         {
             UpdateStrategyControlBoard();
+        }
+
+        private void StrategyProgressFilter_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateStrategyProgressRows();
         }
 
         private void SyncPaperTradingPreviewState()
@@ -218,6 +227,108 @@ namespace TradingDashboard
                 $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")}";
         }
 
+        private void UpdateStrategyProgressRows()
+        {
+            if (StrategyProgressItemsControl == null)
+                return;
+
+            _strategyProgressRows.Clear();
+
+            WatchStockItem? stock = ResolveSelectedProgressStock();
+            if (stock == null)
+            {
+                _strategyProgressRows.Add(StrategyProgressRow.Placeholder(
+                    "No selected stock",
+                    "종목을 선택하면 전략 진행 상태가 여기에 표시됨",
+                    (Brush)FindResource("TextMutedBrush")));
+                return;
+            }
+
+            IReadOnlyList<StrategyEvaluationResult> results = EvaluateEnabledStrategySlots(stock);
+            foreach (StrategyEvaluationResult result in results.Where(ShouldShowStrategyProgressResult))
+            {
+                StrategyProgressSnapshot progress = result.Progress ?? StrategyProgressSnapshot.Empty(result.SlotId);
+                StrategySlotDescriptor? descriptor = _strategySlotRegistry.GetDescriptor(result.SlotId);
+                Brush accentBrush = ResolveStrategyProgressBrush(descriptor?.MarketScope, progress.ProgressPercent);
+
+                _strategyProgressRows.Add(new StrategyProgressRow(
+                    $"{stock.Name} · {result.Name}",
+                    result.StateText,
+                    string.IsNullOrWhiteSpace(result.Summary) ? progress.StateText : result.Summary,
+                    Math.Clamp(progress.ProgressPercent, 0, 100),
+                    $"{Math.Clamp(progress.ProgressPercent, 0, 100):0}%",
+                    accentBrush));
+            }
+
+            if (_strategyProgressRows.Count == 0)
+            {
+                _strategyProgressRows.Add(StrategyProgressRow.Placeholder(
+                    $"{stock.Name} · filtered",
+                    "필터에 맞는 전략 진행 항목이 없음",
+                    (Brush)FindResource("TextMutedBrush")));
+            }
+        }
+
+        private WatchStockItem? ResolveSelectedProgressStock()
+        {
+            if (!string.IsNullOrWhiteSpace(_selectedStockCode) &&
+                _watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? stock))
+                return stock;
+
+            return RecentWatchListBox?.SelectedItem as WatchStockItem
+                ?? WatchListBox?.SelectedItem as WatchStockItem;
+        }
+
+        private bool ShouldShowStrategyProgressResult(StrategyEvaluationResult result)
+        {
+            if (!IsStrategyProgressSlotSelected(result.SlotId))
+                return false;
+
+            bool isOwned = IsSelectedProgressStockOwned();
+            bool showOwned = IsStrategyToggleOn(ProgressFilterOwnedToggle);
+            bool showUnowned = IsStrategyToggleOn(ProgressFilterUnownedToggle);
+
+            return isOwned ? showOwned : showUnowned;
+        }
+
+        private bool IsStrategyProgressSlotSelected(StrategySlotId slotId) =>
+            slotId switch
+            {
+                StrategySlotId.BaseCandleChase => IsStrategyToggleOn(ProgressFilterBaseCandleChaseToggle),
+                StrategySlotId.ThreeMinutePullback => IsStrategyToggleOn(ProgressFilterPullbackToggle),
+                StrategySlotId.PrevLimitBodyRecovery => IsStrategyToggleOn(ProgressFilterPrevLimitToggle),
+                StrategySlotId.ThemeDisclosureAssist => IsStrategyToggleOn(ProgressFilterThemeAssistToggle),
+                _ => false
+            };
+
+        private bool IsSelectedProgressStockOwned()
+        {
+            if (string.IsNullOrWhiteSpace(_selectedStockCode))
+                return false;
+
+            return _balanceHoldings.Any(holding =>
+                holding.HoldingQuantity > 0 &&
+                string.Equals(
+                    NormalizeStockCode(holding.StockCode),
+                    NormalizeStockCode(_selectedStockCode),
+                    StringComparison.Ordinal));
+        }
+
+        private Brush ResolveStrategyProgressBrush(StrategyMarketScope? marketScope, double progressPercent)
+        {
+            if (progressPercent >= 70)
+                return (Brush)FindResource("PaletteLightGreen");
+
+            return marketScope switch
+            {
+                StrategyMarketScope.KrxOnly => (Brush)FindResource("PalettePink"),
+                StrategyMarketScope.NxtOnly => (Brush)FindResource("PaletteSkyBlue"),
+                StrategyMarketScope.Sor => (Brush)FindResource("PaletteSkyBlue"),
+                StrategyMarketScope.Assist => (Brush)FindResource("PaletteLightYellow"),
+                _ => (Brush)FindResource("TextMutedBrush")
+            };
+        }
+
         private static bool IsStrategyToggleOn(ToggleButton toggle) =>
             toggle?.IsChecked == true;
 
@@ -228,6 +339,18 @@ namespace TradingDashboard
 
             string normalized = text.Replace(",", string.Empty).Trim();
             return long.TryParse(normalized, out long value) ? value : 0;
+        }
+
+        private sealed record StrategyProgressRow(
+            string Title,
+            string StateText,
+            string Summary,
+            double ProgressPercent,
+            string ProgressText,
+            Brush AccentBrush)
+        {
+            public static StrategyProgressRow Placeholder(string title, string summary, Brush brush) =>
+                new(title, "WAIT", summary, 0, "0%", brush);
         }
     }
 }

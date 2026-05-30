@@ -1046,6 +1046,7 @@ namespace TradingDashboard
             CancellationToken requestToken = _selectedRequestCts.Token;
             SelectedStockTitle.Text = stockName;
             _selectedStockCode = stockCode;
+            UpdateStrategyProgressRows();
             _recentTrades.Clear();
             _buyTradeVolume = 0;
             _sellTradeVolume = 0;
@@ -1510,6 +1511,7 @@ namespace TradingDashboard
 
                 _currentStatusMetrics = m;
                 ApplySelectedWatchStockPriceInfo(stockCode, m);
+                UpdateStrategyProgressRows();
                 (string dailyVolumeRatioText, Brush dailyVolumeRatioBrush) = await GetDailyVolumeRatioAsync(stockCode, useNxtMarket, m, cancellationToken);
                 if (selectionVersion != _selectionVersion)
                     return;
