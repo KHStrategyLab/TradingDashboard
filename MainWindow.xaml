@@ -302,6 +302,267 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="StrategySlotToggleStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="SlotBorder"
+                                Background="{StaticResource BgInnerBrush}"
+                                BorderBrush="{StaticResource LineSoftBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="76"/>
+                                </Grid.ColumnDefinitions>
+
+                                <ContentPresenter x:Name="SlotContent"
+                                                  Grid.Column="0"
+                                                  Margin="0,0,12,0"
+                                                  VerticalAlignment="Center"/>
+
+                                <Grid Grid.Column="1"
+                                      Width="64"
+                                      Height="28"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Top">
+                                    <Border x:Name="SwitchTrack"
+                                            Background="#2A2020"
+                                            BorderBrush="#4A3434"
+                                            BorderThickness="1"
+                                            CornerRadius="14"/>
+                                    <TextBlock x:Name="SwitchText"
+                                               Text="OFF"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Margin="0,0,10,0"/>
+                                    <Border x:Name="SwitchThumb"
+                                            Width="22"
+                                            Height="22"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Margin="3,0,0,0"
+                                            Background="#6B7280"
+                                            CornerRadius="11"/>
+                                </Grid>
+
+                                <TextBlock x:Name="SlotDisabledText"
+                                           Grid.Column="0"
+                                           Text="미적용"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Top"
+                                           Margin="0,2,6,0"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SlotBorder" Property="BorderBrush" Value="#2E7D64"/>
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="#0F3A2C"/>
+                                <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{StaticResource PaletteGreen}"/>
+                                <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteLightGreen}"/>
+                                <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
+                                <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
+                                <Setter TargetName="SwitchThumb" Property="Background" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter TargetName="SlotDisabledText" Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Setter TargetName="SlotContent" Property="Opacity" Value="0.48"/>
+                                <Setter TargetName="SlotBorder" Property="BorderBrush" Value="#2A2A2A"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SlotBorder" Property="Background" Value="#1D2428"/>
+                                <Setter TargetName="SlotBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StrategyDetailButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="44"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Background" Value="#252525"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="DetailButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="DetailButtonBorder" Property="Background" Value="#303840"/>
+                                <Setter TargetName="DetailButtonBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StrategyStepCircleStyle" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Background" Value="#242424"/>
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <Style x:Key="StrategyStepLabelStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+
+        <Style x:Key="StrategyStrengthProgressBarStyle" TargetType="{x:Type ProgressBar}">
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Background" Value="#242424"/>
+            <Setter Property="Foreground" Value="{StaticResource PaletteSkyBlue}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ProgressBar}">
+                        <Grid x:Name="PART_Track"
+                              SnapsToDevicePixels="True">
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="10"/>
+                            <Border x:Name="PART_Indicator"
+                                    HorizontalAlignment="Left"
+                                    Background="{TemplateBinding Foreground}"
+                                    CornerRadius="10"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StrategyStrengthLabelStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{StaticResource TextSubBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="StrategyFilterChipStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="MinWidth" Value="86"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="Padding" Value="13,0"/>
+            <Setter Property="Background" Value="#252525"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSubBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="ChipBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="14"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ChipBorder" Property="Background" Value="#14313D"/>
+                                <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter Property="Foreground" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChipBorder" Property="Background" Value="#303840"/>
+                                <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PolicyToggleSwitchStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Width" Value="64"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Background" Value="#2A2020"/>
+            <Setter Property="BorderBrush" Value="#4A3434"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Grid>
+                            <Border x:Name="SwitchTrack"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="14"/>
+                            <TextBlock x:Name="SwitchText"
+                                       Text="OFF"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,10,0"/>
+                            <Border x:Name="SwitchThumb"
+                                    Width="22"
+                                    Height="22"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Margin="3,0,0,0"
+                                    Background="#6B7280"
+                                    CornerRadius="11"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="#0F3A2C"/>
+                                <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{StaticResource PaletteGreen}"/>
+                                <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteLightGreen}"/>
+                                <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
+                                <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
+                                <Setter TargetName="SwitchThumb" Property="Background" Value="{StaticResource PaletteSkyBlue}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -779,9 +1040,1107 @@
                 <TabControl Style="{StaticResource RightPanelTabControlStyle}"
                             ItemContainerStyle="{StaticResource RightPanelTabItemStyle}">
                     <TabItem Header="Strategy">
-                        <Grid Background="{StaticResource BgPanelBrush}">
-                            <TextBlock Text="Strategy selection / enable flags / signal panel"
-                                       Style="{StaticResource PlaceholderTextStyle}"/>
+                        <Grid Background="{StaticResource BgPanelBrush}"
+                              Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    CornerRadius="6"
+                                    Padding="14"
+                                    MinHeight="126"
+                                    Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="76"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="0">
+                                        <TextBlock Text="Auto Trading"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="13"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock Text="Enable switch locks budget and slot inputs while running."
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <ToggleButton x:Name="AutoTradingEnabledToggle"
+                                                  Grid.Row="0"
+                                                  Grid.Column="1"
+                                                  IsChecked="False"
+                                                  Style="{StaticResource PolicyToggleSwitchStyle}"
+                                                  Checked="StrategyControlBoard_Changed"
+                                                  Unchecked="StrategyControlBoard_Changed"
+                                                  VerticalAlignment="Top"
+                                                  HorizontalAlignment="Right"/>
+
+                                    <Border Grid.Row="1"
+                                            Grid.ColumnSpan="2"
+                                            Background="#151515"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="9"
+                                            Margin="0,14,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="76"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="전략 테스트 모드"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"/>
+                                                <TextBlock Text="ON이면 자동매매 ON이어도 실주문을 차단하고 가상 포지션만 추적"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="10"
+                                                           Margin="0,3,0,0"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <ToggleButton x:Name="PaperTradingModeToggle"
+                                                          Grid.Column="1"
+                                                          IsChecked="False"
+                                                          Style="{StaticResource PolicyToggleSwitchStyle}"
+                                                          Checked="StrategyControlBoard_Changed"
+                                                          Unchecked="StrategyControlBoard_Changed"
+                                                          Margin="0"
+                                                          VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Grid Grid.Row="2"
+                                          Grid.ColumnSpan="2"
+                                          Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="74"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0"
+                                                    Margin="0,0,10,0">
+                                            <TextBlock Text="예산"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"/>
+                                                    <TextBox x:Name="AutoTradeBudgetTextBox"
+                                                             Text="5,000,000"
+                                                             Height="30"
+                                                             Margin="0,5,0,0"
+                                                             Padding="8,0"
+                                                             TextChanged="StrategyControlBoardInput_Changed"
+                                                             VerticalContentAlignment="Center">
+                                                <TextBox.Style>
+                                                    <Style TargetType="{x:Type TextBox}">
+                                                        <Setter Property="Background" Value="#101010"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
+                                                        <Setter Property="BorderThickness" Value="1"/>
+                                                        <Setter Property="FontSize" Value="13"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        <Setter Property="CaretBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsChecked, ElementName=AutoTradingEnabledToggle}" Value="True">
+                                                                <Setter Property="IsEnabled" Value="False"/>
+                                                                <Setter Property="Opacity" Value="0.45"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBox.Style>
+                                            </TextBox>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="슬롯수"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"/>
+                                                    <TextBox x:Name="AutoTradeSlotCountTextBox"
+                                                             Text="3"
+                                                             Height="30"
+                                                             Margin="0,5,0,0"
+                                                             Padding="8,0"
+                                                             TextChanged="StrategyControlBoardInput_Changed"
+                                                             TextAlignment="Center"
+                                                     VerticalContentAlignment="Center">
+                                                <TextBox.Style>
+                                                    <Style TargetType="{x:Type TextBox}">
+                                                        <Setter Property="Background" Value="#101010"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
+                                                        <Setter Property="BorderThickness" Value="1"/>
+                                                        <Setter Property="FontSize" Value="13"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        <Setter Property="CaretBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsChecked, ElementName=AutoTradingEnabledToggle}" Value="True">
+                                                                <Setter Property="IsEnabled" Value="False"/>
+                                                                <Setter Property="Opacity" Value="0.45"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBox.Style>
+                                            </TextBox>
+                                        </StackPanel>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="1"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    CornerRadius="6"
+                                    Padding="14"
+                                    MinHeight="126"
+                                    Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Strategy Slots"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="13"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock Text="Disabled slots are ignored by signal evaluation."
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               Text="UI only"
+                                               Foreground="{StaticResource PaletteSkyBlue}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Top"/>
+                                </Grid>
+                            </Border>
+
+                            <ScrollViewer Grid.Row="2"
+                                          Margin="0,10,0,0"
+                                          VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <ToggleButton x:Name="StrategySlotBaseCandleChaseToggle"
+                                                  Style="{StaticResource StrategySlotToggleStyle}"
+                                                  Checked="StrategySlotToggle_Changed"
+                                                  Unchecked="StrategySlotToggle_Changed"
+                                                  IsChecked="True">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Slot 1 · 10min Base Candle Chase"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1"
+                                                        Content="설명"
+                                                        Tag="BaseCandleChase"
+                                                        Style="{StaticResource StrategyDetailButtonStyle}"
+                                                        Click="StrategyDetailButton_Click"/>
+                                            </Grid>
+                                            <Border HorizontalAlignment="Left"
+                                                    Background="#17243A"
+                                                    BorderBrush="{StaticResource PaletteSkyBlue}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Padding="6,1"
+                                                    Margin="0,5,0,0">
+                                                <TextBlock Text="SOR · KRX 기준가 고정"
+                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"/>
+                                            </Border>
+                                            <TextBlock Text="10min volume/value burst, high breakout, not overextended"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="Stop: base mid or breakout -1.5% · Target: base range extension"
+                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+
+                                    <ToggleButton x:Name="StrategySlotPullbackToggle"
+                                                  Style="{StaticResource StrategySlotToggleStyle}"
+                                                  Checked="StrategySlotToggle_Changed"
+                                                  Unchecked="StrategySlotToggle_Changed"
+                                                  IsChecked="True">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Slot 2 · 3min Pullback"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1"
+                                                        Content="설명"
+                                                        Tag="ThreeMinutePullback"
+                                                        Style="{StaticResource StrategyDetailButtonStyle}"
+                                                        Click="StrategyDetailButton_Click"/>
+                                            </Grid>
+                                            <Border HorizontalAlignment="Left"
+                                                    Background="#17243A"
+                                                    BorderBrush="{StaticResource PaletteSkyBlue}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Padding="6,1"
+                                                    Margin="0,5,0,0">
+                                                <TextBlock Text="SOR · KRX 기준가 고정"
+                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"/>
+                                            </Border>
+                                            <TextBlock Text="After base candle, wait for pullback, reaction, confirmation"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="Stop: reaction candle low · Target: base high recovery first"
+                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+
+                                    <ToggleButton x:Name="StrategySlotPrevLimitToggle"
+                                                  Style="{StaticResource StrategySlotToggleStyle}"
+                                                  Checked="StrategySlotToggle_Changed"
+                                                  Unchecked="StrategySlotToggle_Changed"
+                                                  IsChecked="False">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Slot 3 · Prev Limit Body Recovery"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1"
+                                                        Content="설명"
+                                                        Tag="PrevLimitBodyRecovery"
+                                                        Style="{StaticResource StrategyDetailButtonStyle}"
+                                                        Click="StrategyDetailButton_Click"/>
+                                            </Grid>
+                                            <Border HorizontalAlignment="Left"
+                                                    Background="#2A2020"
+                                                    BorderBrush="{StaticResource PalettePink}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Padding="6,1"
+                                                    Margin="0,5,0,0">
+                                                <TextBlock Text="KRX 전용 · 기준봉 KRX 일봉"
+                                                           Foreground="{StaticResource PalettePink}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"/>
+                                            </Border>
+                                            <TextBlock Text="KRX base candle, body pullback, open recovery signal"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="Reserved for KHStrategyLab strategy import"
+                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+
+                                    <ToggleButton x:Name="StrategySlotThemeAssistToggle"
+                                                  Style="{StaticResource StrategySlotToggleStyle}"
+                                                  Checked="StrategySlotToggle_Changed"
+                                                  Unchecked="StrategySlotToggle_Changed"
+                                                  IsChecked="False">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Slot 4 · Theme / Disclosure Assist"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1"
+                                                        Content="설명"
+                                                        Tag="ThemeDisclosureAssist"
+                                                        Style="{StaticResource StrategyDetailButtonStyle}"
+                                                        Click="StrategyDetailButton_Click"/>
+                                            </Grid>
+                                            <Border HorizontalAlignment="Left"
+                                                    Background="#26210F"
+                                                    BorderBrush="{StaticResource PaletteLightYellow}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Padding="6,1"
+                                                    Margin="0,5,0,0">
+                                                <TextBlock Text="보조 · 단독매수 없음"
+                                                           Foreground="{StaticResource PaletteLightYellow}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"/>
+                                            </Border>
+                                            <TextBlock Text="News, disclosure, and theme tags only; no buy signal yet"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="Low priority assistant slot"
+                                                       Foreground="{StaticResource TextSubBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <Border Grid.Row="3"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    CornerRadius="6"
+                                    Padding="10"
+                                    Margin="0,10,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="전략실 키"
+                                               Foreground="{StaticResource TextMainBrush}"
+                                               FontSize="12"
+                                               FontWeight="Bold"/>
+                                    <TextBlock Text="전략이 신호를 냈을 때 주문과 알림을 허용할지 결정한다."
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               Margin="0,3,0,8"
+                                               TextWrapping="Wrap"/>
+
+                                    <Border Background="#151515"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="9"
+                                            Margin="0,0,0,7">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="76"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="겹침 매수"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"/>
+                                                <TextBlock Text="같은 종목이 다른 전략에 이미 걸렸을 때 OFF = 안 산다, ON = 또 산다"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="10"
+                                                           Margin="0,3,0,0"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <ToggleButton x:Name="DuplicateBuyPolicyToggle"
+                                                              Grid.Column="1"
+                                                              IsChecked="False"
+                                                              Style="{StaticResource PolicyToggleSwitchStyle}"
+                                                              Checked="StrategyControlBoard_Changed"
+                                                              Unchecked="StrategyControlBoard_Changed"
+                                                              Margin="0"
+                                                          VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Background="#151515"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="9">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="76"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="겹침 알림"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"/>
+                                                <TextBlock Text="같은 종목이 여러 전략에 걸렸을 때 ON = 알린다, OFF = 기록만 한다"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="10"
+                                                           Margin="0,3,0,0"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <ToggleButton x:Name="DuplicateAlertPolicyToggle"
+                                                              Grid.Column="1"
+                                                              IsChecked="True"
+                                                              Style="{StaticResource PolicyToggleSwitchStyle}"
+                                                              Checked="StrategyControlBoard_Changed"
+                                                              Unchecked="StrategyControlBoard_Changed"
+                                                              Margin="0"
+                                                          VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Row="4"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1,1,1,1"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    CornerRadius="6"
+                                    Padding="10"
+                                    Margin="0,10,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StrategyDetailTitleText"
+                                                   Text="Selected Stock Strategy State"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="StrategySlotSummaryText"
+                                                   Text="Base candle -, continuity -, pullback -, stop -, target -"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="StrategyDetailDocumentText"
+                                                   Text=""
+                                                   Foreground="{StaticResource TextSubBrush}"
+                                                   FontSize="10"
+                                                   Margin="0,6,0,0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               x:Name="StrategySlotStateText"
+                                               Text="WAIT"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="5"
+                                    BorderBrush="#123A25"
+                                    BorderThickness="1"
+                                    Background="#07140D"
+                                    CornerRadius="6"
+                                    Padding="10"
+                                    Margin="0,10,0,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="전략실 전광판"
+                                               Foreground="{StaticResource PaletteLightGreen}"
+                                               FontSize="11"
+                                               FontWeight="Bold"/>
+                                    <TextBlock x:Name="StrategyControlBoardText"
+                                               Grid.Row="1"
+                                               Text="AUTO OFF · 예산 5,000,000 · 슬롯 3 · 전략 2/4 · 키: 겹침매수 OFF / 겹침알림 ON"
+                                               Foreground="{StaticResource PaletteLightGreen}"
+                                               FontFamily="Consolas"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Margin="0,6,0,0"
+                                               TextWrapping="Wrap"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="Progress">
+                        <Grid Background="{StaticResource BgPanelBrush}"
+                              Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="0,0,0,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="0">
+                                        <TextBlock Text="Strategy Step Progress"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="13"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock Text="Select one or more strategies to see tracked stocks by stage."
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <WrapPanel Grid.Row="1"
+                                               Margin="0,16,0,2">
+                                        <ToggleButton x:Name="ProgressFilterBaseCandleChaseToggle"
+                                                      Content="10min Chase"
+                                                      IsChecked="True"
+                                                      Style="{StaticResource StrategyFilterChipStyle}"/>
+                                        <ToggleButton x:Name="ProgressFilterPullbackToggle"
+                                                      Content="3min Pullback"
+                                                      IsChecked="True"
+                                                      Style="{StaticResource StrategyFilterChipStyle}"/>
+                                        <ToggleButton x:Name="ProgressFilterPrevLimitToggle"
+                                                      Content="Prev Limit"
+                                                      Style="{StaticResource StrategyFilterChipStyle}"/>
+                                        <ToggleButton x:Name="ProgressFilterThemeAssistToggle"
+                                                      Content="Theme Assist"
+                                                      Style="{StaticResource StrategyFilterChipStyle}"/>
+                                    </WrapPanel>
+
+                                    <WrapPanel Grid.Row="2"
+                                               Margin="0,4,0,0">
+                                        <TextBlock Text="상태"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,8,8"/>
+                                        <ToggleButton x:Name="ProgressFilterUnownedToggle"
+                                                      Content="미보유"
+                                                      IsChecked="True"
+                                                      Style="{StaticResource StrategyFilterChipStyle}"/>
+                                        <ToggleButton x:Name="ProgressFilterOwnedToggle"
+                                                      Content="보유"
+                                                      Style="{StaticResource StrategyFilterChipStyle}"/>
+                                    </WrapPanel>
+
+                                    <Border Grid.Row="3"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="0,1,0,0"
+                                            Margin="0,8,0,0"
+                                            Padding="0,8,0,0">
+                                    <TextBlock
+                                               Text="Progress lifecycle: 0-70% candidate tracking · 70% buy filled · 70-100% position/exit management."
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               Margin="0,2,0,0"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <ScrollViewer Grid.Row="1"
+                                          Margin="0"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          CanContentScroll="False"
+                                          PanningMode="VerticalOnly">
+                                <StackPanel>
+                                    <Border Background="{StaticResource BgInnerBrush}"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,8">
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Tracked Stocks"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="selected strategy"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="10"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+
+                                            <Border Background="#141414"
+                                                    BorderBrush="{StaticResource LineSoftBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="5"
+                                                    Padding="8"
+                                                    Margin="0,0,0,7">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Row="0"
+                                                               Grid.Column="0"
+                                                               Text="삼성SDS"
+                                                               Foreground="{StaticResource TextMainBrush}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Row="0"
+                                                               Grid.Column="1"
+                                                               Text="돌파대기"
+                                                               Foreground="{StaticResource PaletteSkyBlue}"
+                                                               FontSize="13"
+                                                               FontWeight="SemiBold"/>
+                                                    <ProgressBar Grid.Row="1"
+                                                                 Grid.Column="0"
+                                                                 Minimum="0"
+                                                                 Maximum="100"
+                                                                 Value="70"
+                                                                 Foreground="{StaticResource PaletteSkyBlue}"
+                                                                 Style="{StaticResource StrategyStrengthProgressBarStyle}"
+                                                                 Margin="0,10,10,0"/>
+                                                    <TextBlock Grid.Row="1"
+                                                               Grid.Column="1"
+                                                               Text="70%"
+                                                               Foreground="{StaticResource PaletteSkyBlue}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"
+                                                               TextAlignment="Right"
+                                                               VerticalAlignment="Center"
+                                                               Margin="0,9,0,0"/>
+                                                </Grid>
+                                            </Border>
+
+                                            <Border Background="#141414"
+                                                    BorderBrush="{StaticResource LineSoftBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="5"
+                                                    Padding="8"
+                                                    Margin="0,0,0,7">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Row="0"
+                                                               Grid.Column="0"
+                                                               Text="로보스타"
+                                                               Foreground="{StaticResource TextMainBrush}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Row="0"
+                                                               Grid.Column="1"
+                                                               Text="눌림"
+                                                               Foreground="{StaticResource PaletteLightGreen}"
+                                                               FontSize="13"
+                                                               FontWeight="SemiBold"/>
+                                                    <ProgressBar Grid.Row="1"
+                                                                 Grid.Column="0"
+                                                                 Minimum="0"
+                                                                 Maximum="100"
+                                                                 Value="45"
+                                                                 Foreground="{StaticResource PaletteLightGreen}"
+                                                                 Style="{StaticResource StrategyStrengthProgressBarStyle}"
+                                                                 Margin="0,10,10,0"/>
+                                                    <TextBlock Grid.Row="1"
+                                                               Grid.Column="1"
+                                                               Text="45%"
+                                                               Foreground="{StaticResource PaletteLightGreen}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"
+                                                               TextAlignment="Right"
+                                                               VerticalAlignment="Center"
+                                                               Margin="0,9,0,0"/>
+                                                </Grid>
+                                            </Border>
+
+                                            <Border Background="#141414"
+                                                    BorderBrush="{StaticResource LineSoftBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="5"
+                                                    Padding="8">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Row="0"
+                                                               Grid.Column="0"
+                                                               Text="한켐"
+                                                               Foreground="{StaticResource TextMainBrush}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Row="0"
+                                                               Grid.Column="1"
+                                                               Text="대기"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               FontSize="13"
+                                                               FontWeight="SemiBold"/>
+                                                    <ProgressBar Grid.Row="1"
+                                                                 Grid.Column="0"
+                                                                 Minimum="0"
+                                                                 Maximum="100"
+                                                                 Value="12"
+                                                                 Foreground="{StaticResource TextSubBrush}"
+                                                                 Style="{StaticResource StrategyStrengthProgressBarStyle}"
+                                                                 Margin="0,10,10,0"/>
+                                                    <TextBlock Grid.Row="1"
+                                                               Grid.Column="1"
+                                                               Text="12%"
+                                                               Foreground="{StaticResource TextSubBrush}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"
+                                                               TextAlignment="Right"
+                                                               VerticalAlignment="Center"
+                                                               Margin="0,9,0,0"/>
+                                                </Grid>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <StackPanel Visibility="Collapsed">
+                                    <Border Background="{StaticResource BgInnerBrush}"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,8">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="10min Base Candle Chase"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="SOR"
+                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                                           FontSize="11"
+                                                           FontWeight="Bold"/>
+                                            </Grid>
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="58"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="40"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="기준강도"
+                                                           Style="{StaticResource StrategyStrengthLabelStyle}"/>
+                                                <ProgressBar Grid.Column="1"
+                                                             Minimum="0"
+                                                             Maximum="100"
+                                                             Value="70"
+                                                             Foreground="{StaticResource PaletteSkyBlue}"
+                                                             Style="{StaticResource StrategyStrengthProgressBarStyle}"
+                                                             VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="70%"
+                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"
+                                                           TextAlignment="Right"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Style="{StaticResource StrategyStepCircleStyle}" BorderBrush="{StaticResource PaletteSkyBlue}">
+                                                    <TextBlock Text="1" Foreground="{StaticResource PaletteSkyBlue}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="2" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="2" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="3" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="4" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="3" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="5" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="6" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="4" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="7" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="8" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="5" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </Grid>
+                                            <Grid Margin="0,0,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="기준봉" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="2" Text="고가근처" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="4" Text="돌파" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="6" Text="과열확인" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="8" Text="후보" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Background="{StaticResource BgInnerBrush}"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,8">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="3min Pullback"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="SOR"
+                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                                           FontSize="11"
+                                                           FontWeight="Bold"/>
+                                            </Grid>
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="58"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="40"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="진행강도"
+                                                           Style="{StaticResource StrategyStrengthLabelStyle}"/>
+                                                <ProgressBar Grid.Column="1"
+                                                             Minimum="0"
+                                                             Maximum="100"
+                                                             Value="45"
+                                                             Foreground="{StaticResource PaletteLightGreen}"
+                                                             Style="{StaticResource StrategyStrengthProgressBarStyle}"
+                                                             VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="45%"
+                                                           Foreground="{StaticResource PaletteLightGreen}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"
+                                                           TextAlignment="Right"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Style="{StaticResource StrategyStepCircleStyle}" BorderBrush="{StaticResource PaletteSkyBlue}">
+                                                    <TextBlock Text="1" Foreground="{StaticResource PaletteSkyBlue}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="2" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="2" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="3" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="4" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="3" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="5" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="6" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="4" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="7" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="8" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="5" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </Grid>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="기준봉" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="2" Text="눌림" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="4" Text="반응" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="6" Text="고가돌파" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="8" Text="후보" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Background="{StaticResource BgInnerBrush}"
+                                            BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="10">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Prev Limit Body Recovery"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="KRX"
+                                                           Foreground="{StaticResource PalettePink}"
+                                                           FontSize="11"
+                                                           FontWeight="Bold"/>
+                                            </Grid>
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="58"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="40"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="회복강도"
+                                                           Style="{StaticResource StrategyStrengthLabelStyle}"/>
+                                                <ProgressBar Grid.Column="1"
+                                                             Minimum="0"
+                                                             Maximum="100"
+                                                             Value="20"
+                                                             Foreground="{StaticResource PalettePink}"
+                                                             Style="{StaticResource StrategyStrengthProgressBarStyle}"
+                                                             VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="20%"
+                                                           Foreground="{StaticResource PalettePink}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"
+                                                           TextAlignment="Right"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Style="{StaticResource StrategyStepCircleStyle}" BorderBrush="{StaticResource PaletteSkyBlue}">
+                                                    <TextBlock Text="1" Foreground="{StaticResource PaletteSkyBlue}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="2" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="2" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="3" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="4" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="3" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="5" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="6" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="4" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="7" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
+                                                <Border Grid.Column="8" Style="{StaticResource StrategyStepCircleStyle}">
+                                                    <TextBlock Text="5" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </Grid>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="52"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="기준봉" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="2" Text="몸통눌림" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="4" Text="탈출봉" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="6" Text="시가회복" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                                <TextBlock Grid.Column="8" Text="후보" Style="{StaticResource StrategyStepLabelStyle}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Grid>
                     </TabItem>
 

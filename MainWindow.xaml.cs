@@ -127,6 +127,7 @@ namespace TradingDashboard
         public MainWindow()
         {
             InitializeComponent();
+            InitializeStrategySlots();
 
             _upColorBrush = (Brush)FindResource("PaletteRed");
             _downColorBrush = (Brush)FindResource("PaletteBlue");

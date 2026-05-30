@@ -1,0 +1,164 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using TradingDashboard.Models;
+using TradingDashboard.Services.Strategies;
+
+namespace TradingDashboard
+{
+    public partial class MainWindow
+    {
+        private readonly StrategySlotRegistry _strategySlotRegistry = StrategySlotRegistry.CreateDefault();
+
+        private void InitializeStrategySlots()
+        {
+            UpdateStrategySlotSummary();
+            UpdateStrategyControlBoard();
+        }
+
+        private void StrategySlotToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateStrategySlotSummary();
+            UpdateStrategyControlBoard();
+        }
+
+        private void StrategyControlBoard_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateStrategyControlBoard();
+        }
+
+        private void StrategyControlBoardInput_Changed(object sender, TextChangedEventArgs e)
+        {
+            UpdateStrategyControlBoard();
+        }
+
+        private void StrategyDetailButton_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (sender is not ButtonBase button ||
+                button.Tag is not string tag ||
+                !Enum.TryParse(tag, out StrategySlotId slotId))
+                return;
+
+            StrategySlotDescriptor? descriptor = _strategySlotRegistry.GetDescriptor(slotId);
+            if (descriptor == null)
+                return;
+
+            StrategyDetailTitleText.Text = $"{descriptor.Name} · {descriptor.MarketBadgeText}";
+            StrategySlotSummaryText.Text = descriptor.Detail;
+            StrategyDetailDocumentText.Text = $"문서: {descriptor.DocumentPath}";
+            StrategySlotStateText.Text = descriptor.MarketBadgeText;
+            StrategySlotStateText.Foreground = descriptor.MarketScope switch
+            {
+                StrategyMarketScope.KrxOnly => (Brush)FindResource("PalettePink"),
+                StrategyMarketScope.NxtOnly => (Brush)FindResource("PaletteSkyBlue"),
+                StrategyMarketScope.Sor => (Brush)FindResource("PaletteSkyBlue"),
+                StrategyMarketScope.Assist => (Brush)FindResource("PaletteLightYellow"),
+                _ => (Brush)FindResource("TextMainBrush")
+            };
+        }
+
+        private IReadOnlyList<StrategySlotSetting> GetStrategySlotSettings() =>
+        [
+            new(
+                StrategySlotId.BaseCandleChase,
+                "10min Base Candle Chase",
+                IsStrategyToggleOn(StrategySlotBaseCandleChaseToggle)),
+            new(
+                StrategySlotId.ThreeMinutePullback,
+                "3min Pullback",
+                IsStrategyToggleOn(StrategySlotPullbackToggle)),
+            new(
+                StrategySlotId.PrevLimitBodyRecovery,
+                "Prev Limit Body Recovery",
+                IsStrategyToggleOn(StrategySlotPrevLimitToggle)),
+            new(
+                StrategySlotId.ThemeDisclosureAssist,
+                "Theme / Disclosure Assist",
+                IsStrategyToggleOn(StrategySlotThemeAssistToggle))
+        ];
+
+        private IReadOnlyList<StrategyEvaluationResult> EvaluateEnabledStrategySlots(WatchStockItem? stock)
+        {
+            StrategyEvaluationContext context = new()
+            {
+                Stock = stock,
+                Metrics = _currentStatusMetrics,
+                ChartCandleCount = _currentChartCandles.Count,
+                Market = _isNxtMarketMode ? "NXT" : "KRX"
+            };
+
+            return _strategySlotRegistry.EvaluateEnabled(GetStrategySlotSettings(), context);
+        }
+
+        private StrategyDuplicatePolicy GetStrategyDuplicatePolicy() =>
+            new(
+                AllowAdditionalBuy: IsStrategyToggleOn(DuplicateBuyPolicyToggle),
+                NotifyDuplicateSignal: IsStrategyToggleOn(DuplicateAlertPolicyToggle));
+
+        private StrategyExecutionSettings GetStrategyExecutionSettings() =>
+            new(
+                AutoTradingEnabled: IsStrategyToggleOn(AutoTradingEnabledToggle),
+                PaperTradingMode: IsStrategyToggleOn(PaperTradingModeToggle),
+                Budget: ParseLongInput(AutoTradeBudgetTextBox?.Text),
+                SlotCount: Math.Max(0, (int)ParseLongInput(AutoTradeSlotCountTextBox?.Text)));
+
+        private void UpdateStrategySlotSummary()
+        {
+            if (StrategySlotSummaryText == null || StrategySlotStateText == null)
+                return;
+
+            IReadOnlyList<StrategySlotSetting> settings = GetStrategySlotSettings();
+            int enabledCount = settings.Count(x => x.IsEnabled);
+
+            StrategySlotSummaryText.Text =
+                $"Enabled {enabledCount}/{settings.Count} · disabled slots are skipped before evaluation";
+            StrategySlotStateText.Text = enabledCount > 0 ? "READY" : "OFF";
+            StrategySlotStateText.Foreground = enabledCount > 0
+                ? (Brush)FindResource("PaletteLightGreen")
+                : (Brush)FindResource("TextMutedBrush");
+        }
+
+        private void UpdateStrategyControlBoard()
+        {
+            if (StrategyControlBoardText == null)
+                return;
+
+            StrategyExecutionSettings execution = GetStrategyExecutionSettings();
+            StrategyDuplicatePolicy duplicate = GetStrategyDuplicatePolicy();
+            IReadOnlyList<StrategySlotSetting> settings = GetStrategySlotSettings();
+            string enabledStrategies = string.Join(", ", settings
+                .Where(x => x.IsEnabled)
+                .Select(x => x.Name));
+
+            if (string.IsNullOrWhiteSpace(enabledStrategies))
+                enabledStrategies = "none";
+
+            StrategyControlBoardText.Text =
+                $"MODE {execution.ExecutionModeText} · " +
+                $"AUTO {(execution.AutoTradingEnabled ? "ON" : "OFF")} · " +
+                $"가상 {(execution.PaperTradingMode ? "ON(실주문차단)" : "OFF")} · " +
+                $"예산 {execution.Budget:N0} · 슬롯 {execution.SlotCount} · " +
+                $"전략 {settings.Count(x => x.IsEnabled)}/{settings.Count}: {enabledStrategies} · " +
+                $"키 겹침매수 {(duplicate.AllowAdditionalBuy ? "ON" : "OFF")} / " +
+                $"겹침알림 {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")}";
+        }
+
+        private static bool IsStrategyToggleOn(ToggleButton toggle) =>
+            toggle?.IsChecked == true;
+
+        private static long ParseLongInput(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return 0;
+
+            string normalized = text.Replace(",", string.Empty).Trim();
+            return long.TryParse(normalized, out long value) ? value : 0;
+        }
+    }
+}
