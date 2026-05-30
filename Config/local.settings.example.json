@@ -47,5 +47,23 @@
     "WarmupMinutes": 5,
     "NewsCount": 3,
     "TitleMaxLength": 25
+  },
+  "TradingCosts": {
+    "Default": {
+      "CommissionRate": 0.00015,
+      "SellTaxRate": 0.002
+    },
+    "Krx": {
+      "CommissionRate": 0.00015,
+      "SellTaxRate": 0.002
+    },
+    "Nxt": {
+      "CommissionRate": 0.000145,
+      "SellTaxRate": 0.002
+    },
+    "Sor": {
+      "CommissionRate": 0.00015,
+      "SellTaxRate": 0.002
+    }
   }
 }

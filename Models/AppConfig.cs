@@ -10,6 +10,7 @@ namespace TradingDashboard.Models
         public TelegramSettings Telegram { get; set; } = new TelegramSettings();
         public DashboardSettings Dashboard { get; set; } = new DashboardSettings();
         public LateNewsAlertSettings LateNewsAlert { get; set; } = new LateNewsAlertSettings();
+        public TradingCostSettings TradingCosts { get; set; } = new TradingCostSettings();
     }
 
     public class NaverNewsSettings
@@ -68,5 +69,31 @@ namespace TradingDashboard.Models
         public int WarmupMinutes { get; set; } = 5;
         public int NewsCount { get; set; } = 3;
         public int TitleMaxLength { get; set; } = 25;
+    }
+
+    public class TradingCostSettings
+    {
+        public TradingCostRate Default { get; set; } = new TradingCostRate();
+        public TradingCostRate Krx { get; set; } = new TradingCostRate
+        {
+            CommissionRate = 0.00015m,
+            SellTaxRate = 0.0020m
+        };
+        public TradingCostRate Nxt { get; set; } = new TradingCostRate
+        {
+            CommissionRate = 0.000145m,
+            SellTaxRate = 0.0020m
+        };
+        public TradingCostRate Sor { get; set; } = new TradingCostRate
+        {
+            CommissionRate = 0.00015m,
+            SellTaxRate = 0.0020m
+        };
+    }
+
+    public class TradingCostRate
+    {
+        public decimal CommissionRate { get; set; } = 0.00015m;
+        public decimal SellTaxRate { get; set; } = 0.0020m;
     }
 }

@@ -17,6 +17,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using TradingDashboard.Models;
 using TradingDashboard.Services;
+using TradingDashboard.Services.Trading;
 
 namespace TradingDashboard
 {
@@ -24,6 +25,7 @@ namespace TradingDashboard
     {
         private const int MaxLogLines = 500;
         private const int MaxWatchlistMemoryCacheCount = 200;
+        private const int DuplicateStockSelectionBlockMs = 200;
         private const string KrxPreviousCloseBasePriceSource = "KRX_PREV_CLOSE";
         private const double ChartRightPadding = 25d;
         private readonly AppConfig _config;
@@ -34,6 +36,8 @@ namespace TradingDashboard
         private readonly DartDisclosureAlertService _disclosureAlertService;
         private readonly TelegramNotifier _telegramNotifier;
         private readonly KiwoomRestConditionService _kiwoomConditionService;
+        private readonly KiwoomTradingClient _tradingClient;
+        private readonly TradingCostCalculator _tradingCostCalculator;
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly Queue<string> _logLines = new();
         private readonly Brush _upColorBrush;
@@ -48,6 +52,7 @@ namespace TradingDashboard
         private readonly ObservableCollection<TradePrint> _recentTrades = [];
         private readonly ObservableCollection<HogaLevel> _sellHogaLevels = [];
         private readonly ObservableCollection<HogaLevel> _buyHogaLevels = [];
+        private readonly ObservableCollection<KiwoomHolding> _balanceHoldings = [];
         private readonly List<NewsItem> _marketNewsCache = [];
         private readonly Dictionary<string, WatchStockItem> _watchStockByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, WatchlistStockCacheEntry> _watchlistMemoryCache = new(StringComparer.Ordinal);
@@ -68,6 +73,8 @@ namespace TradingDashboard
         private readonly Dictionary<ChartCacheKey, ChartCacheEntry> _chartMemoryCache = [];
         private long _chartCacheAccessSequence;
         private int _chartRenderVersion;
+        private string _lastAcceptedWatchSelectionKey = string.Empty;
+        private DateTime _lastAcceptedWatchSelectionAt = DateTime.MinValue;
         private ChartPeriod _currentChartPeriod = ChartPeriod.Daily;
         private ChartPeriod _currentChartDataPeriod = ChartPeriod.Daily;
         private string _currentChartCode = string.Empty;
@@ -149,9 +156,14 @@ namespace TradingDashboard
             _disclosureAlertService.AlertLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _kiwoomConditionService = new KiwoomRestConditionService(_config.Kiwoom);
             _kiwoomConditionService.RestLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
+            _tradingClient = new KiwoomTradingClient(_config.Kiwoom, _kiwoomConditionService.GetAccessTokenAsync);
+            _tradingClient.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
+            _tradingCostCalculator = new TradingCostCalculator(_config.TradingCosts);
             LoadWatchlistCache();
             WatchListBox.ItemsSource = _watchStocks;
             RecentTradeListBox.ItemsSource = _recentTrades;
+            BalanceHoldingsDataGrid.ItemsSource = _balanceHoldings;
+            BalanceHoldingsScrollableDataGrid.ItemsSource = _balanceHoldings;
             SellQtyListBox.ItemsSource = _sellHogaLevels;
             SellPriceListBox.ItemsSource = _sellHogaLevels;
             BuyPriceListBox.ItemsSource = _buyHogaLevels;
@@ -198,6 +210,7 @@ namespace TradingDashboard
                     $"{_watchStocks.Count} watchlist stocks ready",
                     "News and filings will continue in the background");
                 _ = LoadMarketNewsAfterStartupDelayAsync();
+                _ = RefreshBalanceAsync("startup");
             }
             finally
             {
@@ -734,6 +747,17 @@ namespace TradingDashboard
                 stockName = stockCode;
             if (string.IsNullOrWhiteSpace(stockName))
                 return;
+
+            string selectionKey = string.IsNullOrWhiteSpace(stockCode) ? stockName : stockCode;
+            DateTime now = DateTime.Now;
+            if (string.Equals(selectionKey, _lastAcceptedWatchSelectionKey, StringComparison.Ordinal) &&
+                (now - _lastAcceptedWatchSelectionAt).TotalMilliseconds < DuplicateStockSelectionBlockMs)
+            {
+                return;
+            }
+
+            _lastAcceptedWatchSelectionKey = selectionKey;
+            _lastAcceptedWatchSelectionAt = now;
 
             int selectionVersion = ++_selectionVersion;
             CancellationTokenSource? previousRequestCts = _selectedRequestCts;
@@ -1688,6 +1712,13 @@ namespace TradingDashboard
             LeftLogTextBox.ScrollToEnd();
         }
 
+        private void LeftLogTextBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            _logLines.Clear();
+            AppendLog("Log cleared");
+        }
+
         private void SetStartupLoading(bool isVisible, string message, string statusLine1 = "", string statusLine2 = "")
         {
             if (!Dispatcher.CheckAccess())
@@ -1712,6 +1743,8 @@ namespace TradingDashboard
                 _chartRequestCts?.Dispose();
                 _watchlistCacheRefreshCts?.Cancel();
                 _watchlistCacheRefreshCts?.Dispose();
+                _balanceRequestCts?.Cancel();
+                _balanceRequestCts?.Dispose();
                 _realtimeCts?.Cancel();
                 _realtimeWs?.Abort();
                 _realtimeWs?.Dispose();

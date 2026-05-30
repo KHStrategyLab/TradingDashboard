@@ -969,8 +969,8 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1.725*"/>
-                <ColumnDefinition Width="6.425*"/>
-                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="5.925*"/>
+                <ColumnDefinition Width="2.5*"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left watchlist -->
@@ -1217,7 +1217,8 @@
                                      IsReadOnly="True"
                                      TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Hidden"
-                                     HorizontalScrollBarVisibility="Disabled"/>
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     MouseDoubleClick="LeftLogTextBox_MouseDoubleClick"/>
                         </Grid>
                     </Border>
                 </Grid>
@@ -2672,6 +2673,285 @@
                                     </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="Balance">
+                        <Grid Background="{StaticResource BgPanelBrush}"
+                              Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="9*"/>
+                                <RowDefinition Height="1*"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0"
+                                  Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Balance"
+                                               Foreground="{StaticResource TextMainBrush}"
+                                               FontSize="13"
+                                               FontWeight="Bold"/>
+                                    <TextBlock x:Name="BalanceStatusText"
+                                               Text="kt00018 KRX · waiting"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="11"
+                                               Margin="0,4,0,0"
+                                               MouseLeftButtonDown="BalanceStatusText_MouseLeftButtonDown"/>
+                                </StackPanel>
+
+                                <Border Grid.Column="1"
+                                        Background="{StaticResource BgInnerBrush}"
+                                        BorderBrush="{StaticResource LineSoftBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="10,6"
+                                        MinWidth="132"
+                                        HorizontalAlignment="Right">
+                                    <StackPanel>
+                                        <TextBlock Text="Realized P/L"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="10"
+                                                   HorizontalAlignment="Right"/>
+                                        <TextBlock x:Name="BalanceRealizedProfitText"
+                                                   Text="-"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"
+                                                   Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <Grid Grid.Row="1"
+                                  Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Background="{StaticResource BgInnerBrush}"
+                                        BorderBrush="{StaticResource LineSoftBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="8"
+                                        Margin="0,0,6,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Purchase"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="10"/>
+                                        <TextBlock x:Name="BalanceTotalPurchaseText"
+                                                   Text="-"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="1"
+                                        Background="{StaticResource BgInnerBrush}"
+                                        BorderBrush="{StaticResource LineSoftBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="8"
+                                        Margin="0,0,6,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Evaluation"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="10"/>
+                                        <TextBlock x:Name="BalanceTotalEvaluationText"
+                                                   Text="-"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="2"
+                                        Background="{StaticResource BgInnerBrush}"
+                                        BorderBrush="{StaticResource LineSoftBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="8"
+                                        Margin="0,0,6,0">
+                                    <StackPanel>
+                                        <TextBlock Text="P/L"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="10"/>
+                                        <TextBlock x:Name="BalanceTotalProfitText"
+                                                   Text="-"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="3"
+                                        Background="{StaticResource BgInnerBrush}"
+                                        BorderBrush="{StaticResource LineSoftBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="8">
+                                    <StackPanel>
+                                        <TextBlock Text="Rate"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="10"/>
+                                        <TextBlock x:Name="BalanceTotalProfitRateText"
+                                                   Text="-"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <Border Grid.Row="2"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    BorderBrush="{StaticResource LineSoftBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="5"
+                                    Padding="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <DataGrid x:Name="BalanceHoldingsDataGrid"
+                                              Grid.Column="0"
+                                              AutoGenerateColumns="False"
+                                              HeadersVisibility="Column"
+                                              CanUserAddRows="False"
+                                              CanUserDeleteRows="False"
+                                              IsReadOnly="True"
+                                              GridLinesVisibility="Horizontal"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                              ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                              Background="#151515"
+                                              Foreground="{StaticResource TextMainBrush}"
+                                              BorderThickness="0"
+                                              RowBackground="#151515"
+                                              AlternatingRowBackground="#181818"
+                                              HorizontalGridLinesBrush="{StaticResource LineSoftBrush}"
+                                              RowHeaderWidth="0"
+                                              FontSize="11">
+                                        <DataGrid.ColumnHeaderStyle>
+                                            <Style TargetType="{x:Type DataGridColumnHeader}">
+                                                <Setter Property="Background" Value="#202020"/>
+                                                <Setter Property="Foreground" Value="{StaticResource TextSubBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
+                                                <Setter Property="Padding" Value="6,5"/>
+                                                <Setter Property="FontSize" Value="10"/>
+                                            </Style>
+                                        </DataGrid.ColumnHeaderStyle>
+                                        <DataGrid.CellStyle>
+                                            <Style TargetType="{x:Type DataGridCell}">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
+                                                <Setter Property="Padding" Value="6,4"/>
+                                            </Style>
+                                        </DataGrid.CellStyle>
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Name" Binding="{Binding StockName}" Width="150"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+
+                                    <ScrollViewer x:Name="BalanceHoldingsHorizontalScrollViewer"
+                                                  Grid.Column="1"
+                                                  HorizontalScrollBarVisibility="Hidden"
+                                                  VerticalScrollBarVisibility="Disabled"
+                                                  PanningMode="HorizontalOnly"
+                                                  PreviewMouseWheel="BalanceHoldingsDataGrid_PreviewMouseWheel"
+                                                  PreviewMouseDown="BalanceHoldingsDataGrid_PreviewMouseDown"
+                                                  PreviewMouseMove="BalanceHoldingsDataGrid_PreviewMouseMove"
+                                                  PreviewMouseUp="BalanceHoldingsDataGrid_PreviewMouseUp">
+                                        <DataGrid x:Name="BalanceHoldingsScrollableDataGrid"
+                                                  Width="636"
+                                                  AutoGenerateColumns="False"
+                                                  HeadersVisibility="Column"
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  IsReadOnly="True"
+                                                  GridLinesVisibility="Horizontal"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                  ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                                  Background="#151515"
+                                                  Foreground="{StaticResource TextMainBrush}"
+                                                  BorderThickness="0"
+                                                  RowBackground="#151515"
+                                                  AlternatingRowBackground="#181818"
+                                                  HorizontalGridLinesBrush="{StaticResource LineSoftBrush}"
+                                                  RowHeaderWidth="0"
+                                                  FontSize="11">
+                                            <DataGrid.ColumnHeaderStyle>
+                                                <Style TargetType="{x:Type DataGridColumnHeader}">
+                                                    <Setter Property="Background" Value="#202020"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource TextSubBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
+                                                    <Setter Property="Padding" Value="6,5"/>
+                                                    <Setter Property="FontSize" Value="10"/>
+                                                </Style>
+                                            </DataGrid.ColumnHeaderStyle>
+                                            <DataGrid.CellStyle>
+                                                <Style TargetType="{x:Type DataGridCell}">
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
+                                                    <Setter Property="Padding" Value="6,4"/>
+                                                </Style>
+                                            </DataGrid.CellStyle>
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Qty" Binding="{Binding HoldingQuantity, StringFormat={}{0:N0}}" Width="86"/>
+                                                <DataGridTextColumn Header="Able" Binding="{Binding OrderableQuantity, StringFormat={}{0:N0}}" Width="86"/>
+                                                <DataGridTextColumn Header="Avg" Binding="{Binding AverageBuyPrice, StringFormat={}{0:N0}}" Width="90"/>
+                                                <DataGridTextColumn Header="Now" Binding="{Binding CurrentPrice, StringFormat={}{0:N0}}" Width="90"/>
+                                                <DataGridTextColumn Header="Eval" Binding="{Binding EvaluationAmount, StringFormat={}{0:N0}}" Width="110"/>
+                                                <DataGridTextColumn Header="P/L" Binding="{Binding EvaluationProfit, StringFormat={}{0:N0}}" Width="100"/>
+                                                <DataGridTextColumn Header="Rate" Binding="{Binding ProfitRate, StringFormat={}{0:N2}%}" Width="74"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="3"
+                                  Margin="0,8,0,0"
+                                  MinHeight="34">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0"
+                                           Text="MTS match: kt00018 main · 04 realtime · kt00005 check"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="10"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+
+                                <Button x:Name="BalanceRefreshButton"
+                                        Grid.Column="1"
+                                        Content="Refresh"
+                                        Width="72"
+                                        Height="26"
+                                        Style="{StaticResource ToolbarButtonStyle}"
+                                        Click="BalanceRefreshButton_Click"/>
+                            </Grid>
                         </Grid>
                     </TabItem>
 
