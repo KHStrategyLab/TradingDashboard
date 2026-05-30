@@ -49,6 +49,9 @@ namespace TradingDashboard
         private readonly Brush _hogaCurrentPriceBorderBrush;
         private readonly Brush _hogaCurrentPriceBackgroundBrush;
         private readonly ObservableCollection<WatchStockItem> _watchStocks = [];
+        private readonly ObservableCollection<WatchStockItem> _recentViewedStocks = [];
+        private readonly ObservableCollection<StockMasterItem> _stockSearchSuggestions = [];
+        private bool _stockSearchAutocompleteSuppressed;
         private readonly ObservableCollection<TradePrint> _recentTrades = [];
         private readonly ObservableCollection<HogaLevel> _sellHogaLevels = [];
         private readonly ObservableCollection<HogaLevel> _buyHogaLevels = [];
@@ -75,6 +78,7 @@ namespace TradingDashboard
         private int _chartRenderVersion;
         private string _lastAcceptedWatchSelectionKey = string.Empty;
         private DateTime _lastAcceptedWatchSelectionAt = DateTime.MinValue;
+        private CancellationTokenSource? _stockSearchSuggestionCts;
         private ChartPeriod _currentChartPeriod = ChartPeriod.Daily;
         private ChartPeriod _currentChartDataPeriod = ChartPeriod.Daily;
         private string _currentChartCode = string.Empty;
@@ -161,6 +165,8 @@ namespace TradingDashboard
             _tradingCostCalculator = new TradingCostCalculator(_config.TradingCosts);
             LoadWatchlistCache();
             WatchListBox.ItemsSource = _watchStocks;
+            RecentWatchListBox.ItemsSource = _recentViewedStocks;
+            StockSearchSuggestionListBox.ItemsSource = _stockSearchSuggestions;
             RecentTradeListBox.ItemsSource = _recentTrades;
             BalanceHoldingsDataGrid.ItemsSource = _balanceHoldings;
             BalanceHoldingsScrollableDataGrid.ItemsSource = _balanceHoldings;
@@ -731,18 +737,289 @@ namespace TradingDashboard
 
         private async void WatchListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            await LoadNewsForSelectedStockAsync();
+            if (sender is not ListBox listBox || listBox.SelectedItem is null)
+                return;
+
+            await LoadNewsForSelectedStockAsync(listBox.SelectedItem);
         }
 
-        private async Task LoadNewsForSelectedStockAsync()
+        private async void StockSearchButton_Click(object sender, RoutedEventArgs e)
         {
-            string stockName = WatchListBox.SelectedItem switch
+            await SearchAndOpenStockAsync();
+        }
+
+        private async void StockSearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            CancelStockSearchSuggestion();
+            if (_stockSearchAutocompleteSuppressed)
+            {
+                HideStockSearchSuggestions();
+                return;
+            }
+
+            string query = StockSearchTextBox.Text.Trim();
+            if (query.Length < 2)
+            {
+                HideStockSearchSuggestions();
+                return;
+            }
+
+            _stockSearchSuggestionCts = new CancellationTokenSource();
+            CancellationToken token = _stockSearchSuggestionCts.Token;
+
+            try
+            {
+                await Task.Delay(700, token);
+                IReadOnlyList<StockMasterItem> suggestions = await _kiwoomConditionService
+                    .SearchStockMasterItemsAsync(query, 20, token);
+
+                if (token.IsCancellationRequested)
+                    return;
+
+                _stockSearchSuggestions.Clear();
+                foreach (StockMasterItem item in suggestions)
+                    _stockSearchSuggestions.Add(item);
+
+                StockSearchSuggestionListBox.Visibility = _stockSearchSuggestions.Count > 0
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                if (_stockSearchSuggestions.Count > 0)
+                {
+                    StockSearchSuggestionListBox.SelectedIndex = 0;
+                    FocusFirstStockSearchSuggestion();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                HideStockSearchSuggestions();
+                AppendLog($"stock autocomplete error: {ex.GetType().Name} / {ex.Message}");
+            }
+        }
+
+        private async void StockSearchTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (StockSearchSuggestionListBox.Visibility == Visibility.Visible &&
+                (e.Key == Key.Down || e.Key == Key.Up))
+            {
+                MoveStockSearchSuggestionSelection(e.Key == Key.Down ? 1 : -1);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.Escape && StockSearchSuggestionListBox.Visibility == Visibility.Visible)
+            {
+                HideStockSearchSuggestions();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key != Key.Enter)
+                return;
+
+            e.Handled = true;
+            if (StockSearchSuggestionListBox.Visibility == Visibility.Visible &&
+                StockSearchSuggestionListBox.SelectedItem is StockMasterItem)
+            {
+                await OpenSelectedStockSuggestionAsync();
+                return;
+            }
+
+            await SearchAndOpenStockAsync();
+        }
+
+        private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+            if (key != Key.S || (Keyboard.Modifiers & ModifierKeys.Alt) != ModifierKeys.Alt)
+                return;
+
+            _stockSearchAutocompleteSuppressed = false;
+            StockSearchTextBox.Focus();
+            StockSearchTextBox.SelectAll();
+            e.Handled = true;
+        }
+
+        private void StockSearchTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            _stockSearchAutocompleteSuppressed = false;
+        }
+
+        private void StockSearchTextBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            _stockSearchAutocompleteSuppressed = false;
+        }
+
+        private void MoveStockSearchSuggestionSelection(int delta)
+        {
+            int count = StockSearchSuggestionListBox.Items.Count;
+            if (count <= 0)
+                return;
+
+            int current = StockSearchSuggestionListBox.SelectedIndex;
+            if (current < 0)
+                current = delta > 0 ? -1 : 0;
+
+            int next = Math.Clamp(current + delta, 0, count - 1);
+            StockSearchSuggestionListBox.SelectedIndex = next;
+            StockSearchSuggestionListBox.ScrollIntoView(StockSearchSuggestionListBox.SelectedItem);
+        }
+
+        private void FocusFirstStockSearchSuggestion()
+        {
+            StockSearchSuggestionListBox.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (StockSearchSuggestionListBox.Visibility != Visibility.Visible ||
+                    StockSearchSuggestionListBox.Items.Count <= 0)
+                    return;
+
+                StockSearchSuggestionListBox.UpdateLayout();
+                StockSearchSuggestionListBox.SelectedIndex = StockSearchSuggestionListBox.SelectedIndex < 0
+                    ? 0
+                    : StockSearchSuggestionListBox.SelectedIndex;
+                StockSearchSuggestionListBox.ScrollIntoView(StockSearchSuggestionListBox.SelectedItem);
+                StockSearchSuggestionListBox.UpdateLayout();
+
+                if (StockSearchSuggestionListBox.ItemContainerGenerator.ContainerFromIndex(StockSearchSuggestionListBox.SelectedIndex) is ListBoxItem item)
+                {
+                    item.Focus();
+                    return;
+                }
+
+                StockSearchSuggestionListBox.Focus();
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        private async void StockSearchSuggestionListBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                HideStockSearchSuggestions();
+                StockSearchTextBox.Focus();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key != Key.Enter)
+                return;
+
+            e.Handled = true;
+            await OpenSelectedStockSuggestionAsync();
+        }
+
+        private async void StockSearchSuggestionListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            await OpenSelectedStockSuggestionAsync();
+        }
+
+        private async Task OpenSelectedStockSuggestionAsync()
+        {
+            if (StockSearchSuggestionListBox.SelectedItem is not StockMasterItem selected)
+                return;
+
+            _stockSearchAutocompleteSuppressed = true;
+            HideStockSearchSuggestions();
+            StockSearchTextBox.Text = selected.Name;
+            await SearchAndOpenStockAsync(selected.Code);
+            FocusSelectedRecentStock();
+        }
+
+        private async Task SearchAndOpenStockAsync(string? forcedQuery = null)
+        {
+            string query = (forcedQuery ?? StockSearchTextBox.Text).Trim();
+            if (string.IsNullOrWhiteSpace(query))
+                return;
+
+            StockSearchButton.IsEnabled = false;
+            try
+            {
+                WatchStockItem? existing = _watchStocks
+                    .Concat(_recentViewedStocks)
+                    .FirstOrDefault(stock =>
+                        string.Equals(stock.Code, query, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(stock.Name, query, StringComparison.OrdinalIgnoreCase));
+
+                WatchStockItem? stock = existing;
+                if (stock is null)
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                    stock = await _kiwoomConditionService.SearchListedStockAsync(query, cts.Token);
+                }
+
+                if (stock is null)
+                {
+                    AppendLog($"stock search no result: {query}");
+                    return;
+                }
+
+                AddRecentViewedStock(stock);
+                if (ReferenceEquals(RecentWatchListBox.SelectedItem, stock))
+                    await LoadNewsForSelectedStockAsync(stock);
+                else
+                    RecentWatchListBox.SelectedItem = stock;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"stock search error: {query} / {ex.GetType().Name} / {ex.Message}");
+            }
+            finally
+            {
+                StockSearchButton.IsEnabled = true;
+            }
+        }
+
+        private void HideStockSearchSuggestions()
+        {
+            _stockSearchSuggestions.Clear();
+            StockSearchSuggestionListBox.Visibility = Visibility.Collapsed;
+        }
+
+        private void FocusSelectedRecentStock()
+        {
+            if (RecentWatchListBox.SelectedItem is null)
+                return;
+
+            RecentWatchListBox.UpdateLayout();
+            if (RecentWatchListBox.ItemContainerGenerator.ContainerFromItem(RecentWatchListBox.SelectedItem) is ListBoxItem item)
+            {
+                item.Focus();
+                return;
+            }
+
+            RecentWatchListBox.Focus();
+        }
+
+        private void CancelStockSearchSuggestion()
+        {
+            CancellationTokenSource? previous = _stockSearchSuggestionCts;
+            _stockSearchSuggestionCts = null;
+            if (previous is null)
+                return;
+
+            try
+            {
+                previous.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            finally
+            {
+                previous.Dispose();
+            }
+        }
+
+        private async Task LoadNewsForSelectedStockAsync(object? selectedItem)
+        {
+            string stockName = selectedItem switch
             {
                 WatchStockItem stock => stock.Name,
                 ListBoxItem listBoxItem => listBoxItem.Tag as string ?? string.Empty,
                 _ => string.Empty
             };
-            string stockCode = WatchListBox.SelectedItem is WatchStockItem selectedWatch ? selectedWatch.Code : string.Empty;
+            string stockCode = selectedItem is WatchStockItem selectedWatch ? selectedWatch.Code : string.Empty;
             if (string.IsNullOrWhiteSpace(stockName))
                 stockName = stockCode;
             if (string.IsNullOrWhiteSpace(stockName))
@@ -786,6 +1063,8 @@ namespace TradingDashboard
             InfoBasePriceText.Text = "-";
             InfoBasePriceText.Foreground = _whiteBrush;
             AppendLog($"stock selected: {stockName}");
+            if (selectedItem is WatchStockItem recentStock)
+                AddRecentViewedStock(recentStock);
 
             _ = LoadNewsAsync(stockName, selectionVersion, requestToken);
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
@@ -801,6 +1080,22 @@ namespace TradingDashboard
             StartSelectedChartRender();
             _ = LoadSelectedStockStatusAsync(stockCode, selectionVersion, requestToken);
             _ = LoadKrxClosingSnapshotIfNeededAsync(stockCode, selectionVersion, requestToken);
+        }
+
+        private void AddRecentViewedStock(WatchStockItem stock)
+        {
+            if (string.IsNullOrWhiteSpace(stock.Code))
+                return;
+
+            for (int i = _recentViewedStocks.Count - 1; i >= 0; i--)
+            {
+                if (string.Equals(_recentViewedStocks[i].Code, stock.Code, StringComparison.Ordinal))
+                    _recentViewedStocks.RemoveAt(i);
+            }
+
+            _recentViewedStocks.Insert(0, stock);
+            while (_recentViewedStocks.Count > 30)
+                _recentViewedStocks.RemoveAt(_recentViewedStocks.Count - 1);
         }
 
         private bool IsCurrentSelection(string stockCode, int selectionVersion)
@@ -1743,6 +2038,7 @@ namespace TradingDashboard
                 _chartRequestCts?.Dispose();
                 _watchlistCacheRefreshCts?.Cancel();
                 _watchlistCacheRefreshCts?.Dispose();
+                CancelStockSearchSuggestion();
                 _balanceRequestCts?.Cancel();
                 _balanceRequestCts?.Dispose();
                 _realtimeCts?.Cancel();

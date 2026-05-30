@@ -17,6 +17,7 @@ namespace TradingDashboard.Services
     {
         private readonly KiwoomSettings _settings = settings ?? new KiwoomSettings();
         private readonly HttpClient _httpClient = httpClient ?? new HttpClient();
+        private readonly StockMasterCacheStore _stockMasterCacheStore = new();
         private readonly SemaphoreSlim _restRequestGate = new(1, 1);
         private readonly SemaphoreSlim _restConcurrencyGate = new(5, 5);
         private readonly SemaphoreSlim _tokenGate = new(1, 1);
@@ -111,6 +112,131 @@ namespace TradingDashboard.Services
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string normalizedCode = NormalizeStockCode(code);
             return await GetStockInfoAsync(token, normalizedCode, name, null, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<WatchStockItem?> SearchListedStockAsync(string query, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string text = (query ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            Dictionary<string, StockMarketInfo> marketInfoByCode = await GetStockMarketInfoMapAsync(token, cancellationToken).ConfigureAwait(false);
+            string normalizedCode = NormalizeStockCode(text);
+
+            if (!string.IsNullOrWhiteSpace(normalizedCode) && marketInfoByCode.TryGetValue(normalizedCode, out StockMarketInfo? codeMatch))
+                return await GetStockInfoAsync(token, normalizedCode, codeMatch.Name, codeMatch, cancellationToken).ConfigureAwait(false);
+
+            KeyValuePair<string, StockMarketInfo>? exactName = marketInfoByCode
+                .FirstOrDefault(kv => string.Equals(kv.Value.Name, text, StringComparison.OrdinalIgnoreCase));
+            if (exactName.HasValue && !string.IsNullOrWhiteSpace(exactName.Value.Key))
+                return await GetStockInfoAsync(token, exactName.Value.Key, exactName.Value.Value.Name, exactName.Value.Value, cancellationToken).ConfigureAwait(false);
+
+            KeyValuePair<string, StockMarketInfo>? partialName = marketInfoByCode
+                .FirstOrDefault(kv => kv.Value.Name.Contains(text, StringComparison.OrdinalIgnoreCase));
+            if (partialName.HasValue && !string.IsNullOrWhiteSpace(partialName.Value.Key))
+                return await GetStockInfoAsync(token, partialName.Value.Key, partialName.Value.Value.Name, partialName.Value.Value, cancellationToken).ConfigureAwait(false);
+
+            return null;
+        }
+
+        public async Task<IReadOnlyList<StockMasterItem>> SearchStockMasterItemsAsync(
+            string query,
+            int takeCount = 30,
+            CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string text = (query ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return [];
+
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            Dictionary<string, StockMarketInfo> marketInfoByCode = await GetStockMarketInfoMapAsync(token, cancellationToken).ConfigureAwait(false);
+            string normalizedCode = NormalizeStockCode(text);
+
+            return marketInfoByCode
+                .Select(kv => new StockMasterItem
+                {
+                    Code = kv.Key,
+                    Name = kv.Value.Name,
+                    MarketCode = kv.Value.MarketTypeCode,
+                    MarketName = kv.Value.MarketName,
+                    ProgramMarketType = kv.Value.ProgramMarketType,
+                    SupportsNxt = kv.Value.SupportsNxt,
+                    LastPrice = kv.Value.LastPrice > 0 ? kv.Value.LastPrice.ToString() : string.Empty,
+                    OrderWarning = kv.Value.OrderWarning,
+                    AuditInfo = kv.Value.AuditInfo,
+                    StockState = kv.Value.StockState,
+                    SectorName = kv.Value.SectorName,
+                    CompanyClassName = kv.Value.CompanyClassName
+                })
+                .Where(item =>
+                    !IsExcludedFromStockAutocomplete(item) &&
+                    ((!string.IsNullOrWhiteSpace(normalizedCode) && item.Code.Contains(normalizedCode, StringComparison.OrdinalIgnoreCase)) ||
+                     item.Name.Contains(text, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(item => string.Equals(item.Code, normalizedCode, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(item => string.Equals(item.Name, text, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(item => item.Name, StringComparer.CurrentCulture)
+                .Take(Math.Max(1, takeCount))
+                .ToList();
+        }
+
+        private static bool IsExcludedFromStockAutocomplete(StockMasterItem item)
+        {
+            string name = item.Name ?? string.Empty;
+            string marketName = item.MarketName ?? string.Empty;
+            string stockState = item.StockState ?? string.Empty;
+            string sectorName = item.SectorName ?? string.Empty;
+            string companyClassName = item.CompanyClassName ?? string.Empty;
+            string joined = $"{name} {marketName} {stockState} {sectorName} {companyClassName}";
+            string joinedUpper = joined.ToUpperInvariant();
+            if (joined.Contains("\uC2A4\uD329", StringComparison.Ordinal))
+                return true;
+
+            if (joinedUpper.Contains("ETF", StringComparison.Ordinal) ||
+                joinedUpper.Contains("ETN", StringComparison.Ordinal) ||
+                joinedUpper.Contains("SPAC", StringComparison.Ordinal) ||
+                joined.Contains("스팩", StringComparison.Ordinal))
+                return true;
+
+            string upper = name.ToUpperInvariant();
+            if (upper.Contains("ETF", StringComparison.Ordinal) ||
+                upper.Contains("ETN", StringComparison.Ordinal) ||
+                upper.Contains("SPAC", StringComparison.Ordinal) ||
+                name.Contains("스팩", StringComparison.Ordinal))
+                return true;
+
+            string[] fundPrefixes =
+            [
+                "KODEX", "TIGER", "RISE", "KBSTAR", "ACE", "SOL", "PLUS", "KOSEF",
+                "HANARO", "ARIRANG", "TIMEFOLIO", "FOCUS", "1Q", "마이티"
+            ];
+            if (fundPrefixes.Any(prefix => upper.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            string[] extraFundPrefixes =
+            [
+                "WOORI", "HK", "BNK", "UNICORN", "KOACT", "ITF", "TREX"
+            ];
+            if (extraFundPrefixes.Any(prefix => upper.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            string[] unicodeFundNameHints =
+            [
+                "\uB808\uBC84\uB9AC\uC9C0", "\uC778\uBC84\uC2A4", "\uC120\uBB3C", "\uCC44\uAD8C",
+                "\uAD6D\uACE0\uCC44", "\uD68C\uC0AC\uCC44", "\uD569\uC131", "\uB098\uC2A4\uB2E5",
+                "\uB2E4\uC6B0\uC874\uC2A4", "\uCF54\uC2A4\uD53C200", "\uCF54\uC2A4\uB2E5150"
+            ];
+            if (unicodeFundNameHints.Any(hint => name.Contains(hint, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            string[] fundNameHints =
+            [
+                "레버리지", "인버스", "선물", "채권", "국고채", "회사채", "합성",
+                "S&P", "NASDAQ", "나스닥", "다우존스", "코스피200", "코스닥150", "MSCI"
+            ];
+            return fundNameHints.Any(hint => name.Contains(hint, StringComparison.OrdinalIgnoreCase));
         }
 
         public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
@@ -1507,7 +1633,15 @@ namespace TradingDashboard.Services
 
         private async Task<Dictionary<string, StockMarketInfo>> GetStockMarketInfoMapAsync(string token, CancellationToken cancellationToken)
         {
+            string tradingDate = ResolveStockMasterTradingDate(DateTime.Now);
+            StockMasterCacheDocument? cachedDocument = await _stockMasterCacheStore
+                .LoadFreshAsync(tradingDate, cancellationToken)
+                .ConfigureAwait(false);
+            if (cachedDocument?.Items is { Count: > 0 })
+                return BuildStockMarketInfoMap(cachedDocument.Items);
+
             var map = new Dictionary<string, StockMarketInfo>(StringComparer.Ordinal);
+            var masterItems = new List<StockMasterItem>();
             foreach ((string RequestMarketType, string ProgramMarketType, string DefaultName) market in new[]
             {
                 ("0", "P00101", "KOSPI"),
@@ -1533,28 +1667,111 @@ namespace TradingDashboard.Services
 
                     string marketCode = ReadAnyDeep(row, "marketCode", "market_code", "mrkt_tp");
                     string marketName = ReadAnyDeep(row, "marketName", "market_name");
+                    string name = ReadAnyDeep(row, "name", "stk_nm", "stock_name");
                     string nxtEnable = ReadAnyDeep(row, "nxtEnable", "nxt_enable");
                     long lastPrice = Math.Abs(ParseLongSafe(ReadAnyDeep(row, "lastPrice", "last_price", "base_pric")));
+                    string resolvedMarketCode = string.IsNullOrWhiteSpace(marketCode) ? market.RequestMarketType : marketCode;
+                    string resolvedMarketName = string.IsNullOrWhiteSpace(marketName) ? market.DefaultName : marketName;
+                    string orderWarning = ReadAnyDeep(row, "orderWarning", "order_warning");
+                    string auditInfo = ReadAnyDeep(row, "auditInfo", "audit_info");
+                    string stockState = ReadAnyDeep(row, "state");
+                    string sectorName = ReadAnyDeep(row, "upName", "up_name");
+                    string companyClassName = ReadAnyDeep(row, "companyClassName", "company_class_name");
+                    bool supportsNxt = string.Equals(nxtEnable, "Y", StringComparison.OrdinalIgnoreCase);
+
                     map[code] = new StockMarketInfo
                     {
-                        MarketTypeCode = string.IsNullOrWhiteSpace(marketCode) ? market.RequestMarketType : marketCode,
-                        MarketName = string.IsNullOrWhiteSpace(marketName) ? market.DefaultName : marketName,
+                        Name = name,
+                        MarketTypeCode = resolvedMarketCode,
+                        MarketName = resolvedMarketName,
                         ProgramMarketType = market.ProgramMarketType,
                         LastPrice = lastPrice,
-                        OrderWarning = ReadAnyDeep(row, "orderWarning", "order_warning"),
-                        AuditInfo = ReadAnyDeep(row, "auditInfo", "audit_info"),
-                        StockState = ReadAnyDeep(row, "state"),
-                        SectorName = ReadAnyDeep(row, "upName", "up_name"),
-                        SupportsNxt = string.Equals(nxtEnable, "Y", StringComparison.OrdinalIgnoreCase)
+                        OrderWarning = orderWarning,
+                        AuditInfo = auditInfo,
+                        StockState = stockState,
+                        SectorName = sectorName,
+                        CompanyClassName = companyClassName,
+                        SupportsNxt = supportsNxt
                     };
+                    masterItems.Add(new StockMasterItem
+                    {
+                        Code = code,
+                        Name = name,
+                        MarketCode = resolvedMarketCode,
+                        MarketName = resolvedMarketName,
+                        ProgramMarketType = market.ProgramMarketType,
+                        SupportsNxt = supportsNxt,
+                        LastPrice = lastPrice > 0 ? lastPrice.ToString() : string.Empty,
+                        OrderWarning = orderWarning,
+                        AuditInfo = auditInfo,
+                        StockState = stockState,
+                        SectorName = sectorName,
+                        CompanyClassName = companyClassName
+                    });
                 }
+            }
+
+            if (masterItems.Count > 0)
+            {
+                await _stockMasterCacheStore.SaveAsync(new StockMasterCacheDocument
+                {
+                    Meta = new StockMasterCacheMeta
+                    {
+                        UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                        TradingDate = tradingDate,
+                        Source = "ka10099",
+                        OrderMarketPolicy = "SOR",
+                        BasePriceMarketPolicy = "KRX"
+                    },
+                    Items = masterItems
+                        .OrderBy(x => x.Code, StringComparer.Ordinal)
+                        .ToList()
+                }, cancellationToken).ConfigureAwait(false);
             }
 
             return map;
         }
 
+        private static Dictionary<string, StockMarketInfo> BuildStockMarketInfoMap(IEnumerable<StockMasterItem> items)
+        {
+            var map = new Dictionary<string, StockMarketInfo>(StringComparer.Ordinal);
+            foreach (StockMasterItem item in items)
+            {
+                string code = NormalizeStockCode(item.Code);
+                if (string.IsNullOrWhiteSpace(code) || map.ContainsKey(code))
+                    continue;
+
+                map[code] = new StockMarketInfo
+                {
+                    Name = item.Name,
+                    MarketTypeCode = item.MarketCode,
+                    MarketName = item.MarketName,
+                    ProgramMarketType = item.ProgramMarketType,
+                    LastPrice = Math.Abs(ParseLongSafe(item.LastPrice)),
+                    OrderWarning = item.OrderWarning,
+                    AuditInfo = item.AuditInfo,
+                    StockState = item.StockState,
+                    SectorName = item.SectorName,
+                    CompanyClassName = item.CompanyClassName,
+                    SupportsNxt = item.SupportsNxt
+                };
+            }
+
+            return map;
+        }
+
+        private static string ResolveStockMasterTradingDate(DateTime now)
+        {
+            DateTime date = now.Date;
+            while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+                date = date.AddDays(-1);
+
+            return date.ToString("yyyyMMdd");
+        }
+
         private sealed class StockMarketInfo
         {
+            public string Name { get; set; } = string.Empty;
             public string MarketTypeCode { get; set; } = string.Empty;
             public string MarketName { get; set; } = string.Empty;
             public string ProgramMarketType { get; set; } = string.Empty;
@@ -1563,6 +1780,7 @@ namespace TradingDashboard.Services
             public string AuditInfo { get; set; } = string.Empty;
             public string StockState { get; set; } = string.Empty;
             public string SectorName { get; set; } = string.Empty;
+            public string CompanyClassName { get; set; } = string.Empty;
             public bool SupportsNxt { get; set; }
         }
 

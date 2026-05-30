@@ -9,7 +9,8 @@
         WindowState="Maximized"
         Background="#121212"
         Foreground="#E0E0E0"
-        FontFamily="Malgun Gothic">
+        FontFamily="Malgun Gothic"
+        PreviewKeyDown="MainWindow_PreviewKeyDown">
 
     <Window.Resources>
         <!-- Legacy palette -->
@@ -942,11 +943,56 @@
                            VerticalAlignment="Center"
                            Margin="15,0,20,0"/>
 
-                <TextBlock Grid.Column="1"
-                           Text="Watchlist · Order Book · Trades · News · Filings"
-                           FontSize="12"
-                           Foreground="{StaticResource TextSubBrush}"
-                           VerticalAlignment="Center"/>
+                <Grid Grid.Column="1"
+                      Width="420"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="0"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="StockSearchTextBox"
+                             Grid.Column="0"
+                             Height="27"
+                             Background="#101010"
+                             Foreground="{StaticResource TextMainBrush}"
+                             BorderBrush="{StaticResource LineSoftBrush}"
+                             BorderThickness="1"
+                             FontSize="12"
+                             Padding="9,4"
+                             VerticalContentAlignment="Center"
+                             Text=""
+                             TextChanged="StockSearchTextBox_TextChanged"
+                             GotKeyboardFocus="StockSearchTextBox_GotKeyboardFocus"
+                             PreviewMouseDown="StockSearchTextBox_PreviewMouseDown"
+                             KeyDown="StockSearchTextBox_KeyDown"/>
+                    <TextBlock Grid.Column="0"
+                               Text="Search Alt+S"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               FontSize="12"
+                               IsHitTestVisible="False">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=StockSearchTextBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <Button x:Name="StockSearchButton"
+                            Grid.Column="1"
+                            Content="Find"
+                            Height="27"
+                            Margin="6,0,0,0"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Visibility="Collapsed"
+                            Click="StockSearchButton_Click"/>
+                </Grid>
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
@@ -964,6 +1010,58 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <ListBox x:Name="StockSearchSuggestionListBox"
+                 Grid.Row="0"
+                 Grid.RowSpan="2"
+                 Width="420"
+                 Margin="0,39,0,0"
+                 MaxHeight="170"
+                 Panel.ZIndex="50"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Top"
+                 Visibility="Collapsed"
+                 Background="#181818"
+                 BorderBrush="{StaticResource PaletteSkyBlue}"
+                 BorderThickness="1"
+                 Foreground="{StaticResource TextMainBrush}"
+                 ItemContainerStyle="{StaticResource WatchListBoxItemStyle}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                 MouseDoubleClick="StockSearchSuggestionListBox_MouseDoubleClick"
+                 KeyDown="StockSearchSuggestionListBox_KeyDown">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Padding="8,5"
+                            BorderBrush="{StaticResource LineSoftBrush}"
+                            BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="64"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Code}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextMutedBrush}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Name}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextMainBrush}"
+                                       MaxWidth="255"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding MarketName}"
+                                       FontSize="10"
+                                       Foreground="{StaticResource PaletteBlueGray}"
+                                       Margin="8,0,0,0"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
 
         <!-- Main workspace -->
         <Grid Grid.Row="1">
@@ -986,6 +1084,7 @@
                     </Grid.RowDefinitions>
 
                     <Border Grid.Row="0"
+                            Visibility="Collapsed"
                             Background="{StaticResource BgHeaderBrush}"
                             BorderBrush="{StaticResource LineBrush}"
                             BorderThickness="0,0,0,1">
@@ -993,8 +1092,12 @@
                                    Style="{StaticResource PanelHeaderTextStyle}"/>
                     </Border>
 
-                    <ListBox Grid.Row="1"
-                             x:Name="WatchListBox"
+                    <TabControl Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Style="{StaticResource RightPanelTabControlStyle}"
+                                ItemContainerStyle="{StaticResource RightPanelTabItemStyle}">
+                        <TabItem Header="Watchlist">
+                    <ListBox x:Name="WatchListBox"
                              SelectionChanged="WatchListBox_SelectionChanged"
                              Background="{StaticResource BgPanelBrush}"
                              BorderThickness="0"
@@ -1187,6 +1290,62 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+                        </TabItem>
+
+                        <TabItem Header="Recent Views">
+                            <Grid>
+                            <ListBox x:Name="RecentWatchListBox"
+                                     SelectionChanged="WatchListBox_SelectionChanged"
+                                     Background="{StaticResource BgPanelBrush}"
+                                     BorderThickness="0"
+                                     Foreground="{StaticResource WhiteValueBrush}"
+                                     ItemContainerStyle="{StaticResource WatchListBoxItemStyle}"
+                                     ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Height="48"
+                                                BorderBrush="{StaticResource LineSoftBrush}"
+                                                BorderThickness="0,0,0,1"
+                                                Padding="10,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="100"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontSize="14"
+                                                               FontWeight="Bold"
+                                                               Foreground="{StaticResource WhiteValueBrush}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding VolumeText}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               Margin="0,3,0,0"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1"
+                                                            HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding CurrentPriceText}"
+                                                               FontSize="14"
+                                                               FontWeight="Bold"
+                                                               Foreground="{Binding PriceBrush}"
+                                                               TextAlignment="Right"/>
+                                                    <TextBlock Text="{Binding ChangeRateText}"
+                                                               FontSize="11"
+                                                               Foreground="{Binding PriceBrush}"
+                                                               Margin="0,3,0,0"
+                                                               TextAlignment="Right"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
 
                     <Border Grid.Row="2"
                             BorderBrush="{StaticResource LineBrush}"
