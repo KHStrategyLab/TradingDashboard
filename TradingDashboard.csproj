@@ -9,6 +9,12 @@
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Content Include="Config\NewsKeywords\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <Target Name="KillRunningTradingDashboard" BeforeTargets="BeforeBuild">
     <Exec Command="taskkill /F /IM TradingDashboard.exe &gt;nul 2&gt;&amp;1" IgnoreExitCode="true" />
   </Target>

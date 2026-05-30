@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -10,6 +11,7 @@ namespace TradingDashboard.Services
     public sealed class NewsThumbnailService
     {
         private static readonly HttpClient HttpClient = CreateHttpClient();
+        private static readonly ConcurrentDictionary<string, string> ThumbnailCache = new(StringComparer.OrdinalIgnoreCase);
         private static readonly Regex OgImageRegex = new(
             "<meta\\s+(?:[^>]*?(?:property|name)=[\"']og:image[\"'][^>]*?content=[\"'](?<url>[^\"']+)[\"']|[^>]*?content=[\"'](?<url>[^\"']+)[\"'][^>]*?(?:property|name)=[\"']og:image[\"'])",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -18,6 +20,8 @@ namespace TradingDashboard.Services
         {
             if (string.IsNullOrWhiteSpace(articleUrl))
                 return string.Empty;
+            if (ThumbnailCache.TryGetValue(articleUrl, out string? cached))
+                return cached;
 
             try
             {
@@ -33,13 +37,17 @@ namespace TradingDashboard.Services
 
                 string url = WebUtility.HtmlDecode(match.Groups["url"].Value).Trim();
                 if (Uri.TryCreate(url, UriKind.Absolute, out _))
+                {
+                    ThumbnailCache[articleUrl] = url;
                     return url;
+                }
             }
             catch
             {
                 // Some news sites block crawlers or redirect oddly. Thumbnails are optional.
             }
 
+            ThumbnailCache[articleUrl] = string.Empty;
             return string.Empty;
         }
 

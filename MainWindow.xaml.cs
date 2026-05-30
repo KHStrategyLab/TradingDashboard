@@ -28,6 +28,7 @@ namespace TradingDashboard
         private const double ChartRightPadding = 25d;
         private readonly AppConfig _config;
         private readonly NaverNewsService _newsService;
+        private readonly NewsKeywordFilterService _newsKeywordFilterService = new();
         private readonly NewsThumbnailService _newsThumbnailService = new();
         private readonly DartDisclosureService _disclosureService;
         private readonly TelegramNotifier _telegramNotifier;
@@ -137,8 +138,10 @@ namespace TradingDashboard
 
             _config = LocalSettingsLoader.Load();
             _newsService = new NaverNewsService(_config.NaverNews);
+            _newsService.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _disclosureService = new DartDisclosureService(_config.Dart);
             _telegramNotifier = new TelegramNotifier(_config.Telegram);
+            _telegramNotifier.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _kiwoomConditionService = new KiwoomRestConditionService(_config.Kiwoom);
             _kiwoomConditionService.RestLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             LoadWatchlistCache();
@@ -701,7 +704,7 @@ namespace TradingDashboard
             InfoBasePriceText.Foreground = _whiteBrush;
             AppendLog($"stock selected: {stockName}");
 
-            _ = LoadNewsAsync(stockName, selectionVersion);
+            _ = LoadNewsAsync(stockName, selectionVersion, requestToken);
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
             await LoadSelectedBasePriceAsync(stockCode, selectionVersion, requestToken);
             if (!IsCurrentSelection(stockCode, selectionVersion))
@@ -815,16 +818,20 @@ namespace TradingDashboard
             }
         }
 
-        private async Task LoadNewsAsync(string stockName, int selectionVersion)
+        private async Task LoadNewsAsync(string stockName, int selectionVersion, CancellationToken cancellationToken)
         {
             try
             {
-                var news = await _newsService.GetLatestNewsAsync(stockName, _config.Dashboard.NewsCount);
+                var news = await _newsService.GetLatestNewsAsync(stockName, _config.Dashboard.NewsCount, cancellationToken);
                 if (selectionVersion != _selectionVersion)
                     return;
 
                 StockNewsListBox.ItemsSource = news;
                 AppendLog($"news loaded: {stockName} ({news.Count}items)");
+            }
+            catch (OperationCanceledException)
+            {
+                // selection changed
             }
             catch (Exception ex)
             {

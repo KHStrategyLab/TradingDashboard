@@ -14,6 +14,13 @@ namespace TradingDashboard.Services
     public class NaverNewsService(NaverNewsSettings settings)
     {
         private static readonly HttpClient HttpClient = new();
+        private static readonly SemaphoreSlim NaverRequestGate = new(1, 1);
+        private const int NaverMaxDisplayCount = 100;
+        private const int NaverMaxRequestsPerWindow = 5;
+        private static readonly TimeSpan NaverRequestWindow = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan NaverTooManyRequestsCooldown = TimeSpan.FromSeconds(1);
+        private static readonly Queue<DateTime> NaverRequestTimesUtc = new();
+        private static DateTime _naverBlockedUntilUtc = DateTime.MinValue;
 
         private const string DefaultMarketQuery =
             "\uC99D\uC2DC|\uCF54\uC2A4\uD53C|\uCF54\uC2A4\uB2E5|\uD2B9\uC9D5\uC8FC|\uAE09\uB4F1|\uACF5\uC2DC|\uC218\uC8FC|\uACF5\uAE09\uACC4\uC57D|\uBC18\uB3C4\uCCB4|AI|2\uCC28\uC804\uC9C0|\uB85C\uBD07";
@@ -58,6 +65,8 @@ namespace TradingDashboard.Services
 
         private readonly NaverNewsSettings _settings = settings ?? new NaverNewsSettings();
 
+        public event Action<string>? ApiLimitLog;
+
         public async Task<List<NewsItem>> GetLatestNewsAsync(string stockName, int? count = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(stockName))
@@ -70,8 +79,8 @@ namespace TradingDashboard.Services
             if (displayCount <= 0)
                 displayCount = 5;
 
-            if (displayCount > 100)
-                displayCount = 100;
+            if (displayCount > NaverMaxDisplayCount)
+                displayCount = NaverMaxDisplayCount;
 
             string sort = string.IsNullOrWhiteSpace(_settings.Sort) ? "date" : _settings.Sort;
             string query = Uri.EscapeDataString(stockName);
@@ -81,8 +90,7 @@ namespace TradingDashboard.Services
             request.Headers.Add("X-Naver-Client-Id", _settings.ClientId);
             request.Headers.Add("X-Naver-Client-Secret", _settings.ClientSecret);
 
-            using HttpResponseMessage response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            using HttpResponseMessage response = await SendNaverApiAsync(request, cancellationToken).ConfigureAwait(false);
 
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -186,6 +194,101 @@ namespace TradingDashboard.Services
                 .DefaultIfEmpty(DefaultMarketQuery)
                 .Take(12)
                 .ToArray();
+        }
+
+        private async Task<HttpResponseMessage> SendNaverApiAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await NaverRequestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await WaitNaverRequestSlotAsync(cancellationToken).ConfigureAwait(false);
+                HttpResponseMessage response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (response.StatusCode != (HttpStatusCode)429)
+                {
+                    response.EnsureSuccessStatusCode();
+                    return response;
+                }
+
+                TimeSpan retryDelay = GetRetryDelay(response);
+                ApiLimitLog?.Invoke($"Naver API 429: wait {retryDelay.TotalSeconds:0.##}s / {DescribeRequest(request)}");
+                response.Dispose();
+                _naverBlockedUntilUtc = DateTime.UtcNow + retryDelay;
+                await WaitNaverRequestSlotAsync(cancellationToken).ConfigureAwait(false);
+                response = await HttpClient.SendAsync(CloneRequest(request), cancellationToken).ConfigureAwait(false);
+                if (response.StatusCode == (HttpStatusCode)429)
+                    ApiLimitLog?.Invoke($"Naver API 429 retry failed: {DescribeRequest(request)}");
+
+                response.EnsureSuccessStatusCode();
+                return response;
+            }
+            finally
+            {
+                NaverRequestGate.Release();
+            }
+        }
+
+        private static async Task WaitNaverRequestSlotAsync(CancellationToken cancellationToken)
+        {
+            DateTime now = DateTime.UtcNow;
+            if (now < _naverBlockedUntilUtc)
+                await Task.Delay(_naverBlockedUntilUtc - now, cancellationToken).ConfigureAwait(false);
+
+            now = DateTime.UtcNow;
+            while (NaverRequestTimesUtc.Count > 0 && now - NaverRequestTimesUtc.Peek() >= NaverRequestWindow)
+                NaverRequestTimesUtc.Dequeue();
+
+            // Naver OpenAPI is shared by stock news, market news, and manual news searches.
+            // Keep this gate: never allow more than 5 calls inside any 1 second window.
+            if (NaverRequestTimesUtc.Count >= NaverMaxRequestsPerWindow)
+            {
+                TimeSpan delay = NaverRequestWindow - (now - NaverRequestTimesUtc.Peek());
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+
+                now = DateTime.UtcNow;
+                while (NaverRequestTimesUtc.Count > 0 && now - NaverRequestTimesUtc.Peek() >= NaverRequestWindow)
+                    NaverRequestTimesUtc.Dequeue();
+            }
+
+            NaverRequestTimesUtc.Enqueue(DateTime.UtcNow);
+        }
+
+        private static TimeSpan GetRetryDelay(HttpResponseMessage response)
+        {
+            TimeSpan? retryAfter = response.Headers.RetryAfter?.Delta;
+            return retryAfter.HasValue && retryAfter.Value > TimeSpan.Zero
+                ? retryAfter.Value
+                : NaverTooManyRequestsCooldown;
+        }
+
+        private static HttpRequestMessage CloneRequest(HttpRequestMessage source)
+        {
+            var clone = new HttpRequestMessage(source.Method, source.RequestUri)
+            {
+                Version = source.Version,
+                VersionPolicy = source.VersionPolicy
+            };
+
+            foreach (var header in source.Headers)
+                clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+
+            return clone;
+        }
+
+        private static string DescribeRequest(HttpRequestMessage request)
+        {
+            if (request.RequestUri == null)
+                return "unknown";
+
+            string query = request.RequestUri.Query;
+            Match match = Regex.Match(query, @"(?:\?|&)query=([^&]+)", RegexOptions.IgnoreCase);
+            if (!match.Success)
+                return request.RequestUri.AbsolutePath;
+
+            string keyword = Uri.UnescapeDataString(match.Groups[1].Value).Trim();
+            return string.IsNullOrWhiteSpace(keyword)
+                ? request.RequestUri.AbsolutePath
+                : keyword;
         }
 
         private static bool IsMarketQuery(string query)

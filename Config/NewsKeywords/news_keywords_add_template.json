@@ -1,0 +1,26 @@
+{
+  "category": {
+    "id": "",
+    "name": "",
+    "sentiment": "positive | caution | negative",
+    "grade": "strong | medium | weak",
+    "tags": [],
+    "keywords": [],
+    "note": ""
+  },
+  "example": {
+    "id": "example_new_theme",
+    "name": "새 테마/예시",
+    "sentiment": "positive",
+    "grade": "medium",
+    "tags": [
+      "긍정",
+      "테마"
+    ],
+    "keywords": [
+      "예시단어1",
+      "예시단어2"
+    ],
+    "note": "나중에 실제 단어로 교체"
+  }
+}

@@ -5,6 +5,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingDashboard.Models;
+using TradingDashboard.Services;
 
 namespace TradingDashboard
 {
@@ -18,20 +19,25 @@ namespace TradingDashboard
             try
             {
                 int count = Math.Clamp(_config.LateNewsAlert.NewsCount, 1, 10);
-                List<NewsItem> newsItems = await _newsService.GetLatestNewsAsync(stock.Name, count * 3, cancellationToken).ConfigureAwait(false);
-                newsItems = [.. newsItems
-                    .Where(item => !string.IsNullOrWhiteSpace(item.Title) && !string.IsNullOrWhiteSpace(item.Link))
-                    .Take(count)];
+                const int candidateCount = 20;
+                List<NewsItem> newsItems = await _newsService.GetLatestNewsAsync(stock.Name, candidateCount, cancellationToken).ConfigureAwait(false);
+                newsItems = [.. newsItems.Where(item => !string.IsNullOrWhiteSpace(item.Title) && !string.IsNullOrWhiteSpace(item.Link))];
+                int beforeFilterCount = newsItems.Count;
+                IReadOnlyList<NewsKeywordFilterService.RankedNewsItem> rankedNews = _newsKeywordFilterService.Rank(newsItems);
+                newsItems = [.. rankedNews.Take(count).Select(item => item.Item)];
 
                 if (newsItems.Count == 0)
                 {
-                    Dispatcher.Invoke(() => AppendLog($"Late News skipped(no news): {stock.Name} ({stock.Code})"));
+                    Dispatcher.Invoke(() => AppendLog(
+                        beforeFilterCount == 0
+                            ? $"Late News skipped(no news): {stock.Name} ({stock.Code})"
+                            : $"Late News skipped(filtered): {stock.Name} ({stock.Code}) / {beforeFilterCount}->0"));
                     return;
                 }
 
-                string message = BuildLateNewsMessage(stock.Name, newsItems);
-                await _telegramNotifier.SendHtmlToDefaultAsync(message, cancellationToken).ConfigureAwait(false);
-                Dispatcher.Invoke(() => AppendLog($"Late News sent: {stock.Name} ({stock.Code})"));
+                await SendLateNewsBundleMessageAsync(stock.Name, newsItems, cancellationToken).ConfigureAwait(false);
+                string topReason = FormatLateNewsFilterReason(rankedNews.FirstOrDefault());
+                Dispatcher.Invoke(() => AppendLog($"Late News sent: {stock.Name} ({stock.Code}) / filter {beforeFilterCount}->{newsItems.Count}{topReason}"));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -100,38 +106,57 @@ namespace TradingDashboard
                 : fallback;
         }
 
-        private string BuildLateNewsMessage(string stockName, IReadOnlyList<NewsItem> newsItems)
+        private async Task SendLateNewsBundleMessageAsync(string stockName, IReadOnlyList<NewsItem> newsItems, CancellationToken cancellationToken)
         {
-            int titleMaxLength = Math.Clamp(_config.LateNewsAlert.TitleMaxLength, 5, 80);
+            string message = BuildLateNewsBundleMessage(stockName, newsItems);
+            await _telegramNotifier.SendHtmlToDefaultAsync(message, disableWebPagePreview: false, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static string BuildLateNewsBundleMessage(string stockName, IReadOnlyList<NewsItem> newsItems)
+        {
             string safeStockName = EscapeTelegramHtml(stockName);
             var lines = new List<string>
             {
-                $"{safeStockName} - \uB09C\uAC00!!!??",
-                string.Empty
+                $"-{safeStockName}-"
             };
 
+            bool previewLinkAdded = false;
+            int index = 1;
             foreach (NewsItem item in newsItems)
             {
-                string title = EscapeTelegramHtml(ShortenTelegramText(item.Title, titleMaxLength));
-                string link = EscapeTelegramHtml(item.Link);
-                lines.Add($"{safeStockName} / {title}");
-                lines.Add($"<a href=\"{link}\">\uAE30\uC0AC \uBCF4\uAE30</a>");
-                lines.Add(string.Empty);
+                if (string.IsNullOrWhiteSpace(item.Link))
+                    continue;
+
+                string safeLink = EscapeTelegramHtml(item.Link);
+                if (!previewLinkAdded)
+                {
+                    lines.Add($"<a href=\"{safeLink}\">&#8203;</a>");
+                    previewLinkAdded = true;
+                }
+
+                lines.Add($"<a href=\"{safeLink}\">기사보기 {index}</a>");
+                index++;
             }
 
-            return string.Join(Environment.NewLine, lines).TrimEnd();
+            return string.Join(Environment.NewLine, lines);
         }
 
-        private static string ShortenTelegramText(string text, int maxLength)
+        private static string FormatLateNewsFilterReason(NewsKeywordFilterService.RankedNewsItem? top)
         {
-            string clean = string.IsNullOrWhiteSpace(text)
+            if (top == null)
+                return string.Empty;
+
+            string words = string.Join(",", top.Words.Take(4));
+            return string.IsNullOrWhiteSpace(words)
+                ? $" / score {top.Score}"
+                : $" / score {top.Score} / {words}";
+        }
+
+        private static string ShortenTelegramText(string text)
+        {
+            return string.IsNullOrWhiteSpace(text)
                 ? string.Empty
                 : WebUtility.HtmlDecode(text).Trim();
-
-            if (clean.Length <= maxLength)
-                return clean;
-
-            return clean[..maxLength] + "\u2026";
         }
 
         private static string EscapeTelegramHtml(string text)

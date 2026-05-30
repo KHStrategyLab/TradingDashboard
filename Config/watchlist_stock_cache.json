@@ -17,11 +17,11 @@
     "SectorName": "\uC804\uAE30/\uC804\uC790",
     "SupportsNxt": false,
     "BasePrice": 156200,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1607713+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:37:52.5734196+09:00"
   },
   {
     "Code": "003550",
@@ -41,11 +41,11 @@
     "SectorName": "\uAE08\uC735",
     "SupportsNxt": true,
     "BasePrice": 115800,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610264+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:12.5050687+09:00"
   },
   {
     "Code": "006660",
@@ -65,11 +65,11 @@
     "SectorName": "\uC6B4\uC1A1\uC7A5\uBE44/\uBD80\uD488",
     "SupportsNxt": false,
     "BasePrice": 17170,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610286+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:12.5194498+09:00"
   },
   {
     "Code": "009420",
@@ -89,11 +89,11 @@
     "SectorName": "\uC81C\uC57D",
     "SupportsNxt": true,
     "BasePrice": 62500,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610293+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:12.5360249+09:00"
   },
   {
     "Code": "011070",
@@ -113,11 +113,11 @@
     "SectorName": "\uC804\uAE30/\uC804\uC790",
     "SupportsNxt": true,
     "BasePrice": 1134000,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610299+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:12.551179+09:00"
   },
   {
     "Code": "012330",
@@ -137,11 +137,11 @@
     "SectorName": "\uC6B4\uC1A1\uC7A5\uBE44/\uBD80\uD488",
     "SupportsNxt": true,
     "BasePrice": 686000,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610315+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:12.5644801+09:00"
   },
   {
     "Code": "018260",
@@ -161,11 +161,11 @@
     "SectorName": "IT \uC11C\uBE44\uC2A4",
     "SupportsNxt": true,
     "BasePrice": 248500,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610331+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:13.5045919+09:00"
   },
   {
     "Code": "064400",
@@ -185,11 +185,11 @@
     "SectorName": "IT \uC11C\uBE44\uC2A4",
     "SupportsNxt": true,
     "BasePrice": 87600,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610351+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:14.7718862+09:00"
   },
   {
     "Code": "090360",
@@ -209,11 +209,11 @@
     "SectorName": "\uAE30\uACC4/\uC7A5\uBE44",
     "SupportsNxt": true,
     "BasePrice": 77700,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610361+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:14.8095019+09:00"
   },
   {
     "Code": "125020",
@@ -233,11 +233,11 @@
     "SectorName": "\uC804\uAE30/\uC804\uC790",
     "SupportsNxt": false,
     "BasePrice": 8120,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610378+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:14.8671884+09:00"
   },
   {
     "Code": "126730",
@@ -257,11 +257,11 @@
     "SectorName": "\uC804\uAE30/\uC804\uC790",
     "SupportsNxt": false,
     "BasePrice": 30800,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610382+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:14.8977547+09:00"
   },
   {
     "Code": "356680",
@@ -281,11 +281,11 @@
     "SectorName": "IT \uC11C\uBE44\uC2A4",
     "SupportsNxt": true,
     "BasePrice": 23550,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610387+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:14.9109558+09:00"
   },
   {
     "Code": "457370",
@@ -305,11 +305,11 @@
     "SectorName": "\uD654\uD559",
     "SupportsNxt": false,
     "BasePrice": 11910,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610393+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:15.5052913+09:00"
   },
   {
     "Code": "486990",
@@ -329,10 +329,10 @@
     "SectorName": "IT \uC11C\uBE44\uC2A4",
     "SupportsNxt": true,
     "BasePrice": 34600,
-    "BasePriceDate": "20260529",
+    "BasePriceDate": "20260530",
     "BasePriceSource": "KRX_PREV_CLOSE",
-    "SnapshotDate": "20260529",
-    "LastSeenConditionDate": "20260529",
-    "LastUsedAt": "2026-05-29T20:02:24.1610398+09:00"
+    "SnapshotDate": "20260530",
+    "LastSeenConditionDate": "20260530",
+    "LastUsedAt": "2026-05-30T10:38:16.7049363+09:00"
   }
 ]
