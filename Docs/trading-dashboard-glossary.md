@@ -33,8 +33,8 @@ KRX 정규장 일봉 기준봉을 뜻한다.
 `기준봉 게이트`를 통과시킨 일봉이다.
 
 - 기존 KRX 전략 기준봉 `BaseCandle*`, `BaseHalfPrice`와 구분한다.
-- 저장 필드 예: `GateBaseCandleDate`, `GateBaseCandleMarket`, `GateBaseCandleChangeRate`, `GateBaseCandleTradeValue`
-- `GateBaseCandleOffset`은 파일 저장 대상이 아니다. 화면의 `D+` 표시는 일봉 게이트 검사 결과로 메모리에서 계산한다.
+- 저장 필드 예: `GateBaseCandleOffset`, `GateBaseCandleDate`, `GateBaseCandleMarket`, `GateBaseCandleChangeRate`, `GateBaseCandleTradeValue`
+- `GateBaseCandleOffset`은 파일 캐시에 저장한다. 재시작 후에도 `D+` 배지를 복원하기 위한 값이며, 기존 캐시에 값이 없으면 기본값 `-1`을 유지한다.
 - 목록 배지 예: `D+0`, `D+3`
 - `D+3`은 기준봉 발생 후 3거래일째 추적 중이라는 뜻이다.
 - 게이트 시장은 `GateBaseCandleMarket`에 저장만 하고 화면에는 표시하지 않는다.

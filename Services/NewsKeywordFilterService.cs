@@ -73,13 +73,27 @@ namespace TradingDashboard.Services
                 if (categoryScore <= 0)
                     continue;
 
-                score += Math.Min(categoryScore, category.Weight * 6);
+                if (IsPositiveSentiment(category.Sentiment))
+                {
+                    score += Math.Min(categoryScore, category.Weight * 6);
+                }
+                else
+                {
+                    score -= Math.Min(categoryScore, 2);
+                }
+
                 tags.Add(category.Name);
                 foreach (string tag in category.Tags)
                     tags.Add(tag);
             }
 
             return new KeywordMatchResult(score, [.. tags.Take(8)], [.. words.Take(12)]);
+        }
+
+        private static bool IsPositiveSentiment(string sentiment)
+        {
+            return string.IsNullOrWhiteSpace(sentiment) ||
+                   sentiment.Equals("positive", StringComparison.OrdinalIgnoreCase);
         }
 
         private static int GetRecencyScore(string pubDate)
@@ -170,12 +184,7 @@ namespace TradingDashboard.Services
                 _ => 2
             };
 
-            return sentiment switch
-            {
-                "negative" => weight + 2,
-                "caution" => weight + 1,
-                _ => weight
-            };
+            return weight;
         }
 
         private static string[] ReadStringArray(JsonElement element, string propertyName)
