@@ -215,9 +215,10 @@ namespace TradingDashboard
                     "Choosing KRX/NXT mode before loading watchlist");
                 await PrimeMarketStatusBeforeWatchlistAsync();
 
+                string conditionLabel = GetConfiguredConditionLabel();
                 SetStartupLoading(
                     true,
-                    "Loading condition 01 watchlist...",
+                    $"Loading {conditionLabel} watchlist...",
                     "Requesting Kiwoom condition search results",
                     "Realtime registration will start after the list is ready");
                 await LoadWatchListFromKiwoomConditionAsync();
@@ -306,6 +307,7 @@ namespace TradingDashboard
 
         private async Task LoadWatchListFromKiwoomConditionAsync()
         {
+            string conditionLabel = GetConfiguredConditionLabel();
             try
             {
                 if (!_config.Kiwoom.UseRestApi)
@@ -322,10 +324,10 @@ namespace TradingDashboard
 
                 SetStartupLoading(
                     true,
-                    "Loading condition 01 watchlist...",
+                    $"Loading {conditionLabel} watchlist...",
                     "Kiwoom condition request in progress",
                     "Waiting for candidate stocks");
-                AppendLog("Kiwoom condition 01 query started");
+                AppendLog($"Kiwoom {conditionLabel} query started");
 
                 List<WatchStockItem> stocks = await _kiwoomConditionService.GetConditionStocksAsync();
                 if (stocks.Count == 0)
@@ -343,7 +345,7 @@ namespace TradingDashboard
                 SetStartupLoading(
                     true,
                     "Checking base-candle gate...",
-                    $"{stocks.Count} stocks received from condition 01",
+                    $"{stocks.Count} stocks received from {conditionLabel}",
                     "Discarding stocks without a recent 100B/20% candle");
                 List<WatchStockItem> gatedStocks = await FilterWatchlistByBaseCandleGateAsync(stocks);
 
@@ -371,8 +373,17 @@ namespace TradingDashboard
                     ex.Message);
                 AppendLog($"condition query error: {ex.Message}");
                 if (!ApplyCachedWatchListFallback("condition query failed"))
-                    MessageBox.Show($"Kiwoom condition(01) query error: {ex.Message}");
+                    MessageBox.Show($"Kiwoom {conditionLabel} query error: {ex.Message}");
             }
+        }
+
+        private string GetConfiguredConditionLabel()
+        {
+            string seq = string.IsNullOrWhiteSpace(_config.Kiwoom.ConditionSeq01)
+                ? "1"
+                : _config.Kiwoom.ConditionSeq01.Trim();
+
+            return $"condition {seq}";
         }
 
         private async Task<List<WatchStockItem>> FilterWatchlistByBaseCandleGateAsync(IEnumerable<WatchStockItem> stocks, CancellationToken cancellationToken = default)
@@ -397,8 +408,7 @@ namespace TradingDashboard
         {
             string today = DateTime.Now.ToString("yyyyMMdd");
             WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stock.Code);
-            if (cache is { GateBaseCandleFound: true } &&
-                string.Equals(cache.GateBaseCandleCheckedDate, today, StringComparison.Ordinal))
+            if (cache != null && IsActiveGateBaseCandleCache(cache, today))
             {
                 ApplyGateCacheToStock(stock, cache);
                 return true;
@@ -508,6 +518,12 @@ namespace TradingDashboard
             entry.GateBaseCandleCheckedDate = checkedDate;
         }
 
+        private static bool IsActiveGateBaseCandleCache(WatchlistStockCacheEntry? entry, string today)
+        {
+            return entry is { GateBaseCandleFound: true } &&
+                string.Equals(entry.GateBaseCandleCheckedDate, today, StringComparison.Ordinal);
+        }
+
         private bool ApplyCachedWatchListFallback(string reason)
         {
             List<WatchStockItem> cachedStocks = BuildWatchListFromCache();
@@ -540,8 +556,7 @@ namespace TradingDashboard
             string today = DateTime.Now.ToString("yyyyMMdd");
             List<WatchlistStockCacheEntry> entries = [.. _watchlistMemoryCache.Values
                 .Where(e => !string.IsNullOrWhiteSpace(e.Code) &&
-                    e.GateBaseCandleFound &&
-                    string.Equals(e.GateBaseCandleCheckedDate, today, StringComparison.Ordinal) &&
+                    IsActiveGateBaseCandleCache(e, today) &&
                     (e.SnapshotDate == today || e.LastSeenConditionDate == today))
                 .OrderBy(e => e.LastUsedAt)];
 
@@ -549,8 +564,7 @@ namespace TradingDashboard
             {
                 entries = [.. _watchlistMemoryCache.Values
                     .Where(e => !string.IsNullOrWhiteSpace(e.Code) &&
-                        e.GateBaseCandleFound &&
-                        string.Equals(e.GateBaseCandleCheckedDate, today, StringComparison.Ordinal))
+                        IsActiveGateBaseCandleCache(e, today))
                     .OrderBy(e => e.LastUsedAt)
                     .Take(10)];
             }
@@ -803,8 +817,7 @@ namespace TradingDashboard
                 stock.StockState = entry.StockState;
             if (string.IsNullOrWhiteSpace(stock.SectorName))
                 stock.SectorName = entry.SectorName;
-            if (entry.GateBaseCandleFound &&
-                string.Equals(entry.GateBaseCandleCheckedDate, DateTime.Now.ToString("yyyyMMdd"), StringComparison.Ordinal))
+            if (IsActiveGateBaseCandleCache(entry, DateTime.Now.ToString("yyyyMMdd")))
             {
                 ApplyGateCacheToStock(stock, entry);
             }

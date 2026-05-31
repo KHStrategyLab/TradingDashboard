@@ -274,7 +274,12 @@ namespace TradingDashboard
                         .ConfigureAwait(false);
                     if (daily.Count > 0)
                     {
-                        _chartCandleFileCacheStore.Upsert(stock.Code, stock.UseNxtMarket, ChartPeriod.Daily.ToString(), daily.TakeLast(ResolveChartCandleCount(ChartPeriod.Daily)));
+                        _chartCandleFileCacheStore.Upsert(
+                            stock.Code,
+                            stock.UseNxtMarket,
+                            ChartPeriod.Daily.ToString(),
+                            daily,
+                            ResolveChartFileCacheRetainCount(ChartPeriod.Daily));
                         savedSets++;
                     }
 
@@ -283,7 +288,12 @@ namespace TradingDashboard
                         .ConfigureAwait(false);
                     if (weekly.Count > 0)
                     {
-                        _chartCandleFileCacheStore.Upsert(stock.Code, stock.UseNxtMarket, ChartPeriod.Weekly.ToString(), weekly.TakeLast(ResolveChartCandleCount(ChartPeriod.Weekly)));
+                        _chartCandleFileCacheStore.Upsert(
+                            stock.Code,
+                            stock.UseNxtMarket,
+                            ChartPeriod.Weekly.ToString(),
+                            weekly,
+                            ResolveChartFileCacheRetainCount(ChartPeriod.Weekly));
                         savedSets++;
                     }
 
@@ -292,7 +302,12 @@ namespace TradingDashboard
                         .ConfigureAwait(false);
                     if (monthly.Count > 0)
                     {
-                        _chartCandleFileCacheStore.Upsert(stock.Code, stock.UseNxtMarket, ChartPeriod.Monthly.ToString(), monthly.TakeLast(ResolveChartCandleCount(ChartPeriod.Monthly)));
+                        _chartCandleFileCacheStore.Upsert(
+                            stock.Code,
+                            stock.UseNxtMarket,
+                            ChartPeriod.Monthly.ToString(),
+                            monthly,
+                            ResolveChartFileCacheRetainCount(ChartPeriod.Monthly));
                         savedSets++;
                     }
                 }
@@ -879,6 +894,17 @@ namespace TradingDashboard
                 ChartPeriod.Monthly => 60,
                 _ when IsMinuteChartPeriod(period) => MinuteChartCandleCount,
                 _ => 120
+            };
+        }
+
+        private static int ResolveChartFileCacheRetainCount(ChartPeriod period)
+        {
+            return period switch
+            {
+                ChartPeriod.Daily => 600,
+                ChartPeriod.Weekly => 300,
+                ChartPeriod.Monthly => 180,
+                _ => ResolveChartCandleCount(period)
             };
         }
 

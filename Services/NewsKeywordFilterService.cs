@@ -92,8 +92,7 @@ namespace TradingDashboard.Services
 
         private static bool IsPositiveSentiment(string sentiment)
         {
-            return string.IsNullOrWhiteSpace(sentiment) ||
-                   sentiment.Equals("positive", StringComparison.OrdinalIgnoreCase);
+            return sentiment.Equals("positive", StringComparison.OrdinalIgnoreCase);
         }
 
         private static int GetRecencyScore(string pubDate)

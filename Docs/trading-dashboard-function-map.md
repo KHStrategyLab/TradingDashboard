@@ -77,7 +77,7 @@ Date: 2026-05-31
 | `StartSelectedChartRender` | `MainWindow.Chart.cs` | 선택 종목 차트 렌더링 시작 | 화면 차트용이며 전략 판단 seed와 직접 결합하지 않는다. |
 | `RenderSelectedChartAsync` | `MainWindow.Chart.cs` | 일/주/월/분봉 REST 조회와 캐시 적용 | 메모리 캐시 -> 일/주/月 파일 캐시 -> REST 순서. selectionVersion/chartVersion으로 늦은 응답 방어. |
 | `StartInitialChartFileCachePreload` | `MainWindow.Chart.cs` | 초기 조건식 통과 종목의 일/주/月 파일 캐시 프리로드 | 백그라운드 1회 보조 작업. 분봉은 제외한다. |
-| `ChartCandleCacheStore` | `ChartCandleCacheStore.cs` | `Config/chart_candle_cache.json` 저장/로드 | KRX/NXT/기간 키를 분리한다. 파일은 로컬 캐시라 git에 올리지 않는다. |
+| `ChartCandleCacheStore` | `ChartCandleCacheStore.cs` | `Config/chart_candle_cache.json` 저장/로드 | KRX/NXT/기간 키를 분리한다. 일/주/月만 날짜 기준으로 증분 병합하고, 분봉은 파일 캐시하지 않는다. 파일은 로컬 캐시라 git에 올리지 않는다. |
 | `GetMinuteCandlesAsync` | `KiwoomRestConditionService.cs` | ka10080 분봉 조회 | KRX=6자리, NXT=`_NX`. NXT 실패 시 KRX fallback 금지. |
 | `ApplyChartCandles` | `MainWindow.Chart.cs` | 조회된 봉을 현재 차트 상태에 적용 | `_currentChartCandles`는 화면 차트 상태다. 경량엔진 캐시와 분리할 것. |
 | `ApplyRealtimeChartTick` | `MainWindow.Chart.cs` | 0B 틱으로 현재 화면 차트 진행봉 갱신 | 선택된 단일 종목 화면 표시용. 전략 판단으로 역류 금지. |
@@ -92,7 +92,7 @@ Date: 2026-05-31
 | `LoadMarketNewsAsync` | `MainWindow.xaml.cs` | News 탭 시장 뉴스/검색 조회 | Naver API 제한은 키움 시세 흐름과 분리한다. |
 | `LoadMarketNewsThumbnailsAsync` | `MainWindow.xaml.cs` | 기사 og:image 지연 로드 | 썸네일 실패는 뉴스 표시 실패가 아니다. |
 | `TrySendLateNewsAlertAsync` | `MainWindow.LateNews.cs` | 조건 편입 종목 뉴스 알림 | 매수 신호가 아니라 재료 확인 보조. 키워드 사전이 없으면 알림은 skip한다. |
-| `NewsKeywordFilterService.Rank` | `NewsKeywordFilterService.cs` | 뉴스 제목/요약 키워드 점수화 | 알림 통과 점수는 positive 중심. negative/caution은 태그/소폭 감점으로만 반영한다. 사전 실패 시 원본 뉴스를 통과시키지 않는다. |
+| `NewsKeywordFilterService.Rank` | `NewsKeywordFilterService.cs` | 뉴스 제목/요약 키워드 점수화 | 알림 통과 점수는 명시적 positive 중심. negative/caution은 태그/소폭 감점으로만 반영한다. 사전 실패 시 원본 뉴스를 통과시키지 않는다. |
 | `LoadDisclosuresAsync` | `MainWindow.xaml.cs` | 선택 종목 공시 조회 | 전체 시장 훑기가 아니라 현재 후보/선택 종목 중심. |
 | `DartDisclosureAlertService.TrySendRecentDisclosureAlertAsync` | `DartDisclosureAlertService.cs` | 조건 편입 공시 알림 | 좋은 재료 공시만 우선 통과. 위험 공시는 별도 태그 후보. |
 

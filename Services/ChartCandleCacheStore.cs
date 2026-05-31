@@ -42,7 +42,7 @@ namespace TradingDashboard.Services
             }
         }
 
-        public void Upsert(string code, bool useNxtMarket, string period, IEnumerable<DailyCandle> candles)
+        public void Upsert(string code, bool useNxtMarket, string period, IEnumerable<DailyCandle> candles, int maxCount = 0)
         {
             List<DailyCandle> snapshot = [.. candles
                 .Where(candle => candle != null && !string.IsNullOrWhiteSpace(candle.Date))
@@ -72,9 +72,36 @@ namespace TradingDashboard.Services
                 }
 
                 entry.CachedAt = DateTime.Now.ToString("yyyyMMddHHmmss");
-                entry.Candles = snapshot;
+                entry.Candles = MergeCandles(entry.Candles, snapshot, maxCount);
                 document.Meta.UpdatedAt = entry.CachedAt;
             }
+        }
+
+        private static List<DailyCandle> MergeCandles(IEnumerable<DailyCandle>? existing, IEnumerable<DailyCandle> incoming, int maxCount)
+        {
+            var merged = new Dictionary<string, DailyCandle>(StringComparer.Ordinal);
+            if (existing != null)
+            {
+                foreach (DailyCandle candle in existing)
+                {
+                    if (candle != null && !string.IsNullOrWhiteSpace(candle.Date))
+                        merged[candle.Date] = candle;
+                }
+            }
+
+            // Incremental cache rule: keep older saved candles, append newer candles,
+            // and replace the same-date candle with the latest REST value.
+            foreach (DailyCandle candle in incoming)
+            {
+                if (candle != null && !string.IsNullOrWhiteSpace(candle.Date))
+                    merged[candle.Date] = candle;
+            }
+
+            IEnumerable<DailyCandle> ordered = merged.Values.OrderBy(candle => candle.Date);
+            if (maxCount > 0)
+                ordered = ordered.TakeLast(maxCount);
+
+            return [.. ordered];
         }
 
         public void Save()
