@@ -928,6 +928,7 @@ namespace TradingDashboard
                     return;
 
                 stock.CurrentPrice = price > 0 ? price : stock.CurrentPrice;
+                UpdatePaperPositionsForPrice(code, stock.CurrentPrice);
                 if (volume > 0)
                 {
                     stock.VolumeText = volume.ToString("N0");

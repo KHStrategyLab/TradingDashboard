@@ -59,6 +59,48 @@ namespace TradingDashboard
             return entry;
         }
 
+        private void UpdatePaperPositionsForPrice(string code, long currentPrice)
+        {
+            string normalizedCode = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(normalizedCode) || currentPrice <= 0)
+                return;
+
+            bool changed = false;
+            string now = DateTime.Now.ToString("yyyyMMddHHmmss");
+            foreach (PaperPositionLedgerEntry entry in _paperPositions.Where(x =>
+                string.Equals(x.Code, normalizedCode, StringComparison.Ordinal) &&
+                string.Equals(x.Status, "OPEN", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (entry.CurrentPrice == currentPrice)
+                    continue;
+
+                entry.CurrentPrice = currentPrice;
+                entry.ProfitLoss = CalculatePaperProfitLoss(entry);
+                entry.ProfitRate = CalculatePaperProfitRate(entry);
+                entry.UpdatedAt = now;
+                changed = true;
+            }
+
+            if (changed)
+                SavePaperPositions();
+        }
+
+        private static long CalculatePaperProfitLoss(PaperPositionLedgerEntry entry)
+        {
+            if (entry.Quantity <= 0 || entry.EntryPrice <= 0 || entry.CurrentPrice <= 0)
+                return 0;
+
+            return (entry.CurrentPrice - entry.EntryPrice) * entry.Quantity;
+        }
+
+        private static decimal CalculatePaperProfitRate(PaperPositionLedgerEntry entry)
+        {
+            if (entry.EntryPrice <= 0 || entry.CurrentPrice <= 0)
+                return 0;
+
+            return (entry.CurrentPrice - entry.EntryPrice) / (decimal)entry.EntryPrice * 100m;
+        }
+
         private void SavePaperPositions()
         {
             foreach (PaperPositionLedgerEntry entry in _paperPositions)
