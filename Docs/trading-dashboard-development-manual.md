@@ -174,6 +174,8 @@
 - `ka10076` 체결 감사에서 체결수량/평균체결가/체결시간을 확인하면 `Storage/StrategyPositions/{yyyyMMdd}.json`에 전략별 포지션 장부를 저장한다.
 - 전략별 포지션 장부는 주문 journal과 다르다. journal은 주문 중복 방지, position ledger는 "누가 몇 주를 샀고 누가 팔 책임이 있는지"를 표시한다.
 - 보유 종목 표의 `Tag`는 전략별 포지션 장부를 우선 보고, 아직 장부가 없으면 당일 자동 주문 journal을 임시 참고해 `AUTO Slot 01/02/03`으로 표시한다. 둘 다 없으면 수동 보유로 본다.
+- 매도부장은 `StrategyPositions`의 `OPEN` 포지션을 우선 본다. 같은 종목이라도 Slot별 `OpenQuantity`와 `AveragePrice`로 STOP/TARGET을 판단하고, 실제 매도 수량은 해당 Slot의 `OpenQuantity` 안에서만 정한다.
+- Paper와 Live는 같은 STOP/TARGET 판단 함수를 쓰되 실행만 분리한다. Paper는 장부만 닫고, Live는 SOR 현재가 `-1틱 지정가` 주문 후 체결 감사에서 `StrategyPositions.OpenQuantity`를 줄인다.
 
 수동매수 자동손절기:
 
@@ -1300,7 +1302,7 @@ Engine Start OFF = no strategy execution
 - Progress의 분봉 데이터 단계는 `_currentChartCandles` 하나를 공용으로 보지 않고, 현재 선택 종목의 차트 메모리 캐시에 들어온 분봉별 봉 개수로 확인한다.
 - Slot 1은 10분/3분, Slot 2는 15분/5분, Slot 3은 10분/5분 데이터가 각각 최소 개수 이상 들어와야 해당 데이터 단계가 통과된다.
 - 차트가 새로 로드되면 Progress를 다시 그려 방금 받아온 분봉 캐시 개수를 화면에 반영한다.
-- 단, 현재는 매도 추적 로직을 아직 연결하지 않았으므로 실제 보유 종목은 중복매수 정책을 먼저 탄다.
+- 매도 추적은 `StrategyPositions` 장부가 있는 자동매수 포지션을 우선 처리한다. Slot별 `OpenQuantity`만큼만 STOP/TARGET 판단을 하고, 장부가 없는 보유 종목은 기존 보유/중복매수 정책을 따른다.
 - 보유 종목이 자동매수 편입 대상이 되면 `중복매수 OFF`에서는 제외하고, `중복매수 ON`에서는 다음 전략 처리로 넘긴다.
 - 사용자가 임의로 보유 종목을 특정 전략 룰에 태우는 작업은 이후 수동 편입 기능으로 분리한다.
 

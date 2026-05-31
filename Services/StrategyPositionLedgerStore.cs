@@ -61,7 +61,8 @@ namespace TradingDashboard.Services
         {
             if (entry.Quantity <= 0)
                 entry.Quantity = existing.Quantity;
-            if (entry.OpenQuantity <= 0)
+            if (entry.OpenQuantity <= 0 &&
+                !string.Equals(entry.Status, "CLOSED", StringComparison.OrdinalIgnoreCase))
                 entry.OpenQuantity = existing.OpenQuantity;
             if (entry.AveragePrice <= 0)
                 entry.AveragePrice = existing.AveragePrice;

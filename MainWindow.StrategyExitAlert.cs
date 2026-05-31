@@ -25,6 +25,9 @@ namespace TradingDashboard
             if (!TryResolveStrategyHolding(stock.Code, out KiwoomHolding holding))
                 return;
 
+            if (ProcessStrategyPositionExitAlerts(stock, holding, execution))
+                return;
+
             if (IsManualBuyStopAssistTarget(stock, holding))
             {
                 if (!TryGetManualBuyStopAnchor(stock, out ManualBuyStopAnchor anchor))
@@ -75,6 +78,48 @@ namespace TradingDashboard
             _ = TrySendStrategyExitAlertAsync(stock, check, orderMode);
         }
 
+        private bool ProcessStrategyPositionExitAlerts(
+            WatchStockItem stock,
+            KiwoomHolding holding,
+            StrategyExecutionSettings execution)
+        {
+            var positions = _strategyPositionLedgerByKey.Values
+                .Where(entry => string.Equals(entry.Code, NormalizeStockCode(stock.Code), StringComparison.Ordinal) &&
+                    string.Equals(entry.Source, "AUTO", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(entry.Status, "OPEN", StringComparison.OrdinalIgnoreCase) &&
+                    entry.OpenQuantity > 0)
+                .ToList();
+
+            if (positions.Count == 0)
+                return false;
+
+            foreach (StrategyPositionLedgerEntry position in positions)
+            {
+                StrategyExitCheck check = EvaluatePositionExitCheck(stock, position);
+                if (!check.HasExitSignal)
+                    continue;
+
+                if (execution.AllowsLiveBuy)
+                    _ = TrySubmitStrategyLiveSellAsync(stock, holding, check);
+
+                string key = BuildStrategyExitAlertKey(stock, check);
+                if (!_strategyExitAlertLoggedKeys.Add(key))
+                    continue;
+
+                string orderMode = execution.LiveBuyEnabled
+                    ? "LIVE ORDERS ON / strategy-position sell handoff pending"
+                    : "LIVE ORDERS OFF / strategy-position alert only";
+
+                AppendReadyLog(
+                    $"STRATEGY EXIT SIGNAL: {stock.Code} {stock.Name} / {check.SlotTag} / {check.Reason} / " +
+                    $"price {check.CurrentPrice:N0} / entry {check.AverageBuyPrice:N0} / qty {check.Quantity:N0} / pnl {check.ProfitRate:0.##}% / {orderMode}");
+
+                _ = TrySendStrategyExitAlertAsync(stock, check, orderMode);
+            }
+
+            return true;
+        }
+
         private async Task TrySubmitStrategyLiveSellAsync(
             WatchStockItem stock,
             KiwoomHolding holding,
@@ -113,7 +158,7 @@ namespace TradingDashboard
                     key,
                     "SELL",
                     stock,
-                    string.Empty,
+                    check.SlotTag,
                     check.Reason,
                     guard.Quantity,
                     guard.ReferencePrice,
@@ -165,13 +210,14 @@ namespace TradingDashboard
                     AppendLog(
                         $"LIVE SELL AUDIT: {stock.Code} {stock.Name} / {check.Reason} / " +
                         $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
+                    ApplyStrategyPositionSellFill(check, filled);
                     SaveStrategyOrderJournal(
                         BuildStrategyLiveSellOrderKey(stock, check),
                         "SELL",
                         stock,
-                        string.Empty,
+                        check.SlotTag,
                         check.Reason,
-                        0,
+                        filled,
                         0,
                         0,
                         orderResult,
@@ -207,9 +253,10 @@ namespace TradingDashboard
             long orderableQuantity = holding.OrderableQuantity > 0
                 ? holding.OrderableQuantity
                 : holding.HoldingQuantity;
+            long decisionQuantity = check.Quantity > 0 ? check.Quantity : orderableQuantity;
             long quantity = string.Equals(check.Reason, "TARGET1", StringComparison.OrdinalIgnoreCase)
-                ? Math.Max(1, orderableQuantity / 2)
-                : orderableQuantity;
+                ? Math.Max(1, Math.Min(decisionQuantity, orderableQuantity))
+                : Math.Min(decisionQuantity, orderableQuantity);
             if (quantity <= 0)
                 return StrategyLiveSellGuardResult.Blocked("sellable quantity missing");
             if (check.CurrentPrice <= 0)
@@ -242,13 +289,66 @@ namespace TradingDashboard
             if (currentPrice <= 0 || averageBuyPrice <= 0)
                 return StrategyExitCheck.None(currentPrice, averageBuyPrice);
 
-            decimal profitRate = (currentPrice - averageBuyPrice) / (decimal)averageBuyPrice * 100m;
-            if (profitRate <= StrategyStopLossRate)
-                return StrategyExitCheck.Signal("STOP", currentPrice, averageBuyPrice, profitRate);
-            if (profitRate >= StrategyFirstTargetRate)
-                return StrategyExitCheck.Signal("TARGET1", currentPrice, averageBuyPrice, profitRate);
+            StrategyExitCheck check = EvaluateExitDecision(currentPrice, averageBuyPrice, 0, string.Empty, string.Empty);
+            if (check.HasExitSignal)
+                return check;
 
-            return StrategyExitCheck.None(currentPrice, averageBuyPrice, profitRate);
+            return StrategyExitCheck.None(currentPrice, averageBuyPrice, CalculateProfitRate(currentPrice, averageBuyPrice));
+        }
+
+        private static StrategyExitCheck EvaluatePositionExitCheck(WatchStockItem stock, StrategyPositionLedgerEntry position)
+        {
+            long currentPrice = ResolveStrategySignalPrice(stock);
+            return EvaluateExitDecision(
+                currentPrice,
+                position.AveragePrice,
+                position.OpenQuantity,
+                position.Key,
+                position.SlotTag);
+        }
+
+        private static StrategyExitCheck EvaluateExitDecision(
+            long currentPrice,
+            long entryPrice,
+            long quantity,
+            string positionKey,
+            string slotTag)
+        {
+            if (currentPrice <= 0 || entryPrice <= 0)
+                return StrategyExitCheck.None(currentPrice, entryPrice);
+
+            decimal profitRate = CalculateProfitRate(currentPrice, entryPrice);
+            if (profitRate <= StrategyStopLossRate)
+                return StrategyExitCheck.Signal("STOP", currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity);
+            if (profitRate >= StrategyFirstTargetRate)
+            {
+                long targetQuantity = quantity > 1 ? Math.Max(1, quantity / 2) : quantity;
+                return StrategyExitCheck.Signal("TARGET1", currentPrice, entryPrice, profitRate, positionKey, slotTag, targetQuantity);
+            }
+
+            return StrategyExitCheck.None(currentPrice, entryPrice, profitRate);
+        }
+
+        private void ApplyStrategyPositionSellFill(StrategyExitCheck check, long filledQuantity)
+        {
+            if (filledQuantity <= 0 ||
+                string.IsNullOrWhiteSpace(check.PositionKey) ||
+                !_strategyPositionLedgerByKey.TryGetValue(check.PositionKey, out StrategyPositionLedgerEntry? position))
+                return;
+
+            long sold = Math.Min(filledQuantity, Math.Max(0, position.OpenQuantity));
+            position.OpenQuantity = Math.Max(0, position.OpenQuantity - sold);
+            if (position.OpenQuantity <= 0)
+                position.Status = "CLOSED";
+
+            string fillMemo = position.OpenQuantity <= 0
+                ? check.Reason
+                : $"{check.Reason} PARTIAL {sold:N0}";
+            position.Memo = string.IsNullOrWhiteSpace(position.Memo)
+                ? fillMemo
+                : $"{position.Memo} / {fillMemo}";
+            _strategyPositionLedgerStore.UpsertToday(position);
+            _strategyPositionLedgerByKey[position.Key] = position;
         }
 
         private bool IsManualBuyStopAssistTarget(WatchStockItem stock, KiwoomHolding holding)
@@ -418,12 +518,14 @@ namespace TradingDashboard
 
         private string BuildStrategyExitAlertKey(WatchStockItem stock, StrategyExitCheck check)
         {
-            return $"{NormalizeStockCode(stock.Code)}|EXIT|{check.Reason}|{DateTime.Today:yyyyMMdd}";
+            string owner = string.IsNullOrWhiteSpace(check.PositionKey) ? check.SlotTag : check.PositionKey;
+            return $"{NormalizeStockCode(stock.Code)}|EXIT|{owner}|{check.Reason}|{DateTime.Today:yyyyMMdd}";
         }
 
         private string BuildStrategyLiveSellOrderKey(WatchStockItem stock, StrategyExitCheck check)
         {
-            return $"{NormalizeStockCode(stock.Code)}|LIVE_SELL|{check.Reason}|{DateTime.Today:yyyyMMdd}";
+            string owner = string.IsNullOrWhiteSpace(check.PositionKey) ? check.SlotTag : check.PositionKey;
+            return $"{NormalizeStockCode(stock.Code)}|LIVE_SELL|{owner}|{check.Reason}|{DateTime.Today:yyyyMMdd}";
         }
 
         private bool HasStrategyLiveSellOrderToday(WatchStockItem stock, StrategyExitCheck check)
@@ -459,6 +561,7 @@ namespace TradingDashboard
                 $"<b>STRATEGY EXIT SIGNAL</b> {name} ({code})",
                 $"reason: {reason}",
                 $"price: {check.CurrentPrice:N0} / avg: {check.AverageBuyPrice:N0}",
+                $"slot: {WebUtility.HtmlEncode(check.SlotTag)} / qty: {check.Quantity:N0}",
                 $"pnl: {check.ProfitRate:0.##}%",
                 $"mode: {mode}"
             });
@@ -469,13 +572,23 @@ namespace TradingDashboard
             string Reason,
             long CurrentPrice,
             long AverageBuyPrice,
-            decimal ProfitRate)
+            decimal ProfitRate,
+            string PositionKey,
+            string SlotTag,
+            long Quantity)
         {
-            public static StrategyExitCheck Signal(string reason, long currentPrice, long averageBuyPrice, decimal profitRate) =>
-                new(true, reason, currentPrice, averageBuyPrice, profitRate);
+            public static StrategyExitCheck Signal(
+                string reason,
+                long currentPrice,
+                long averageBuyPrice,
+                decimal profitRate,
+                string positionKey = "",
+                string slotTag = "",
+                long quantity = 0) =>
+                new(true, reason, currentPrice, averageBuyPrice, profitRate, positionKey, slotTag, quantity);
 
             public static StrategyExitCheck None(long currentPrice, long averageBuyPrice, decimal profitRate = 0) =>
-                new(false, string.Empty, currentPrice, averageBuyPrice, profitRate);
+                new(false, string.Empty, currentPrice, averageBuyPrice, profitRate, string.Empty, string.Empty, 0);
         }
 
         private readonly record struct StrategyLiveSellGuardResult(

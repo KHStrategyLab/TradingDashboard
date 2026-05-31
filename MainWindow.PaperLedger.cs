@@ -108,23 +108,23 @@ namespace TradingDashboard
             if (!string.Equals(entry.Status, "OPEN", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            string exitReason = string.Empty;
-            if (entry.ProfitRate <= StrategyStopLossRate)
-                exitReason = "STOP";
-            else if (entry.ProfitRate >= StrategyFirstTargetRate)
-                exitReason = "TARGET1";
-
-            if (string.IsNullOrWhiteSpace(exitReason))
+            StrategyExitCheck decision = EvaluateExitDecision(
+                entry.CurrentPrice,
+                entry.EntryPrice,
+                entry.Quantity,
+                entry.Key,
+                entry.SlotTag);
+            if (!decision.HasExitSignal)
                 return;
 
             entry.Status = "CLOSED";
             entry.ExitTime = now;
             entry.Reason = string.IsNullOrWhiteSpace(entry.Reason)
-                ? exitReason
-                : $"{entry.Reason} / {exitReason}";
-            SavePaperTradeMark(entry, exitReason, now, exitReason);
+                ? decision.Reason
+                : $"{entry.Reason} / {decision.Reason}";
+            SavePaperTradeMark(entry, decision.Reason, now, decision.Reason);
             AppendReadyLog(
-                $"PAPER {exitReason} MARKED: {entry.Code} {entry.Name} / {entry.SlotTag} / " +
+                $"PAPER {decision.Reason} MARKED: {entry.Code} {entry.Name} / {entry.SlotTag} / " +
                 $"entry {entry.EntryPrice:N0} / exit {entry.CurrentPrice:N0} / pnl {entry.ProfitLoss:N0} ({entry.ProfitRate:0.##}%)");
         }
 
