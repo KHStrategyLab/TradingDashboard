@@ -926,6 +926,7 @@ namespace TradingDashboard
         private async Task PreloadStrategyMinuteDataForStocksAsync(IReadOnlyList<WatchStockItem> stocks, CancellationToken cancellationToken, bool force)
         {
             int completed = 0;
+            int failed = 0;
             AppendLog($"strategy minute auto preload continuous run started: {stocks.Count}stocks");
 
             foreach (WatchStockItem stock in stocks)
@@ -978,15 +979,29 @@ namespace TradingDashboard
                 }
 
                 await PreloadStrategyMinuteDataForStockAsync(stock, key);
-                completed++;
-                UpdateStrategyControlBoard();
-                AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {FormatStrategyMinuteReadiness(stock)}");
+                if (IsStrategyMinuteDataReady(stock))
+                {
+                    _strategyMinutePreloadCompletedKeys.Add(key);
+                    SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(stock, market);
+                    completed++;
+                    UpdateStrategyControlBoard();
+                    AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
+                }
+                else
+                {
+                    failed++;
+                    UpdateStrategyControlBoard();
+                    AppendLog($"strategy minute auto preload stock failed: {failed:N0}failed / {completed:N0}/{stocks.Count:N0}ready / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
+                }
             }
 
             _strategyMinuteAutoPreloadStarted = false;
             UpdateStrategyMinutePreloadControlLock();
             UpdateStrategyControlBoard();
-            AppendReadyLog($"strategy minute auto preload ALL READY TO USE: {completed:N0}/{stocks.Count:N0}stocks");
+            if (completed >= stocks.Count)
+                AppendReadyLog($"strategy minute auto preload ALL READY TO USE: {completed:N0}/{stocks.Count:N0}stocks");
+            else
+                AppendLog($"strategy minute auto preload finished with failures: ready {completed:N0}/{stocks.Count:N0} / failed {failed:N0}");
         }
 
         private async Task WaitForStrategyMinutePreloadToFinishAsync(string key, CancellationToken cancellationToken)

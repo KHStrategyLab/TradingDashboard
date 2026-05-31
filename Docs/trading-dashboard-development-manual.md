@@ -149,6 +149,7 @@
 - 0B 실시간 틱은 `StrategyMinuteCacheService.ApplyRealtimeTick(...)`으로 전략 장부의 현재봉을 갱신한다.
 - 0B 거래량은 누적거래량 `13`의 직전값 차분을 우선하고, 차분을 만들 수 없을 때 체결량 `15`를 보조로 사용한다.
 - 0B 연결은 숫자 장부 갱신까지만 담당하며, 매수신호나 주문을 직접 만들지 않는다.
+- 자동 분봉 프리로드는 `IsStrategyMinuteDataReady(stock)` 확인 후에만 completed/stock done으로 집계한다. 실패 종목은 failed 로그로 남기고 ALL READY 로그에 포함하지 않는다.
 - 테스트 매매는 `Engine Start ON + Live Orders OFF + Paper Trading ON` 조합으로 사용한다. 분봉 장부 READY 전에는 Paper BUY 로그도 내지 않는다.
 - 봉마감 확정봉 입력구는 `ApplyClosedBar(...)`로 준비되어 있다.
 
