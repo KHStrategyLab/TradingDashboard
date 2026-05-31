@@ -194,6 +194,17 @@ Paper Trading:
 - 2단계 Paper P/L은 0B 현재가가 들어올 때 `OPEN` Paper 포지션의 현재가, 평가손익, 손익률만 갱신한다. 실제 잔고 수량/평균가/총평가에는 반영하지 않는다.
 - 3단계 Paper EXIT는 `STOP -1.5%` 또는 `TARGET1 +3.0%` 도달 시 그 순간 현재가를 가상 청산가로 찍고 `CLOSED` 상태로 저장한다. 실제 매도 주문은 없다.
 
+2026-06-01 최종 점검 체크포인트:
+
+- SOR 시장가 헬퍼/API는 남기지 않는다. 최종 검색에서 예전 SOR 시장가 헬퍼명이 보이면 제거 대상이다.
+- SOR/NXT 실주문은 현재가 기준 tick offset 지정가만 허용한다.
+- SOR/NXT 시장가, `price=0`, tick offset 없이 만든 임의 지정가는 `KiwoomTradingClient.ValidateOrderRequest(...)`에서 차단한다.
+- `Engine Start` 시 필수 분봉 장부가 READY가 아니면 프리로드를 강제 실행하고, READY 전에는 Paper/Live 매수 판단을 내지 않는다.
+- `RUN STATE`, `MINUTE READY`, `WAIT DATA`, `RUNNING` 표시는 분봉 장부 준비 상태와 감시 상태를 나눠 보여준다.
+- 자동 프리로드는 실제 READY 확인 후에만 `completed`와 `stock done`을 올린다. 실패 종목은 `failed`로 남기고 `ALL READY TO USE`에 포함하지 않는다.
+- `겹침 매수 ON`에서는 같은 종목의 다른 Slot 신호를 막지 않는다. 같은 종목+같은 Slot의 당일 재진입만 막는다.
+- 런타임 장부 `Storage/StrategyMinuteSeeds`, `Storage/StrategyAnchors`, `Storage/StrategyOrderJournal`, `Storage/StrategyPositions`, `Storage/PaperPositions`는 GitHub 백업 대상이 아니다.
+
 전략별 기억값은 공통 장부에 넣지 않는다.
 
 예:
