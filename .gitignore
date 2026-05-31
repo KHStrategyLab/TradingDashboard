@@ -20,6 +20,7 @@ Storage/StrategyMinuteSeeds/
 Storage/StrategyAnchors/
 Storage/StrategyOrderJournal/
 Storage/StrategyPositions/
+Storage/ManualPositions/
 Storage/PaperPositions/
 Storage/PaperTradeMarks/
 !Config/local.settings.example.json

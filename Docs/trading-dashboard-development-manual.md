@@ -184,6 +184,8 @@
 - 대상은 자동 전략 꼬리표가 없는 보유 종목이다.
 - 수동 보유 종목은 `ka10076` 체결 조회의 매수 체결시간(`ord_tm`)으로 매수 5분봉을 찾고, 그 5분봉 저가를 기본 손절선으로 잡는다.
 - 5분봉 MA5 붕괴 조건은 보조 손절 신호로 사용한다.
+- 수동 포지션은 `Storage/ManualPositions/{yyyyMMdd}.json`에 별도 장부로 둔다. Balance 새로고침 때 자동 전략 장부가 없는 보유 종목을 `OPEN`으로 맞추고, 선택 종목은 `Manual In`/`Manual Out` 버튼으로 자동손절 편입/제외한다.
+- `Manual Out` 상태는 `MANUAL OFF` 태그로 표시하고 자동손절기가 건드리지 않는다. 앵커가 아직 없으면 `MANUAL WAIT`, 앵커가 준비되면 `MANUAL STOP`으로 표시한다.
 - `Live Orders OFF`에서는 알림/로그만 남기고, `Live Orders ON`에서만 실제 매도 handoff를 허용한다.
 
 Paper Trading:
@@ -206,7 +208,7 @@ Paper Trading:
 - `RUN STATE`, `MINUTE READY`, `WAIT DATA`, `RUNNING` 표시는 분봉 장부 준비 상태와 감시 상태를 나눠 보여준다.
 - 자동 프리로드는 실제 READY 확인 후에만 `completed`와 `stock done`을 올린다. 실패 종목은 `failed`로 남기고 `ALL READY TO USE`에 포함하지 않는다.
 - `겹침 매수 ON`에서는 같은 종목의 다른 Slot 신호를 막지 않는다. 같은 종목+같은 Slot의 당일 재진입만 막는다.
-- 런타임 장부 `Storage/StrategyMinuteSeeds`, `Storage/StrategyAnchors`, `Storage/StrategyOrderJournal`, `Storage/StrategyPositions`, `Storage/PaperPositions`, `Storage/PaperTradeMarks`는 GitHub 백업 대상이 아니다.
+- 런타임 장부 `Storage/StrategyMinuteSeeds`, `Storage/StrategyAnchors`, `Storage/StrategyOrderJournal`, `Storage/StrategyPositions`, `Storage/ManualPositions`, `Storage/PaperPositions`, `Storage/PaperTradeMarks`는 GitHub 백업 대상이 아니다.
 
 전략별 기억값은 공통 장부에 넣지 않는다.
 

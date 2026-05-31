@@ -3304,7 +3304,8 @@
                                               AlternatingRowBackground="#181818"
                                               HorizontalGridLinesBrush="{StaticResource LineSoftBrush}"
                                               RowHeaderWidth="0"
-                                              FontSize="11">
+                                              FontSize="11"
+                                              SelectionChanged="BalanceHoldingsDataGrid_SelectionChanged">
                                         <DataGrid.ColumnHeaderStyle>
                                             <Style TargetType="{x:Type DataGridColumnHeader}">
                                                 <Setter Property="Background" Value="#202020"/>
@@ -3353,7 +3354,8 @@
                                                   AlternatingRowBackground="#181818"
                                                   HorizontalGridLinesBrush="{StaticResource LineSoftBrush}"
                                                   RowHeaderWidth="0"
-                                                  FontSize="11">
+                                                  FontSize="11"
+                                                  SelectionChanged="BalanceHoldingsDataGrid_SelectionChanged">
                                             <DataGrid.ColumnHeaderStyle>
                                                 <Style TargetType="{x:Type DataGridColumnHeader}">
                                                     <Setter Property="Background" Value="#202020"/>
@@ -3487,13 +3489,30 @@
                                                TextWrapping="Wrap"/>
                                 </Border>
 
-                                <Button x:Name="BalanceRefreshButton"
-                                        Grid.Column="1"
-                                        Content="Refresh"
-                                        Width="72"
-                                        Height="26"
-                                        Style="{StaticResource ToolbarButtonStyle}"
-                                        Click="BalanceRefreshButton_Click"/>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <Button x:Name="ManualPositionIncludeButton"
+                                            Content="Manual In"
+                                            Width="78"
+                                            Height="26"
+                                            Margin="0,0,6,0"
+                                            Style="{StaticResource ToolbarButtonStyle}"
+                                            Click="ManualPositionIncludeButton_Click"/>
+                                    <Button x:Name="ManualPositionExcludeButton"
+                                            Content="Manual Out"
+                                            Width="82"
+                                            Height="26"
+                                            Margin="0,0,6,0"
+                                            Style="{StaticResource ToolbarButtonStyle}"
+                                            Click="ManualPositionExcludeButton_Click"/>
+                                    <Button x:Name="BalanceRefreshButton"
+                                            Content="Refresh"
+                                            Width="72"
+                                            Height="26"
+                                            Style="{StaticResource ToolbarButtonStyle}"
+                                            Click="BalanceRefreshButton_Click"/>
+                                </StackPanel>
                             </Grid>
                         </Grid>
                     </TabItem>

@@ -47,6 +47,7 @@ namespace TradingDashboard
         private readonly StrategyAnchorStore _strategyAnchorStore = new();
         private readonly StrategyOrderJournalStore _strategyOrderJournalStore = new();
         private readonly StrategyPositionLedgerStore _strategyPositionLedgerStore = new();
+        private readonly ManualPositionLedgerStore _manualPositionLedgerStore = new();
         private readonly PaperPositionLedgerStore _paperPositionLedgerStore = new();
         private readonly PaperTradeMarkStore _paperTradeMarkStore = new();
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
@@ -86,6 +87,7 @@ namespace TradingDashboard
         private readonly Dictionary<string, DateTime> _strategyLiveOrderRetryAfterByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DateTime> _strategyLiveOrderBlockedLogAfterByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, StrategyPositionLedgerEntry> _strategyPositionLedgerByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ManualPositionLedgerEntry> _manualPositionLedgerByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ManualBuyStopAnchor> _manualBuyStopAnchorsByCode = new(StringComparer.Ordinal);
         private readonly HashSet<string> _manualBuyStopAnchorLoadingCodes = new(StringComparer.Ordinal);
         private readonly object _strategyLiveOrderLock = new();
@@ -206,6 +208,7 @@ namespace TradingDashboard
             _tradingCostCalculator = new TradingCostCalculator(_config.TradingCosts);
             LoadStrategyOrderJournal();
             LoadStrategyPositionLedger();
+            LoadManualPositionLedger();
             LoadPaperPositionLedger();
             LoadWatchlistCache();
             WatchListBox.ItemsSource = _watchStocks;

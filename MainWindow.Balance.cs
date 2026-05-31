@@ -14,6 +14,7 @@ namespace TradingDashboard
         private CancellationTokenSource? _balanceRequestCts;
         private Point? _balanceGridDragStart;
         private double _balanceGridDragStartOffset;
+        private bool _balanceGridSelectionSyncing;
 
         private async void BalanceRefreshButton_Click(object sender, RoutedEventArgs e)
         {
@@ -100,6 +101,7 @@ namespace TradingDashboard
                     .GetEvaluationBalanceAsync(KiwoomTradingConstants.MarketKrx, cancellationToken)
                     .ConfigureAwait(true);
 
+                SyncManualPositionLedger(snapshot.Holdings);
                 _balanceHoldings.Clear();
                 foreach (KiwoomHolding holding in snapshot.Holdings.OrderByDescending(x => Math.Abs(x.EvaluationAmount)))
                     _balanceHoldings.Add(DecorateHoldingPositionTag(holding));

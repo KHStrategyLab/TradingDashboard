@@ -211,6 +211,7 @@ namespace TradingDashboard
                         $"LIVE SELL AUDIT: {stock.Code} {stock.Name} / {check.Reason} / " +
                         $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
                     ApplyStrategyPositionSellFill(check, filled);
+                    ApplyManualPositionSellFill(check, filled);
                     SaveStrategyOrderJournal(
                         BuildStrategyLiveSellOrderKey(stock, check),
                         "SELL",
@@ -355,7 +356,8 @@ namespace TradingDashboard
         {
             return IsManualBuyStopAssistEnabled() &&
                 holding.HoldingQuantity > 0 &&
-                !HasAutomaticStrategyPositionToday(stock.Code);
+                !HasAutomaticStrategyPositionToday(stock.Code) &&
+                IsManualPositionAssistOpen(stock.Code);
         }
 
         private bool IsManualBuyStopAssistEnabled() =>
@@ -366,6 +368,16 @@ namespace TradingDashboard
             string code = NormalizeStockCode(stock.Code);
             if (_manualBuyStopAnchorsByCode.TryGetValue(code, out anchor))
                 return true;
+
+            if (TryResolveManualPosition(code, out ManualPositionLedgerEntry manualPosition) &&
+                manualPosition.Entry5MinuteLow > 0)
+            {
+                DateTime entryBarTime = ParseLedgerTime(manualPosition.Entry5MinuteTime);
+                DateTime fillTime = ParseLedgerTime(manualPosition.FillTime);
+                anchor = new ManualBuyStopAnchor(code, entryBarTime, manualPosition.Entry5MinuteLow, fillTime, DateTime.Now);
+                _manualBuyStopAnchorsByCode[code] = anchor;
+                return true;
+            }
 
             if (_manualBuyStopAnchorLoadingCodes.Add(code))
                 _ = TryLoadManualBuyStopAnchorAsync(stock);
@@ -402,6 +414,7 @@ namespace TradingDashboard
 
                 var anchor = new ManualBuyStopAnchor(code, entryBar.BucketTime, entryBar.Low, fillTime, DateTime.Now);
                 _manualBuyStopAnchorsByCode[code] = anchor;
+                ApplyManualPositionAnchor(stock, anchor);
                 Dispatcher.Invoke(() => AppendLog($"manual buy stop anchor set: {stock.Code} {stock.Name} / fill {fillTime:HH:mm:ss} / 5m {entryBar.BucketTime:HH:mm} / low {entryBar.Low:N0}"));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -438,6 +451,30 @@ namespace TradingDashboard
             return new DateTime(today.Year, today.Month, today.Day, hour, minute, second);
         }
 
+        private static DateTime ParseLedgerTime(string value)
+        {
+            string digits = new([.. (value ?? string.Empty).Where(char.IsDigit)]);
+            if (digits.Length >= 14 &&
+                int.TryParse(digits[..4], out int year) &&
+                int.TryParse(digits.Substring(4, 2), out int month) &&
+                int.TryParse(digits.Substring(6, 2), out int day) &&
+                int.TryParse(digits.Substring(8, 2), out int hour) &&
+                int.TryParse(digits.Substring(10, 2), out int minute) &&
+                int.TryParse(digits.Substring(12, 2), out int second))
+            {
+                try
+                {
+                    return new DateTime(year, month, day, hour, minute, second);
+                }
+                catch
+                {
+                    return DateTime.MinValue;
+                }
+            }
+
+            return ParseFillTime(value ?? string.Empty);
+        }
+
         private StrategyExitCheck EvaluateManualBuyStopAssistExitCheck(WatchStockItem stock, ManualBuyStopAnchor anchor)
         {
             long currentPrice = ResolveStrategySignalPrice(stock);
@@ -453,7 +490,15 @@ namespace TradingDashboard
             string reason = entryLowBreak
                 ? "MANUAL_STOP_ENTRY_LOW"
                 : "MANUAL_STOP_5M_MA5";
-            return StrategyExitCheck.Signal(reason, currentPrice, anchor.EntryLow, CalculateProfitRate(currentPrice, anchor.EntryLow));
+            long quantity = 0;
+            string positionKey = string.Empty;
+            if (TryResolveManualPosition(stock.Code, out ManualPositionLedgerEntry manualPosition))
+            {
+                quantity = manualPosition.OpenQuantity;
+                positionKey = manualPosition.Key;
+            }
+
+            return StrategyExitCheck.Signal(reason, currentPrice, anchor.EntryLow, CalculateProfitRate(currentPrice, anchor.EntryLow), positionKey, "MANUAL", quantity);
         }
 
         private static bool IsManualBuyStopMa5Breakdown(StrategyMinuteFrameSnapshot frame)

@@ -87,9 +87,7 @@ namespace TradingDashboard
             if (autoTags.Count > 0)
                 return $"AUTO {string.Join(",", autoTags)}";
 
-            return IsManualBuyStopAssistEnabled()
-                ? "MANUAL STOP"
-                : "MANUAL";
+            return ResolveManualPositionTag(code);
         }
 
         private bool HasAutomaticStrategyPositionToday(string code) =>
