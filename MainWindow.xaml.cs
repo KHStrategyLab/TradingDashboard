@@ -45,6 +45,7 @@ namespace TradingDashboard
         private readonly StrategyMinuteCacheService _strategyMinuteCacheService = new();
         private readonly StrategyMinuteSeedFileStore _strategyMinuteSeedFileStore = new();
         private readonly StrategyAnchorStore _strategyAnchorStore = new();
+        private readonly StrategyOrderJournalStore _strategyOrderJournalStore = new();
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
         private readonly Queue<LogLineEntry> _logLines = new();
@@ -78,6 +79,8 @@ namespace TradingDashboard
         private readonly HashSet<string> _strategyLiveBuyOrderKeys = new(StringComparer.Ordinal);
         private readonly HashSet<string> _strategyExitAlertLoggedKeys = new(StringComparer.Ordinal);
         private readonly HashSet<string> _strategyLiveSellOrderKeys = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, DateTime> _strategyLiveOrderRetryAfterByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, DateTime> _strategyLiveOrderBlockedLogAfterByKey = new(StringComparer.Ordinal);
         private readonly object _strategyLiveOrderLock = new();
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
@@ -194,6 +197,7 @@ namespace TradingDashboard
             _tradingClient = new KiwoomTradingClient(_config.Kiwoom, _kiwoomConditionService.GetAccessTokenAsync);
             _tradingClient.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _tradingCostCalculator = new TradingCostCalculator(_config.TradingCosts);
+            LoadStrategyOrderJournal();
             LoadWatchlistCache();
             WatchListBox.ItemsSource = _watchStocks;
             RecentWatchListBox.ItemsSource = _recentViewedStocks;

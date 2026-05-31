@@ -54,10 +54,13 @@ namespace TradingDashboard
             CancellationToken cancellationToken = default)
         {
             string key = BuildStrategyLiveSellOrderKey(stock, check);
+            if (IsStrategyLiveOrderInCooldown(key))
+                return;
+
             StrategyLiveSellGuardResult guard = EvaluateLiveSellRiskGuard(stock, holding, check);
             if (!guard.Allowed)
             {
-                Dispatcher.Invoke(() => AppendLog($"LIVE SELL BLOCKED: {stock.Code} {stock.Name} / {check.Reason} / {guard.Reason}"));
+                LogStrategyLiveOrderBlockedOnce(key, $"LIVE SELL BLOCKED: {stock.Code} {stock.Name} / {check.Reason} / {guard.Reason}");
                 return;
             }
 
@@ -74,7 +77,21 @@ namespace TradingDashboard
 
                 KiwoomOrderResult orderResult = await _tradingClient.SellAsync(request, cancellationToken).ConfigureAwait(false);
                 if (!orderResult.Success)
+                {
                     ReleaseStrategyLiveSellOrderKey(key);
+                    SetStrategyLiveOrderCooldown(key, TimeSpan.FromSeconds(60));
+                }
+                SaveStrategyOrderJournal(
+                    key,
+                    "SELL",
+                    stock,
+                    string.Empty,
+                    check.Reason,
+                    guard.Quantity,
+                    guard.ReferencePrice,
+                    request.OrderPrice,
+                    orderResult,
+                    "SUBMITTED");
 
                 Dispatcher.Invoke(() =>
                 {
@@ -90,6 +107,7 @@ namespace TradingDashboard
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                SetStrategyLiveOrderCooldown(key, TimeSpan.FromSeconds(180));
                 Dispatcher.Invoke(() => AppendLog($"LIVE SELL ERROR: {stock.Code} {stock.Name} / {check.Reason} / {ex.GetType().Name}: {ex.Message}"));
             }
         }
@@ -118,6 +136,18 @@ namespace TradingDashboard
                 {
                     AppendLog(
                         $"LIVE SELL AUDIT: {stock.Code} {stock.Name} / {check.Reason} / " +
+                        $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
+                    SaveStrategyOrderJournal(
+                        BuildStrategyLiveSellOrderKey(stock, check),
+                        "SELL",
+                        stock,
+                        string.Empty,
+                        check.Reason,
+                        0,
+                        0,
+                        0,
+                        orderResult,
+                        "AUDITED",
                         $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
                     _ = RefreshBalanceAsync("strategy live sell");
                 });

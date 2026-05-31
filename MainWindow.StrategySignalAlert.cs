@@ -12,6 +12,21 @@ namespace TradingDashboard
 {
     public partial class MainWindow
     {
+        private void LoadStrategyOrderJournal()
+        {
+            IReadOnlyList<StrategyOrderJournalEntry> entries = _strategyOrderJournalStore.LoadToday();
+            lock (_strategyLiveOrderLock)
+            {
+                foreach (StrategyOrderJournalEntry entry in entries.Where(x => x.Success && !string.IsNullOrWhiteSpace(x.Key)))
+                {
+                    if (string.Equals(entry.Side, "BUY", StringComparison.OrdinalIgnoreCase))
+                        _strategyLiveBuyOrderKeys.Add(entry.Key);
+                    else if (string.Equals(entry.Side, "SELL", StringComparison.OrdinalIgnoreCase))
+                        _strategyLiveSellOrderKeys.Add(entry.Key);
+                }
+            }
+        }
+
         private void ProcessStrategySignalAlerts(
             WatchStockItem stock,
             IReadOnlyList<StrategyEvaluationResult> results)
@@ -51,10 +66,13 @@ namespace TradingDashboard
             CancellationToken cancellationToken = default)
         {
             string key = BuildStrategyLiveBuyOrderKey(stock, result);
+            if (IsStrategyLiveOrderInCooldown(key))
+                return;
+
             StrategyLiveBuyGuardResult guard = EvaluateLiveBuyRiskGuard(stock, result, execution);
             if (!guard.Allowed)
             {
-                Dispatcher.Invoke(() => AppendLog($"LIVE BUY BLOCKED: {stock.Code} {stock.Name} / {result.Name} / {guard.Reason}"));
+                LogStrategyLiveOrderBlockedOnce(key, $"LIVE BUY BLOCKED: {stock.Code} {stock.Name} / {result.Name} / {guard.Reason}");
                 return;
             }
 
@@ -71,7 +89,21 @@ namespace TradingDashboard
 
                 KiwoomOrderResult orderResult = await _tradingClient.BuyAsync(request, cancellationToken).ConfigureAwait(false);
                 if (!orderResult.Success)
+                {
                     ReleaseStrategyLiveBuyOrderKey(key);
+                    SetStrategyLiveOrderCooldown(key, TimeSpan.FromSeconds(60));
+                }
+                SaveStrategyOrderJournal(
+                    key,
+                    "BUY",
+                    stock,
+                    result.SlotId.ToString(),
+                    result.Name,
+                    guard.Quantity,
+                    guard.ReferencePrice,
+                    request.OrderPrice,
+                    orderResult,
+                    "SUBMITTED");
 
                 Dispatcher.Invoke(() =>
                 {
@@ -87,6 +119,7 @@ namespace TradingDashboard
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                SetStrategyLiveOrderCooldown(key, TimeSpan.FromSeconds(180));
                 Dispatcher.Invoke(() => AppendLog($"LIVE BUY ERROR: {stock.Code} {stock.Name} / {result.Name} / {ex.GetType().Name}: {ex.Message}"));
             }
         }
@@ -115,6 +148,18 @@ namespace TradingDashboard
                 {
                     AppendLog(
                         $"LIVE BUY AUDIT: {stock.Code} {stock.Name} / {result.Name} / " +
+                        $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
+                    SaveStrategyOrderJournal(
+                        BuildStrategyLiveBuyOrderKey(stock, result),
+                        "BUY",
+                        stock,
+                        result.SlotId.ToString(),
+                        result.Name,
+                        0,
+                        0,
+                        0,
+                        orderResult,
+                        "AUDITED",
                         $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
                     _ = RefreshBalanceAsync("strategy live buy");
                 });
@@ -236,6 +281,72 @@ namespace TradingDashboard
         {
             lock (_strategyLiveOrderLock)
                 _strategyLiveBuyOrderKeys.Remove(key);
+        }
+
+        private bool IsStrategyLiveOrderInCooldown(string key)
+        {
+            lock (_strategyLiveOrderLock)
+            {
+                return _strategyLiveOrderRetryAfterByKey.TryGetValue(key, out DateTime retryAfter) &&
+                    DateTime.Now < retryAfter;
+            }
+        }
+
+        private void SetStrategyLiveOrderCooldown(string key, TimeSpan duration)
+        {
+            if (string.IsNullOrWhiteSpace(key) || duration <= TimeSpan.Zero)
+                return;
+
+            lock (_strategyLiveOrderLock)
+                _strategyLiveOrderRetryAfterByKey[key] = DateTime.Now + duration;
+        }
+
+        private void LogStrategyLiveOrderBlockedOnce(string key, string message)
+        {
+            string logKey = $"{key}|{message}";
+            lock (_strategyLiveOrderLock)
+            {
+                if (_strategyLiveOrderBlockedLogAfterByKey.TryGetValue(logKey, out DateTime nextLogAt) &&
+                    DateTime.Now < nextLogAt)
+                    return;
+
+                _strategyLiveOrderBlockedLogAfterByKey[logKey] = DateTime.Now + TimeSpan.FromSeconds(60);
+            }
+
+            Dispatcher.Invoke(() => AppendLog(message));
+        }
+
+        private void SaveStrategyOrderJournal(
+            string key,
+            string side,
+            WatchStockItem stock,
+            string slotId,
+            string reason,
+            long quantity,
+            long referencePrice,
+            long orderPrice,
+            KiwoomOrderResult orderResult,
+            string stage,
+            string memo = "")
+        {
+            _strategyOrderJournalStore.UpsertToday(new StrategyOrderJournalEntry
+            {
+                Key = key,
+                Side = side,
+                Code = NormalizeStockCode(stock.Code),
+                Name = stock.Name,
+                SlotId = slotId,
+                Reason = reason,
+                Quantity = quantity,
+                ReferencePrice = referencePrice,
+                OrderPrice = orderPrice,
+                OrderNo = orderResult.OrderNo,
+                ReturnCode = orderResult.ReturnCode,
+                ReturnMessage = orderResult.ReturnMessage,
+                Success = orderResult.Success,
+                Stage = stage,
+                Memo = memo
+            });
         }
 
         private static long ResolveStrategySignalPrice(WatchStockItem stock)

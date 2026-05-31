@@ -17,6 +17,8 @@ Config/watchlist_stock_cache.json
 Config/stock_master_cache.json
 Config/chart_candle_cache.json
 Storage/StrategyMinuteSeeds/
+Storage/StrategyAnchors/
+Storage/StrategyOrderJournal/
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
