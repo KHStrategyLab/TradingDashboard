@@ -351,9 +351,28 @@ namespace TradingDashboard
 
             string name = ReadAnyRealtime(item, "302", "stk_nm", "stkNm", "name", "jm_name");
             if (isAdd)
-                _ = ApplyConditionRealtimeAddAsync(code, name);
+            {
+                if (TryMarkConditionRealtimeEnterPending(code))
+                    _ = ApplyConditionRealtimeAddAsync(code, name);
+            }
             else
                 ApplyConditionRealtimeRemove(code);
+        }
+
+        private bool TryMarkConditionRealtimeEnterPending(string code)
+        {
+            lock (_conditionRealtimeEnterPendingLock)
+            {
+                return _conditionRealtimeEnterPendingCodes.Add(code);
+            }
+        }
+
+        private void ClearConditionRealtimeEnterPending(string code)
+        {
+            lock (_conditionRealtimeEnterPendingLock)
+            {
+                _conditionRealtimeEnterPendingCodes.Remove(code);
+            }
         }
 
         private async Task ApplyConditionRealtimeAddAsync(string code, string name)
@@ -363,53 +382,67 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(code))
                     return;
 
-                (bool handledFromCache, WatchStockItem? addedFromCache) = await ApplyConditionRealtimeAddFromCacheAsync(code, name);
-                if (handledFromCache)
+                CancellationToken ct = _realtimeCts?.Token ?? CancellationToken.None;
+                await _conditionRealtimeEnterSemaphore.WaitAsync(ct);
+                try
                 {
-                    if (addedFromCache != null)
+                    (bool handledFromCache, WatchStockItem? addedFromCache) = await ApplyConditionRealtimeAddFromCacheAsync(code, name);
+                    if (handledFromCache)
                     {
-                        await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(addedFromCache, _realtimeCts?.Token ?? CancellationToken.None);
-                        await TrySendLateNewsAlertAsync(addedFromCache, _realtimeCts?.Token ?? CancellationToken.None);
+                        if (addedFromCache != null)
+                        {
+                            await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(addedFromCache, ct);
+                            await TrySendLateNewsAlertAsync(addedFromCache, ct);
+                        }
+
+                        await RegisterRealtime0BForCurrentWatchlistAsync();
+                        return;
+                    }
+
+                    WatchStockItem stock = await _kiwoomConditionService.GetConditionStockAsync(code, name, ct);
+                    // 장중 실시간 편입은 별도 일봉 게이트 재조회 없이 NEW로만 넘긴다.
+                    // 기준봉 통과 여부는 초기 조건식 조회 또는 오늘 캐시에 있는 게이트 결과만 신뢰한다.
+                    stock.IsIntradayPreCandidate = true;
+                    Dispatcher.Invoke(() => AppendLog($"condition enter NEW: {stock.Name} ({stock.Code})"));
+
+                    bool added = false;
+
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        if (_watchStockByCode.ContainsKey(code))
+                            return;
+
+                        if (string.IsNullOrWhiteSpace(stock.Code))
+                            stock.Code = code;
+                        if (string.IsNullOrWhiteSpace(stock.Name))
+                            stock.Name = string.IsNullOrWhiteSpace(name) ? code : name;
+                        if (string.IsNullOrWhiteSpace(stock.ChangeRateText))
+                            stock.ChangeRateText = "-";
+                        if (string.IsNullOrWhiteSpace(stock.VolumeText))
+                            stock.VolumeText = "-";
+
+                        stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
+                        ApplyWatchlistCacheToStock(stock);
+                        ApplyWatchlistTradeValueEstimate(stock);
+                        _watchStocks.Insert(0, stock);
+                        _watchStockByCode[stock.Code] = stock;
+                        ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
+                        AppendLog($"condition enter: {stock.Name} ({stock.Code})");
+                        added = true;
+                    });
+
+                    if (added)
+                    {
+                        await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(stock, ct);
+                        await TrySendLateNewsAlertAsync(stock, ct);
                     }
 
                     await RegisterRealtime0BForCurrentWatchlistAsync();
-                    return;
                 }
-
-                WatchStockItem stock = await _kiwoomConditionService.GetConditionStockAsync(code, name, _realtimeCts?.Token ?? CancellationToken.None);
-                bool added = false;
-
-                await Dispatcher.InvokeAsync(() =>
+                finally
                 {
-                    if (_watchStockByCode.ContainsKey(code))
-                        return;
-
-                    if (string.IsNullOrWhiteSpace(stock.Code))
-                        stock.Code = code;
-                    if (string.IsNullOrWhiteSpace(stock.Name))
-                        stock.Name = string.IsNullOrWhiteSpace(name) ? code : name;
-                    if (string.IsNullOrWhiteSpace(stock.ChangeRateText))
-                        stock.ChangeRateText = "-";
-                    if (string.IsNullOrWhiteSpace(stock.VolumeText))
-                        stock.VolumeText = "-";
-
-                    stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
-                    ApplyWatchlistCacheToStock(stock);
-                    _watchStocks.Insert(0, stock);
-                    _watchStockByCode[stock.Code] = stock;
-                    SaveDailyWatchlistSnapshot(_watchStocks);
-                    ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
-                    AppendLog($"condition enter: {stock.Name} ({stock.Code})");
-                    added = true;
-                });
-
-                if (added)
-                {
-                    await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(stock, _realtimeCts?.Token ?? CancellationToken.None);
-                    await TrySendLateNewsAlertAsync(stock, _realtimeCts?.Token ?? CancellationToken.None);
+                    _conditionRealtimeEnterSemaphore.Release();
                 }
-
-                await RegisterRealtime0BForCurrentWatchlistAsync();
             }
             catch (OperationCanceledException)
             {
@@ -418,6 +451,10 @@ namespace TradingDashboard
             catch (Exception ex)
             {
                 Dispatcher.Invoke(() => AppendLog($"condition enter handling error: {code} / {ex.Message}"));
+            }
+            finally
+            {
+                ClearConditionRealtimeEnterPending(code);
             }
         }
 
@@ -430,6 +467,11 @@ namespace TradingDashboard
 
                 WatchlistStockCacheEntry? entry = GetWatchlistMemoryCache(code);
                 if (entry == null)
+                    return (false, (WatchStockItem?)null);
+
+                string today = DateTime.Now.ToString("yyyyMMdd");
+                if (!entry.GateBaseCandleFound ||
+                    !string.Equals(entry.GateBaseCandleCheckedDate, today, StringComparison.Ordinal))
                     return (false, (WatchStockItem?)null);
 
                 var stock = new WatchStockItem
@@ -450,14 +492,20 @@ namespace TradingDashboard
                     AuditInfo = entry.AuditInfo,
                     StockState = entry.StockState,
                     SectorName = entry.SectorName,
+                    GateBaseCandleFound = entry.GateBaseCandleFound,
+                    GateBaseCandleOffset = entry.GateBaseCandleOffset,
+                    GateBaseCandleDate = entry.GateBaseCandleDate,
+                    GateBaseCandleMarket = entry.GateBaseCandleMarket,
+                    GateBaseCandleChangeRate = entry.GateBaseCandleChangeRate,
+                    GateBaseCandleTradeValue = entry.GateBaseCandleTradeValue,
                     SupportsNxt = entry.SupportsNxt
                 };
 
                 ApplyWatchlistCacheToStock(stock);
+                ApplyWatchlistTradeValueEstimate(stock);
                 stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
                 _watchStocks.Insert(0, stock);
                 _watchStockByCode[stock.Code] = stock;
-                SaveDailyWatchlistSnapshot(_watchStocks);
                 ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
                 AppendLog($"condition re-enter(cache): {stock.Name} ({stock.Code})");
                 return (true, stock);
@@ -481,7 +529,6 @@ namespace TradingDashboard
                 if (existing != null)
                     _watchStocks.Remove(existing);
 
-                SaveDailyWatchlistSnapshot(_watchStocks);
                 AppendLog($"condition exit: {code}");
             });
 
@@ -811,7 +858,10 @@ namespace TradingDashboard
 
                 stock.CurrentPrice = price > 0 ? price : stock.CurrentPrice;
                 if (volume > 0)
+                {
                     stock.VolumeText = volume.ToString("N0");
+                    stock.TodayTradeValue = (long)Math.Min(long.MaxValue, stock.CurrentPrice * (double)volume);
+                }
 
                 long change = code == _selectedStockCode && stock.CurrentPrice > 0 && _krxPrevClosePrice > 0
                     ? stock.CurrentPrice - _krxPrevClosePrice

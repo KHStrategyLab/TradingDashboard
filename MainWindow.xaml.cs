@@ -27,6 +27,9 @@ namespace TradingDashboard
         private const int MaxWatchlistMemoryCacheCount = 200;
         private const int DuplicateStockSelectionBlockMs = 200;
         private const string KrxPreviousCloseBasePriceSource = "KRX_PREV_CLOSE";
+        private const int GateBaseCandleLookbackCount = 10;
+        private const long GateBaseCandleMinTradeValue = 100_000_000_000;
+        private const double GateBaseCandleMinChangeRate = 20.0;
         private const double ChartRightPadding = 25d;
         private readonly AppConfig _config;
         private readonly NaverNewsService _newsService;
@@ -63,6 +66,9 @@ namespace TradingDashboard
         private readonly Dictionary<string, long> _lastTickPriceByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
+        private readonly SemaphoreSlim _conditionRealtimeEnterSemaphore = new(1, 1);
+        private readonly HashSet<string> _conditionRealtimeEnterPendingCodes = new(StringComparer.Ordinal);
+        private readonly object _conditionRealtimeEnterPendingLock = new();
         private readonly HashSet<string> _lateNewsSentStockCodes = new(StringComparer.Ordinal);
         private readonly object _lateNewsLock = new();
         private readonly DateTime _lateNewsAppStartedAt = DateTime.Now;
@@ -331,13 +337,23 @@ namespace TradingDashboard
 
                 SetStartupLoading(
                     true,
-                    "Applying condition result...",
+                    "Checking base-candle gate...",
                     $"{stocks.Count} stocks received from condition 01",
+                    "Discarding stocks without a recent 100B/20% candle");
+                List<WatchStockItem> gatedStocks = await FilterWatchlistByBaseCandleGateAsync(stocks);
+
+                SetStartupLoading(
+                    true,
+                    "Applying gated watchlist...",
+                    $"{gatedStocks.Count} of {stocks.Count} stocks passed",
                     "Saving cache and preparing realtime registration");
-                ApplyWatchList(stocks);
-                SaveDailyWatchlistSnapshot(stocks);
-                AppendLog($"condition result {stocks.Count}items applied");
-                ScheduleWatchlistBasePriceRefresh(stocks, TimeSpan.FromSeconds(30));
+                ApplyWatchList(gatedStocks);
+                if (gatedStocks.Count > 0)
+                    SaveDailyWatchlistSnapshot(gatedStocks);
+                else
+                    AppendLog("watchlist cache save skipped: gate pass 0items");
+                AppendLog($"condition result {stocks.Count}items / gate pass {gatedStocks.Count}items applied");
+                ScheduleWatchlistBasePriceRefresh(gatedStocks, TimeSpan.FromSeconds(30));
                 _ = StartRealtimeTradeAsync();
             }
             catch (Exception ex)
@@ -351,6 +367,139 @@ namespace TradingDashboard
                 if (!ApplyCachedWatchListFallback("condition query failed"))
                     MessageBox.Show($"Kiwoom condition(01) query error: {ex.Message}");
             }
+        }
+
+        private async Task<List<WatchStockItem>> FilterWatchlistByBaseCandleGateAsync(IEnumerable<WatchStockItem> stocks, CancellationToken cancellationToken = default)
+        {
+            var result = new List<WatchStockItem>();
+            foreach (WatchStockItem stock in stocks.Where(s => !string.IsNullOrWhiteSpace(s.Code)))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await TryApplyBaseCandleGateAsync(stock, cancellationToken))
+                {
+                    result.Add(stock);
+                    continue;
+                }
+
+                AppendLog($"gate discard: {stock.Name} ({stock.Code}) / no 10-day 100B+20% candle");
+            }
+
+            return result;
+        }
+
+        private async Task<bool> TryApplyBaseCandleGateAsync(WatchStockItem stock, CancellationToken cancellationToken = default)
+        {
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stock.Code);
+            if (cache is { GateBaseCandleFound: true } &&
+                string.Equals(cache.GateBaseCandleCheckedDate, today, StringComparison.Ordinal))
+            {
+                ApplyGateCacheToStock(stock, cache);
+                return true;
+            }
+
+            BaseCandleGateResult? gate = await FindBaseCandleGateAsync(stock.Code, useNxtMarket: false, market: "KRX", cancellationToken);
+            if (gate == null && stock.SupportsNxt && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow()))
+                gate = await FindBaseCandleGateAsync(stock.Code, useNxtMarket: true, market: "NXT", cancellationToken);
+
+            ApplyGateResultToStock(stock, gate);
+            if (gate == null)
+                return false;
+
+            WatchlistStockCacheEntry entry = UpsertWatchlistMemoryCache(
+                stock.Code,
+                string.IsNullOrWhiteSpace(stock.Name) ? stock.Code : stock.Name,
+                stock.SupportsNxt,
+                stock.MarketTypeCode,
+                stock.MarketName,
+                stock.ProgramMarketType,
+                stock.CurrentPrice,
+                stock.ChangeAmount,
+                stock.ChangeRateText,
+                stock.VolumeText,
+                stock.LastPrice,
+                stock.OrderWarning,
+                stock.AuditInfo,
+                stock.StockState,
+                stock.SectorName,
+                saveFile: false);
+            ApplyGateStockToCache(stock, entry, today);
+            return stock.GateBaseCandleFound;
+        }
+
+        private async Task<BaseCandleGateResult?> FindBaseCandleGateAsync(string code, bool useNxtMarket, string market, CancellationToken cancellationToken)
+        {
+            List<DailyCandle> candles = await _kiwoomConditionService
+                .GetDailyCandlesAsync(code, useNxtMarket, GateBaseCandleLookbackCount + 1, cancellationToken)
+                .ConfigureAwait(false);
+            if (candles.Count < 2)
+                return null;
+
+            List<DailyCandle> ordered = [.. candles.OrderBy(c => c.Date)];
+            int start = Math.Max(1, ordered.Count - GateBaseCandleLookbackCount);
+            for (int i = ordered.Count - 1; i >= start; i--)
+            {
+                DailyCandle candle = ordered[i];
+                DailyCandle prev = ordered[i - 1];
+                if (prev.Close <= 0)
+                    continue;
+
+                double changeRate = (candle.Close - prev.Close) / prev.Close * 100.0;
+                long estimatedTradingValue = EstimateTradingValue(candle);
+                long tradingValue = Math.Max(candle.TradingValue, estimatedTradingValue);
+                if (tradingValue < GateBaseCandleMinTradeValue || changeRate < GateBaseCandleMinChangeRate)
+                    continue;
+
+                int offset = ordered.Count - 1 - i;
+                return new BaseCandleGateResult(
+                    offset,
+                    candle.Date,
+                    market,
+                    changeRate,
+                    tradingValue);
+            }
+
+            return null;
+        }
+
+        private static long EstimateTradingValue(DailyCandle candle)
+        {
+            if (candle.Close <= 0 || candle.Volume <= 0)
+                return 0;
+
+            return (long)Math.Min(long.MaxValue, candle.Close * (double)candle.Volume);
+        }
+
+        private static void ApplyGateResultToStock(WatchStockItem stock, BaseCandleGateResult? gate)
+        {
+            stock.GateBaseCandleFound = gate != null;
+            stock.GateBaseCandleOffset = gate?.Offset ?? -1;
+            stock.GateBaseCandleDate = gate?.Date ?? string.Empty;
+            stock.GateBaseCandleMarket = gate?.Market ?? string.Empty;
+            stock.GateBaseCandleChangeRate = gate?.ChangeRate ?? 0;
+            stock.GateBaseCandleTradeValue = gate?.TradeValue ?? 0;
+        }
+
+        private static void ApplyGateCacheToStock(WatchStockItem stock, WatchlistStockCacheEntry entry)
+        {
+            stock.GateBaseCandleFound = entry.GateBaseCandleFound;
+            if (entry.GateBaseCandleOffset >= 0)
+                stock.GateBaseCandleOffset = entry.GateBaseCandleOffset;
+            stock.GateBaseCandleDate = entry.GateBaseCandleDate;
+            stock.GateBaseCandleMarket = entry.GateBaseCandleMarket;
+            stock.GateBaseCandleChangeRate = entry.GateBaseCandleChangeRate;
+            stock.GateBaseCandleTradeValue = entry.GateBaseCandleTradeValue;
+        }
+
+        private static void ApplyGateStockToCache(WatchStockItem stock, WatchlistStockCacheEntry entry, string checkedDate)
+        {
+            entry.GateBaseCandleFound = stock.GateBaseCandleFound;
+            entry.GateBaseCandleOffset = stock.GateBaseCandleOffset;
+            entry.GateBaseCandleDate = stock.GateBaseCandleDate;
+            entry.GateBaseCandleMarket = stock.GateBaseCandleMarket;
+            entry.GateBaseCandleChangeRate = stock.GateBaseCandleChangeRate;
+            entry.GateBaseCandleTradeValue = stock.GateBaseCandleTradeValue;
+            entry.GateBaseCandleCheckedDate = checkedDate;
         }
 
         private bool ApplyCachedWatchListFallback(string reason)
@@ -383,13 +532,18 @@ namespace TradingDashboard
         {
             string today = DateTime.Now.ToString("yyyyMMdd");
             List<WatchlistStockCacheEntry> entries = [.. _watchlistMemoryCache.Values
-                .Where(e => !string.IsNullOrWhiteSpace(e.Code) && (e.SnapshotDate == today || e.LastSeenConditionDate == today))
+                .Where(e => !string.IsNullOrWhiteSpace(e.Code) &&
+                    e.GateBaseCandleFound &&
+                    string.Equals(e.GateBaseCandleCheckedDate, today, StringComparison.Ordinal) &&
+                    (e.SnapshotDate == today || e.LastSeenConditionDate == today))
                 .OrderBy(e => e.LastUsedAt)];
 
             if (entries.Count == 0)
             {
                 entries = [.. _watchlistMemoryCache.Values
-                    .Where(e => !string.IsNullOrWhiteSpace(e.Code))
+                    .Where(e => !string.IsNullOrWhiteSpace(e.Code) &&
+                        e.GateBaseCandleFound &&
+                        string.Equals(e.GateBaseCandleCheckedDate, today, StringComparison.Ordinal))
                     .OrderBy(e => e.LastUsedAt)
                     .Take(10)];
             }
@@ -411,6 +565,12 @@ namespace TradingDashboard
                     AuditInfo = e.AuditInfo,
                     StockState = e.StockState,
                     SectorName = e.SectorName,
+                    GateBaseCandleFound = e.GateBaseCandleFound,
+                    GateBaseCandleOffset = e.GateBaseCandleOffset,
+                    GateBaseCandleDate = e.GateBaseCandleDate,
+                    GateBaseCandleMarket = e.GateBaseCandleMarket,
+                    GateBaseCandleChangeRate = e.GateBaseCandleChangeRate,
+                    GateBaseCandleTradeValue = e.GateBaseCandleTradeValue,
                     SupportsNxt = e.SupportsNxt
                 })];
         }
@@ -423,11 +583,13 @@ namespace TradingDashboard
                 .Select(group => group.First())
                 .ToList();
 
-            if (cleanStocks.Count == 0)
-                return;
-
             _watchStocks.Clear();
             _watchStockByCode.Clear();
+            if (cleanStocks.Count == 0)
+            {
+                AppendLog("left list refreshed: 0items");
+                return;
+            }
 
             foreach (WatchStockItem stock in cleanStocks)
             {
@@ -437,8 +599,10 @@ namespace TradingDashboard
                     stock.ChangeRateText = "-";
                 if (string.IsNullOrWhiteSpace(stock.VolumeText))
                     stock.VolumeText = "-";
+                ApplyWatchlistTradeValueEstimate(stock);
                 stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
                 ApplyWatchlistCacheToStock(stock);
+                ApplyWatchlistTradeValueEstimate(stock);
                 _watchStocks.Add(stock);
                 if (!string.IsNullOrWhiteSpace(stock.Code))
                     _watchStockByCode[stock.Code] = stock;
@@ -500,6 +664,7 @@ namespace TradingDashboard
                     if (!IsTrustedKrxBasePrice(entry, today))
                         ClearCachedBasePrice(entry);
 
+                    ApplyGateStockToCache(stock, entry, string.IsNullOrWhiteSpace(entry.GateBaseCandleCheckedDate) ? today : entry.GateBaseCandleCheckedDate);
                     entry.SnapshotDate = today;
                     entry.LastSeenConditionDate = today;
                     entry.Market = entry.SupportsNxt ? "KRX,NXT" : "KRX";
@@ -595,17 +760,7 @@ namespace TradingDashboard
             if (!changed)
                 return;
 
-            try
-            {
-                _watchlistCacheStore.Save(snapshotCodes
-                    .Where(code => _watchlistMemoryCache.ContainsKey(code))
-                    .Select(code => _watchlistMemoryCache[code]));
-                Dispatcher.Invoke(() => AppendLog("watchlist base-price cache refreshed"));
-            }
-            catch (Exception ex)
-            {
-                Dispatcher.Invoke(() => AppendLog($"watchlist base-price cache save error: {ex.Message}"));
-            }
+            Dispatcher.Invoke(() => AppendLog("watchlist base-price memory refreshed"));
         }
 
         private void ApplyWatchlistCacheToStock(WatchStockItem stock)
@@ -630,6 +785,7 @@ namespace TradingDashboard
                 stock.ChangeRateText = string.IsNullOrWhiteSpace(entry.ChangeRateText) ? stock.ChangeRateText : entry.ChangeRateText;
             if (string.IsNullOrWhiteSpace(stock.VolumeText) || stock.VolumeText == "-")
                 stock.VolumeText = string.IsNullOrWhiteSpace(entry.VolumeText) ? stock.VolumeText : entry.VolumeText;
+            ApplyWatchlistTradeValueEstimate(stock);
             if (stock.LastPrice <= 0)
                 stock.LastPrice = entry.LastPrice;
             if (string.IsNullOrWhiteSpace(stock.OrderWarning))
@@ -640,6 +796,11 @@ namespace TradingDashboard
                 stock.StockState = entry.StockState;
             if (string.IsNullOrWhiteSpace(stock.SectorName))
                 stock.SectorName = entry.SectorName;
+            if (entry.GateBaseCandleFound &&
+                string.Equals(entry.GateBaseCandleCheckedDate, DateTime.Now.ToString("yyyyMMdd"), StringComparison.Ordinal))
+            {
+                ApplyGateCacheToStock(stock, entry);
+            }
         }
 
         private WatchlistStockCacheEntry? GetWatchlistMemoryCache(string code)
@@ -649,6 +810,18 @@ namespace TradingDashboard
 
             entry.LastUsedAt = DateTime.Now;
             return entry;
+        }
+
+        private static void ApplyWatchlistTradeValueEstimate(WatchStockItem stock)
+        {
+            if (stock.TodayTradeValue > 0)
+                return;
+
+            long volume = ParseLongAbs(stock.VolumeText);
+            if (stock.CurrentPrice <= 0 || volume <= 0)
+                return;
+
+            stock.TodayTradeValue = (long)Math.Min(long.MaxValue, stock.CurrentPrice * (double)volume);
         }
 
         private static bool IsTrustedKrxBasePrice(WatchlistStockCacheEntry? entry, string date)
@@ -2101,7 +2274,12 @@ namespace TradingDashboard
             return 0;
         }
 
-
+        private sealed record BaseCandleGateResult(
+            int Offset,
+            string Date,
+            string Market,
+            double ChangeRate,
+            long TradeValue);
 
     }
 }

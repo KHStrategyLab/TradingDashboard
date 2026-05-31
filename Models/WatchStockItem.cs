@@ -7,12 +7,14 @@ namespace TradingDashboard.Models
 {
     public class WatchStockItem : INotifyPropertyChanged
     {
+        private const long TradeValueSignalThreshold = 20_000_000_000;
         private string _code = string.Empty;
         private string _name = string.Empty;
         private long _currentPrice;
         private long _changeAmount;
         private string _changeRateText = "-";
         private string _volumeText = "-";
+        private long _todayTradeValue;
         private string _marketTypeCode = string.Empty;
         private string _marketName = string.Empty;
         private string _programMarketType = string.Empty;
@@ -20,6 +22,13 @@ namespace TradingDashboard.Models
         private string _auditInfo = string.Empty;
         private string _stockState = string.Empty;
         private string _sectorName = string.Empty;
+        private bool _gateBaseCandleFound;
+        private int _gateBaseCandleOffset = -1;
+        private string _gateBaseCandleDate = string.Empty;
+        private string _gateBaseCandleMarket = string.Empty;
+        private double _gateBaseCandleChangeRate;
+        private long _gateBaseCandleTradeValue;
+        private bool _isIntradayPreCandidate;
         private long _lastPrice;
         private Brush _priceBrush = Brushes.White;
         private bool _supportsNxt;
@@ -69,6 +78,19 @@ namespace TradingDashboard.Models
         {
             get => _volumeText;
             set => SetField(ref _volumeText, NormalizeDash(value));
+        }
+
+        public long TodayTradeValue
+        {
+            get => _todayTradeValue;
+            set
+            {
+                if (SetField(ref _todayTradeValue, value))
+                {
+                    OnPropertyChanged(nameof(TodayTradeValueText));
+                    OnPropertyChanged(nameof(IsTodayTradeValueStrong));
+                }
+            }
         }
 
         public string MarketTypeCode
@@ -152,6 +174,85 @@ namespace TradingDashboard.Models
             }
         }
 
+        public bool GateBaseCandleFound
+        {
+            get => _gateBaseCandleFound;
+            set
+            {
+                if (SetField(ref _gateBaseCandleFound, value))
+                {
+                    OnPropertyChanged(nameof(GateBaseCandleBadgeText));
+                    OnPropertyChanged(nameof(GateBaseCandleDetailText));
+                }
+            }
+        }
+
+        public int GateBaseCandleOffset
+        {
+            get => _gateBaseCandleOffset;
+            set
+            {
+                if (SetField(ref _gateBaseCandleOffset, value))
+                {
+                    OnPropertyChanged(nameof(GateBaseCandleBadgeText));
+                    OnPropertyChanged(nameof(GateBaseCandleDetailText));
+                }
+            }
+        }
+
+        public string GateBaseCandleDate
+        {
+            get => _gateBaseCandleDate;
+            set
+            {
+                if (SetField(ref _gateBaseCandleDate, NormalizeText(value)))
+                    OnPropertyChanged(nameof(GateBaseCandleDetailText));
+            }
+        }
+
+        public string GateBaseCandleMarket
+        {
+            get => _gateBaseCandleMarket;
+            set
+            {
+                if (SetField(ref _gateBaseCandleMarket, NormalizeText(value)))
+                {
+                    OnPropertyChanged(nameof(GateBaseCandleBadgeText));
+                    OnPropertyChanged(nameof(GateBaseCandleDetailText));
+                }
+            }
+        }
+
+        public double GateBaseCandleChangeRate
+        {
+            get => _gateBaseCandleChangeRate;
+            set
+            {
+                if (SetField(ref _gateBaseCandleChangeRate, value))
+                    OnPropertyChanged(nameof(GateBaseCandleDetailText));
+            }
+        }
+
+        public long GateBaseCandleTradeValue
+        {
+            get => _gateBaseCandleTradeValue;
+            set
+            {
+                if (SetField(ref _gateBaseCandleTradeValue, value))
+                    OnPropertyChanged(nameof(GateBaseCandleDetailText));
+            }
+        }
+
+        public bool IsIntradayPreCandidate
+        {
+            get => _isIntradayPreCandidate;
+            set
+            {
+                if (SetField(ref _isIntradayPreCandidate, value))
+                    OnPropertyChanged(nameof(PreCandidateBadgeText));
+            }
+        }
+
         public long LastPrice
         {
             get => _lastPrice;
@@ -178,10 +279,39 @@ namespace TradingDashboard.Models
         public string ChangeAmountText => ChangeAmount == 0 ? "0" : ChangeAmount > 0 ? $"+{ChangeAmount:N0}" : $"{ChangeAmount:N0}";
         public string DirectionText => ChangeAmount > 0 ? "+" : ChangeAmount < 0 ? "-" : "";
         public string LastPriceText => LastPrice > 0 ? LastPrice.ToString("N0") : "-";
+        public string TodayTradeValueText => TodayTradeValue > 0 ? $"{TodayTradeValue / 100_000_000.0:0.#}억" : string.Empty;
+        public bool IsTodayTradeValueStrong => TodayTradeValue >= TradeValueSignalThreshold;
         public string MarketBadgeText => string.IsNullOrWhiteSpace(MarketName) ? MarketTypeCode : NormalizeMarketName(MarketName);
         public string OrderWarningBadgeText => FormatOrderWarning(OrderWarning);
         public string OrderWarningListBadgeText => NormalizeText(OrderWarning) == "5" ? "WARN" : OrderWarningBadgeText;
         public string AuditInfoBadgeText => FormatAuditInfo(AuditInfo);
+        public string GateBaseCandleBadgeText
+        {
+            get
+            {
+                if (!GateBaseCandleFound || GateBaseCandleOffset < 0)
+                    return string.Empty;
+
+                return $"D+{GateBaseCandleOffset}";
+            }
+        }
+
+        public string GateBaseCandleDetailText
+        {
+            get
+            {
+                if (!GateBaseCandleFound)
+                    return string.Empty;
+
+                string valueText = GateBaseCandleTradeValue >= 100_000_000
+                    ? $"{GateBaseCandleTradeValue / 100_000_000.0:0.#}억"
+                    : "-";
+                return $"{GateBaseCandleDate} {GateBaseCandleChangeRate:0.##}% {valueText}";
+            }
+        }
+
+        public string PreCandidateBadgeText => IsIntradayPreCandidate ? "NEW" : string.Empty;
+
         public string AlertListBadgeText => !string.IsNullOrWhiteSpace(OrderWarningListBadgeText)
             ? OrderWarningListBadgeText
             : AuditInfoBadgeText == "CAUTION" ? "CAUT" : AuditInfoBadgeText;

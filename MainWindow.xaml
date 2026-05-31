@@ -1186,6 +1186,8 @@
                                                  <ColumnDefinition Width="Auto"/>
                                                  <ColumnDefinition Width="Auto"/>
                                                  <ColumnDefinition Width="Auto"/>
+                                                 <ColumnDefinition Width="Auto"/>
+                                                 <ColumnDefinition Width="Auto"/>
                                              </Grid.ColumnDefinitions>
 
                                              <TextBlock Grid.Column="0"
@@ -1296,15 +1298,114 @@
                                                      </TextBlock.Style>
                                                  </TextBlock>
                                              </Border>
+
+                                             <Border Grid.Column="4"
+                                                     Margin="6,2,0,0"
+                                                     Padding="4,0"
+                                                     MinWidth="30"
+                                                     Height="14"
+                                                     CornerRadius="3"
+                                                     BorderBrush="{StaticResource PaletteSkyBlue}"
+                                                     BorderThickness="1"
+                                                     Background="#152A36"
+                                                     ToolTip="장중 신규 편입"
+                                                     VerticalAlignment="Center">
+                                                 <Border.Style>
+                                                     <Style TargetType="Border">
+                                                         <Setter Property="Visibility" Value="Visible"/>
+                                                         <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding PreCandidateBadgeText}" Value="">
+                                                                 <Setter Property="Visibility" Value="Collapsed"/>
+                                                             </DataTrigger>
+                                                         </Style.Triggers>
+                                                     </Style>
+                                                 </Border.Style>
+                                                 <TextBlock Text="{Binding PreCandidateBadgeText}"
+                                                            FontSize="8"
+                                                            FontWeight="Bold"
+                                                            Foreground="{StaticResource PaletteSkyBlue}"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            TextAlignment="Center"/>
+                                             </Border>
+
+                                             <Border Grid.Column="5"
+                                                     Margin="6,2,0,0"
+                                                     Padding="4,0"
+                                                     MinWidth="44"
+                                                     Height="14"
+                                                     CornerRadius="3"
+                                                     BorderBrush="{StaticResource UpBrush}"
+                                                     BorderThickness="1"
+                                                     Background="#351818"
+                                                     ToolTip="{Binding GateBaseCandleDetailText}"
+                                                     VerticalAlignment="Center">
+                                                 <Border.Style>
+                                                     <Style TargetType="Border">
+                                                         <Setter Property="Visibility" Value="Visible"/>
+                                                         <Setter Property="BorderBrush" Value="{StaticResource UpBrush}"/>
+                                                         <Setter Property="Background" Value="#351818"/>
+                                                         <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding GateBaseCandleBadgeText}" Value="">
+                                                                 <Setter Property="Visibility" Value="Collapsed"/>
+                                                             </DataTrigger>
+                                                             <DataTrigger Binding="{Binding GateBaseCandleOffset}" Value="0">
+                                                                 <Setter Property="BorderBrush" Value="{StaticResource PalettePink}"/>
+                                                                 <Setter Property="Background" Value="#4A161C"/>
+                                                             </DataTrigger>
+                                                         </Style.Triggers>
+                                                     </Style>
+                                                 </Border.Style>
+                                                 <TextBlock Text="{Binding GateBaseCandleBadgeText}"
+                                                            FontSize="8"
+                                                            FontWeight="Bold"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            TextAlignment="Center">
+                                                     <TextBlock.Style>
+                                                         <Style TargetType="TextBlock">
+                                                             <Setter Property="Foreground" Value="{StaticResource UpBrush}"/>
+                                                             <Style.Triggers>
+                                                                 <DataTrigger Binding="{Binding GateBaseCandleOffset}" Value="0">
+                                                                     <Setter Property="Foreground" Value="{StaticResource PalettePink}"/>
+                                                                 </DataTrigger>
+                                                             </Style.Triggers>
+                                                         </Style>
+                                                     </TextBlock.Style>
+                                                 </TextBlock>
+                                             </Border>
                                          </Grid>
 
-                                         <TextBlock Grid.Row="1"
-                                                    Grid.Column="0"
-                                                    Text="{Binding VolumeText}"
-                                                    FontSize="12"
-                                                    Foreground="#A0A0A0"
-                                                    Margin="0,3,0,0"
-                                                    TextTrimming="CharacterEllipsis"/>
+                                         <Grid Grid.Row="1"
+                                               Grid.Column="0"
+                                               Margin="0,3,0,0">
+                                             <Grid.ColumnDefinitions>
+                                                 <ColumnDefinition Width="*"/>
+                                                 <ColumnDefinition Width="Auto"/>
+                                             </Grid.ColumnDefinitions>
+                                             <TextBlock Grid.Column="0"
+                                                        Text="{Binding VolumeText}"
+                                                        FontSize="12"
+                                                        Foreground="#A0A0A0"
+                                                        TextTrimming="CharacterEllipsis"/>
+                                             <TextBlock Grid.Column="1"
+                                                        Text="{Binding TodayTradeValueText}"
+                                                        FontSize="12"
+                                                        FontWeight="Bold"
+                                                        Margin="8,0,0,0"
+                                                        TextAlignment="Right">
+                                                 <TextBlock.Style>
+                                                     <Style TargetType="TextBlock">
+                                                         <Setter Property="Foreground" Value="{StaticResource DownBrush}"/>
+                                                         <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding IsTodayTradeValueStrong}" Value="True">
+                                                                 <Setter Property="Foreground" Value="{StaticResource UpBrush}"/>
+                                                             </DataTrigger>
+                                                         </Style.Triggers>
+                                                     </Style>
+                                                 </TextBlock.Style>
+                                             </TextBlock>
+                                         </Grid>
 
                                          <TextBlock Grid.Row="0"
                                                     Grid.Column="1"
@@ -2017,6 +2118,55 @@
                                           Margin="0,10,0,0"
                                           VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
+                                    <Border BorderBrush="{StaticResource LineBrush}"
+                                            BorderThickness="1"
+                                            Background="{StaticResource BgInnerBrush}"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <TextBlock Text="전략 번호표 · 타이틀 / 주요 이평선"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="13"
+                                                       FontWeight="Bold"/>
+                                            <TextBlock Text="1. 조건00 MA 회복초입(기존 등록) · KRX 일봉 기준봉 / 10분 MA5·20·60 / 5분 20봉 신고가"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,7,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="2. SOR 15분 눌림 + 5분 돌파(주전략 원형) · 일봉 MA60 근처 / 15분 MA60 / 5분 20봉 신고가"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="3. SOR 10분 눌림 + 5분 돌파(중간형) · KRX 일봉 기준봉 / 10분 MA60 / 5분 20봉 신고가"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="4. SOR 10분 기준 + 3분 공격형(오늘 추가) · 10분 MA60 / 3분 20봉 신고가"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="5. 전일상한가 몸통 눌림 시가회복 · KRX 일봉 기준봉 / 5분 반등선 / 시가회복"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="6. 당일 1분 장대양봉 눌림(10순위 후보) · 1분 MA60 / 기준봉 중심값 / 1분 거래대금"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="7. 테마·공시·뉴스 보조 · 이평선 없음 / 재료 확인 전용 / 단독매수 없음"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
+
                                     <ToggleButton x:Name="StrategySlotBaseCandleChaseToggle"
                                                   Style="{StaticResource StrategySlotToggleStyle}"
                                                   Checked="StrategySlotToggle_Changed"

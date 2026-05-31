@@ -1218,6 +1218,22 @@ namespace TradingDashboard.Services
             return value < 1_000_000 ? value * 1000 : value;
         }
 
+        private static long NormalizeMillionWonToWon(long value)
+        {
+            if (value <= 0)
+                return 0;
+
+            return value > long.MaxValue / 1_000_000 ? long.MaxValue : value * 1_000_000;
+        }
+
+        private static long EstimateTradeValueWon(long price, long volume)
+        {
+            if (price <= 0 || volume <= 0)
+                return 0;
+
+            return (long)Math.Min(long.MaxValue, price * (double)volume);
+        }
+
         private static bool IsContinuation(string value)
         {
             return string.Equals(value, "Y", StringComparison.OrdinalIgnoreCase) ||
@@ -1579,6 +1595,9 @@ namespace TradingDashboard.Services
                 string itemName = ReadAnyDeep(root, "stk_nm", "stkNm", "name", "hname", "item_name");
             long price = ParseLongSafe(ReadAnyDeep(root, "cur_prc", "curPrc", "price", "now_prc"));
             long volume = ParseLongSafe(ReadAnyDeep(root, "trde_qty", "trdeQty", "acc_trde_qty", "acml_vol", "volume"));
+            long tradingValue = NormalizeMillionWonToWon(ParseLongSafe(ReadAnyDeep(root, "trde_prica", "trde_amt", "acc_trde_prica", "acc_trde_amt", "acml_tr_pbmn")));
+            if (tradingValue <= 0 && price != 0 && volume > 0)
+                tradingValue = EstimateTradeValueWon(Math.Abs(price), volume);
             long dayChange = ParseLongSafe(ReadAnyDeep(root, "pred_pre", "predPre", "change", "chg_val", "11"));
             long prev = ParseLongSafe(ReadAnyDeep(root, "base_prc", "basePrc", "yday_prc"));
             string rateText = ReadAnyDeep(root, "flu_rt", "fluRt", "chg_rt", "change_rate");
@@ -1604,6 +1623,7 @@ namespace TradingDashboard.Services
                     ChangeAmount = change,
                     ChangeRateText = rateText,
                     VolumeText = volume > 0 ? volume.ToString("N0") : "-",
+                    TodayTradeValue = tradingValue,
                     MarketTypeCode = marketInfo?.MarketTypeCode ?? string.Empty,
                     MarketName = marketInfo?.MarketName ?? string.Empty,
                     ProgramMarketType = marketInfo?.ProgramMarketType ?? string.Empty,
@@ -2057,6 +2077,7 @@ namespace TradingDashboard.Services
             long low = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "low_pric", "low", "stck_lwpr")));
             long close = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "clos_pric", "close", "stck_clpr", "cur_prc")));
             long volume = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "trde_qty", "cntg_vol", "volume", "acml_vol", "acc_trde_qty")));
+            long tradingValue = Math.Abs(ParseLongSafe(ReadAnyDeep(item, "trde_prica", "trde_amt", "acc_trde_prica", "acc_trde_amt", "acml_tr_pbmn")));
 
             if (close == 0 && item.ValueKind == JsonValueKind.Array)
             {
@@ -2070,10 +2091,15 @@ namespace TradingDashboard.Services
 
                 if (item.GetArrayLength() > 5)
                     volume = volume == 0 ? Math.Abs(ParseLongSafe(item[5].ToString())) : volume;
+                if (item.GetArrayLength() > 6)
+                    tradingValue = tradingValue == 0 ? Math.Abs(ParseLongSafe(item[6].ToString())) : tradingValue;
             }
 
             if (close <= 0 || string.IsNullOrWhiteSpace(date))
                 return null;
+
+            if (tradingValue <= 0 && volume > 0)
+                tradingValue = checked((long)Math.Min((double)long.MaxValue, close * (double)volume));
 
             return new DailyCandle
             {
@@ -2082,7 +2108,8 @@ namespace TradingDashboard.Services
                 High = high > 0 ? high : close,
                 Low = low > 0 ? low : close,
                 Close = close,
-                Volume = volume
+                Volume = volume,
+                TradingValue = tradingValue
             };
         }
 
