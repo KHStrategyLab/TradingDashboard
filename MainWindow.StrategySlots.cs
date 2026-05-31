@@ -283,7 +283,7 @@ namespace TradingDashboard
                 MinuteData = BuildStrategyMinuteDataStatus(stock),
                 MinuteSnapshots = BuildStrategyMinuteSnapshotSet(stock),
                 Market = _isNxtMarketMode ? "NXT" : "KRX",
-                IsOwned = IsStockOwned(stock)
+                IsOwned = IsStockOwned(stock) && !GetStrategyDuplicatePolicy().AllowAdditionalBuy
             };
 
             return _strategySlotRegistry.EvaluateEnabled(GetStrategySlotSettings(), context);

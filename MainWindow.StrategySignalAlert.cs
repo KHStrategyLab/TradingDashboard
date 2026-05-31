@@ -192,9 +192,10 @@ namespace TradingDashboard
                 return StrategyLiveBuyGuardResult.Blocked(marketReason);
             if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
                 return StrategyLiveBuyGuardResult.Blocked("stock missing");
-            if (IsStockOwned(stock))
+            bool allowAdditionalBuy = GetStrategyDuplicatePolicy().AllowAdditionalBuy;
+            if (IsStockOwned(stock) && !allowAdditionalBuy)
                 return StrategyLiveBuyGuardResult.Blocked("already owned");
-            if (HasStrategyLiveBuyOrderToday(stock))
+            if (HasStrategyLiveBuyOrderToday(stock, result, allowAdditionalBuy))
                 return StrategyLiveBuyGuardResult.Blocked("live buy already submitted today");
             if (!IsStrategyMinuteDataReady(stock))
                 return StrategyLiveBuyGuardResult.Blocked("minute ledger not ready");
@@ -259,8 +260,18 @@ namespace TradingDashboard
             return $"{NormalizeStockCode(stock.Code)}|{result.SlotId}|LIVE_BUY|{DateTime.Today:yyyyMMdd}";
         }
 
-        private bool HasStrategyLiveBuyOrderToday(WatchStockItem stock)
+        private bool HasStrategyLiveBuyOrderToday(
+            WatchStockItem stock,
+            StrategyEvaluationResult result,
+            bool allowAdditionalBuy)
         {
+            if (allowAdditionalBuy)
+            {
+                string exactKey = BuildStrategyLiveBuyOrderKey(stock, result);
+                lock (_strategyLiveOrderLock)
+                    return _strategyLiveBuyOrderKeys.Contains(exactKey);
+            }
+
             string prefix = $"{NormalizeStockCode(stock.Code)}|";
             string suffix = $"|LIVE_BUY|{DateTime.Today:yyyyMMdd}";
             lock (_strategyLiveOrderLock)
