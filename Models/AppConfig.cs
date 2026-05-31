@@ -9,6 +9,7 @@ namespace TradingDashboard.Models
         public KiwoomSettings Kiwoom { get; set; } = new KiwoomSettings();
         public TelegramSettings Telegram { get; set; } = new TelegramSettings();
         public DashboardSettings Dashboard { get; set; } = new DashboardSettings();
+        public StrategyMinutePreloadSettings StrategyMinutePreload { get; set; } = new StrategyMinutePreloadSettings();
         public LateNewsAlertSettings LateNewsAlert { get; set; } = new LateNewsAlertSettings();
         public TradingCostSettings TradingCosts { get; set; } = new TradingCostSettings();
     }
@@ -59,6 +60,11 @@ namespace TradingDashboard.Models
         public int OrderBookDepth { get; set; } = 10;
         public int RecentTradeCount { get; set; } = 10;
         public int RefreshIntervalMs { get; set; } = 500;
+    }
+
+    public class StrategyMinutePreloadSettings
+    {
+        public int IdleDelaySeconds { get; set; } = 180;
     }
 
     public class LateNewsAlertSettings

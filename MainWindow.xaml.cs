@@ -70,6 +70,8 @@ namespace TradingDashboard
         private readonly Dictionary<string, long> _lastStrategyMinuteCumulativeVolumeByKey = new(StringComparer.Ordinal);
         private readonly HashSet<string> _strategyMinutePreloadCompletedKeys = new(StringComparer.Ordinal);
         private readonly HashSet<string> _strategyMinutePreloadRunningKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _strategyMinuteAutoPreloadBatchKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _paperTradingPreviewLoggedKeys = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _conditionRealtimeEnterSemaphore = new(1, 1);
@@ -92,6 +94,7 @@ namespace TradingDashboard
         private long _chartCacheAccessSequence;
         private int _chartRenderVersion;
         private bool _initialChartFileCachePreloadStarted;
+        private bool _strategyMinuteAutoPreloadStarted;
         private string _lastAcceptedWatchSelectionKey = string.Empty;
         private DateTime _lastAcceptedWatchSelectionAt = DateTime.MinValue;
         private CancellationTokenSource? _stockSearchSuggestionCts;
@@ -138,6 +141,7 @@ namespace TradingDashboard
         private CancellationTokenSource? _selectedRequestCts;
         private CancellationTokenSource? _chartRequestCts;
         private CancellationTokenSource? _watchlistCacheRefreshCts;
+        private CancellationTokenSource? _strategyMinuteAutoPreloadCts;
         private static readonly string[] MarketStatusTypes = ["0s"];
         private static readonly string[] SellPriceKeys = ["41", "42", "43", "44", "45", "46", "47", "48", "49", "50"];
         private static readonly string[] SellQtyKeys = ["61", "62", "63", "64", "65", "66", "67", "68", "69", "70"];
@@ -153,6 +157,8 @@ namespace TradingDashboard
 
         public MainWindow()
         {
+            _config = LocalSettingsLoader.Load();
+
             InitializeComponent();
             InitializeStrategySlots();
 
@@ -165,7 +171,6 @@ namespace TradingDashboard
             _hogaCurrentPriceBorderBrush = (Brush)FindResource("PaletteSkyBlue");
             _hogaCurrentPriceBackgroundBrush = new SolidColorBrush(Color.FromRgb(0x0F, 0x32, 0x3E));
 
-            _config = LocalSettingsLoader.Load();
             _newsService = new NaverNewsService(_config.NaverNews);
             _newsService.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _disclosureService = new DartDisclosureService(_config.Dart);
@@ -367,6 +372,7 @@ namespace TradingDashboard
                 AppendLog($"condition result {stocks.Count}items / gate pass {gatedStocks.Count}items applied");
                 ScheduleWatchlistBasePriceRefresh(gatedStocks, TimeSpan.FromSeconds(30));
                 StartInitialChartFileCachePreload(gatedStocks);
+                StartStrategyMinuteAutoPreload(gatedStocks);
                 _ = StartRealtimeTradeAsync();
             }
             catch (Exception ex)
@@ -552,6 +558,7 @@ namespace TradingDashboard
             AppendLog($"{reason}, watchlist cache {cachedStocks.Count}items applied");
             ScheduleWatchlistBasePriceRefresh(cachedStocks, TimeSpan.FromSeconds(30));
             StartInitialChartFileCachePreload(cachedStocks);
+            StartStrategyMinuteAutoPreload(cachedStocks);
             _ = StartRealtimeTradeAsync();
             return true;
         }
@@ -2294,6 +2301,8 @@ namespace TradingDashboard
                 _chartRequestCts?.Dispose();
                 _watchlistCacheRefreshCts?.Cancel();
                 _watchlistCacheRefreshCts?.Dispose();
+                _strategyMinuteAutoPreloadCts?.Cancel();
+                _strategyMinuteAutoPreloadCts?.Dispose();
                 CancelStockSearchSuggestion();
                 _balanceRequestCts?.Cancel();
                 _balanceRequestCts?.Dispose();

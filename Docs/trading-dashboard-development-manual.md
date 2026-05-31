@@ -128,13 +128,19 @@
 
 - `LoadStrategyMinuteDataAsync(...)`는 1/3/5/10/15/30분봉을 받아 `StrategyMinuteCacheService`에 seed로 넣는 내부 로더다.
 - 1분봉은 향후 단기 전략/이평선 확인용으로 최소 300개를 seed로 받는다.
-- 전략실의 `분봉 프리로드` 스위치가 ON이면 선택 종목 기준으로 내부 로더를 자동 실행한다.
+- 전략실의 `분봉 프리로드` 스위치가 ON이면 조건식/캐시 감시목록 적용 후 idle 예약을 걸고, 사람이 종목을 하나씩 선택하지 않아도 감시목록 분봉 seed를 자동 로드한다.
+- idle 대기 시간은 전략실의 `대기시간` 입력칸 또는 `Config/local.settings.json`의 `StrategyMinutePreload.IdleDelaySeconds`로 조절한다. 기본값은 180초다.
+- `파일 저장` 스위치와 `대기시간` 입력칸은 `분봉 프리로드`를 켜기 전에 정한다.
+- `분봉 프리로드`가 ON이면 `대기시간` 입력칸과 `파일 저장` 스위치를 잠그고, `분봉 프리로드` 스위치는 중단용으로 남겨둔다.
+- idle이 끝나 프리로드가 시작되면 종목 사이에 추가 대기 없이 연속 실행한다. 새 조건 편입이나 스위치 변경이 들어오면 진행 중 배치를 끊고 새 idle 예약으로 다시 잡는다.
+- 장중 조건식 신규 편입 종목도 감시목록에 들어오면 idle 예약에 포함한다.
 - 전략실의 `파일 저장` 스위치는 seed 파일 저장 모드 표시용이다. 실제 `Storage/StrategyMinuteSeeds` 저장 구현은 다음 단계다.
 - `StrategyMinuteDataStatus`는 차트 메모리 캐시가 아니라 전략분봉 장부의 READY/개수 상태를 표시한다.
 - `StrategyMinuteSnapshotSet`은 전략 슬롯이 요청할 수 있는 분봉별 Snapshot 묶음이다.
 - 0B 실시간 틱은 `StrategyMinuteCacheService.ApplyRealtimeTick(...)`으로 전략 장부의 현재봉을 갱신한다.
 - 0B 거래량은 누적거래량 `13`의 직전값 차분을 우선하고, 차분을 만들 수 없을 때 체결량 `15`를 보조로 사용한다.
 - 0B 연결은 숫자 장부 갱신까지만 담당하며, 매수신호나 주문을 직접 만들지 않는다.
+- 테스트 매매는 `Engine Start ON + Live Orders OFF + Paper Trading ON` 조합으로 사용한다. 이 모드는 로그에 `PAPER TEST ARMED` / `PAPER BUY READY TO USE`를 남기고 실주문은 차단한다.
 - 봉마감 확정봉 입력구는 `ApplyClosedBar(...)`로 준비되어 있다.
 
 전략별 기억값은 공통 장부에 넣지 않는다.
@@ -1093,8 +1099,8 @@ NXT/KRX:
 - `Live Orders`가 ON이면 전략 신호를 기존 실전 주문 레이어로 넘긴다.
 - `Live Orders`가 OFF이면 `Engine Start`가 ON이어도 실주문은 내지 않고 알림/기록만 남긴다.
 - 현재 단계의 전략 슬롯/컨트롤 보드는 실주문 실행부 확정이 아니라 전략 진행 상태 표시판과 모의 실행 검증판으로 먼저 운용한다.
-- `Paper Trading`은 빨간 실행 영역 밖의 노란 독립 셀로 둔다. 아직 전략/주문/성과 추적 로직에는 연결하지 않는다.
-- `Paper Trading`은 단독 실행용 자리다. `Engine Start`가 ON이면 `Paper Trading` 셀은 꺼지고 비활성화된다.
+- `Paper Trading`은 빨간 실행 영역 밖의 노란 독립 셀로 둔다. `Live Orders`가 OFF일 때만 켤 수 있다.
+- `Paper Trading`은 `Engine Start ON + Live Orders OFF` 조합에서 테스트 매매 로그를 남기는 자리다. `Live Orders`가 ON이면 꺼지고 비활성화된다.
 - `Live Orders`를 끄면 알림만으로 신호 품질을 우선 판단한다.
 - `Engine Start` ON 상태에서는 `Live Orders` 여부와 상관없이 전략 슬롯과 전략실 키를 변경할 수 없다.
 - 이때 전략 슬롯/전략실 키를 누르면 기존 상태로 되돌리고 `띵띵` 경고 로그를 남긴다. 색상은 비활성색으로 흐리지 않는다.

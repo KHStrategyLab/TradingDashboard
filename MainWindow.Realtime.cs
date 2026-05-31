@@ -474,6 +474,7 @@ namespace TradingDashboard
                         _watchStocks.Insert(0, stock);
                         _watchStockByCode[stock.Code] = stock;
                         ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
+                        StartStrategyMinuteAutoPreload([stock]);
                         AppendLog($"condition enter: {stock.Name} ({stock.Code})");
                         added = true;
                     });
@@ -567,6 +568,7 @@ namespace TradingDashboard
                 _watchStocks.Insert(0, stock);
                 _watchStockByCode[stock.Code] = stock;
                 ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
+                StartStrategyMinuteAutoPreload([stock]);
                 AppendLog($"condition re-enter(cache): {stock.Name} ({stock.Code})");
                 return (true, stock);
             });

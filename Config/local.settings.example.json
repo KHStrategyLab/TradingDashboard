@@ -40,6 +40,9 @@
     "RecentTradeCount": 10,
     "RefreshIntervalMs": 500
   },
+  "StrategyMinutePreload": {
+    "IdleDelaySeconds": 180
+  },
   "LateNewsAlert": {
     "Enabled": false,
     "StartTime": "08:00",

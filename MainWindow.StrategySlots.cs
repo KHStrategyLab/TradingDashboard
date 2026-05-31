@@ -15,10 +15,17 @@ namespace TradingDashboard
         private readonly StrategySlotRegistry _strategySlotRegistry = StrategySlotRegistry.CreateDefault();
         private readonly System.Collections.ObjectModel.ObservableCollection<StrategyProgressRow> _strategyProgressRows = [];
         private bool _isRevertingLockedStrategyToggle;
+        private bool _isInitializingStrategyControls = true;
 
         private void InitializeStrategySlots()
         {
+            _isInitializingStrategyControls = true;
             StrategyProgressItemsControl.ItemsSource = _strategyProgressRows;
+            if (StrategyMinutePreloadIdleSecondsTextBox != null)
+                StrategyMinutePreloadIdleSecondsTextBox.Text = ResolveConfiguredStrategyMinuteAutoPreloadIdleSeconds().ToString();
+            _isInitializingStrategyControls = false;
+
+            UpdateStrategyMinutePreloadControlLock();
             UpdateStrategySlotSummary();
             UpdateStrategyControlBoard();
             UpdateStrategyProgressRows();
@@ -29,6 +36,7 @@ namespace TradingDashboard
             if (TryRejectEngineLockedStrategyChange(sender))
                 return;
 
+            LogStrategyToggleState(sender);
             UpdateStrategySlotSummary();
             UpdateStrategyControlBoard();
             UpdateStrategyProgressRows();
@@ -44,8 +52,11 @@ namespace TradingDashboard
             }
 
             SyncPaperTradingPreviewState();
+            LogStrategyToggleState(sender);
             UpdateStrategyControlBoard();
+            UpdateStrategyMinutePreloadControlLock();
             TryStartStrategyMinutePreloadForSelectedStock();
+            StartStrategyMinuteAutoPreload(_watchStocks);
         }
 
         private void StrategyControlBoardInput_Changed(object sender, TextChangedEventArgs e)
@@ -53,21 +64,41 @@ namespace TradingDashboard
             UpdateStrategyControlBoard();
         }
 
+        private void StrategyMinutePreloadIdleSecondsTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            UpdateStrategyControlBoard();
+
+            if (_isInitializingStrategyControls ||
+                StrategyMinutePreloadIdleSecondsTextBox == null ||
+                _strategyMinuteAutoPreloadStarted)
+                return;
+
+            if (int.TryParse(StrategyMinutePreloadIdleSecondsTextBox.Text, out int seconds))
+            {
+                int clampedSeconds = Math.Clamp(seconds, 5, 3600);
+                _config.StrategyMinutePreload ??= new StrategyMinutePreloadSettings();
+                _config.StrategyMinutePreload.IdleDelaySeconds = clampedSeconds;
+                AppendLog($"strategy minute preload idle seconds set: {clampedSeconds}s");
+                StartStrategyMinuteAutoPreload(_watchStocks);
+            }
+        }
+
         private void StrategyProgressFilter_Changed(object sender, RoutedEventArgs e)
         {
+            LogStrategyToggleState(sender);
             UpdateStrategyProgressRows();
         }
 
         private void SyncPaperTradingPreviewState()
         {
-            if (AutoTradingEnabledToggle == null || VirtualTradingPreviewToggle == null)
+            if (LiveBuyEnabledToggle == null || VirtualTradingPreviewToggle == null)
                 return;
 
-            bool engineStarted = IsStrategyToggleOn(AutoTradingEnabledToggle);
-            if (engineStarted && VirtualTradingPreviewToggle.IsChecked == true)
+            bool liveOrdersEnabled = IsStrategyToggleOn(LiveBuyEnabledToggle);
+            if (liveOrdersEnabled && VirtualTradingPreviewToggle.IsChecked == true)
                 VirtualTradingPreviewToggle.IsChecked = false;
 
-            VirtualTradingPreviewToggle.IsEnabled = !engineStarted;
+            VirtualTradingPreviewToggle.IsEnabled = !liveOrdersEnabled;
         }
 
         private bool TryRejectEngineLockedStrategyChange(object sender)
@@ -91,7 +122,7 @@ namespace TradingDashboard
                 _isRevertingLockedStrategyToggle = false;
             }
 
-            AppendLog("띵띵: Engine Start 중에는 전략 설정을 변경할 수 없음. 전략은 켜기 전에 설정하라.");
+            AppendLog($"strategy switch blocked while engine is running: {GetStrategyToggleLogName(toggle)} remains {(IsStrategyToggleOn(toggle) ? "ON" : "OFF")}");
             try
             {
                 global::System.Media.SystemSounds.Exclamation.Play();
@@ -114,6 +145,55 @@ namespace TradingDashboard
             ReferenceEquals(toggle, StrategySlotThemeAssistToggle) ||
             ReferenceEquals(toggle, DuplicateBuyPolicyToggle) ||
             ReferenceEquals(toggle, DuplicateAlertPolicyToggle);
+
+        private void LogStrategyToggleState(object sender)
+        {
+            if (sender is not ToggleButton toggle ||
+                _isRevertingLockedStrategyToggle)
+                return;
+
+            AppendLog($"strategy switch: {GetStrategyToggleLogName(toggle)} {(IsStrategyToggleOn(toggle) ? "ON" : "OFF")}");
+        }
+
+        private string GetStrategyToggleLogName(ToggleButton toggle)
+        {
+            if (ReferenceEquals(toggle, AutoTradingEnabledToggle))
+                return "Engine Start";
+            if (ReferenceEquals(toggle, LiveBuyEnabledToggle))
+                return "Live Orders";
+            if (ReferenceEquals(toggle, VirtualTradingPreviewToggle))
+                return "Paper Trading";
+            if (ReferenceEquals(toggle, StrategySlotBaseCandleChaseToggle))
+                return "Slot 1 SOR 10m+3m";
+            if (ReferenceEquals(toggle, StrategySlotPullbackToggle))
+                return "Slot 2 SOR 15m+5m";
+            if (ReferenceEquals(toggle, StrategySlotMiddleToggle))
+                return "Slot 3 SOR 10m+5m";
+            if (ReferenceEquals(toggle, StrategySlotThemeAssistToggle))
+                return "Assist Theme";
+            if (ReferenceEquals(toggle, DuplicateBuyPolicyToggle))
+                return "Duplicate Buy";
+            if (ReferenceEquals(toggle, DuplicateAlertPolicyToggle))
+                return "Duplicate Alert";
+            if (ReferenceEquals(toggle, StrategyMinutePreloadToggle))
+                return "Minute Preload";
+            if (ReferenceEquals(toggle, StrategyMinuteSeedFileSaveToggle))
+                return "Minute File Save";
+            if (ReferenceEquals(toggle, ProgressFilterBaseCandleChaseToggle))
+                return "Progress Filter 10m+3m";
+            if (ReferenceEquals(toggle, ProgressFilterPullbackToggle))
+                return "Progress Filter 15m+5m";
+            if (ReferenceEquals(toggle, ProgressFilterMiddleToggle))
+                return "Progress Filter 10m+5m";
+            if (ReferenceEquals(toggle, ProgressFilterThemeAssistToggle))
+                return "Progress Filter Theme";
+            if (ReferenceEquals(toggle, ProgressFilterUnownedToggle))
+                return "Progress Filter Unowned";
+            if (ReferenceEquals(toggle, ProgressFilterOwnedToggle))
+                return "Progress Filter Owned";
+
+            return string.IsNullOrWhiteSpace(toggle.Name) ? "unknown toggle" : toggle.Name;
+        }
 
         private void StrategyDetailButton_Click(object sender, RoutedEventArgs e)
         {
@@ -336,8 +416,10 @@ namespace TradingDashboard
 
             StrategyExecutionSettings execution = GetStrategyExecutionSettings();
             StrategyDuplicatePolicy duplicate = GetStrategyDuplicatePolicy();
+            bool paperTradingPreview = IsPaperTradingPreviewEnabled();
             bool preloadMinutes = IsStrategyMinutePreloadEnabled();
             bool saveMinuteSeeds = IsStrategyMinuteSeedFileSaveEnabled();
+            int preloadIdleSeconds = ResolveStrategyMinuteAutoPreloadIdleSeconds();
             IReadOnlyList<StrategySlotSetting> settings = GetStrategySlotSettings();
             string enabledStrategies = string.Join(", ", settings
                 .Where(x => x.IsEnabled)
@@ -350,12 +432,13 @@ namespace TradingDashboard
                 $"MODE {execution.ExecutionModeText} · " +
                 $"ENGINE {(execution.AutoTradingEnabled ? "ON" : "OFF")} · " +
                 $"LIVE ORDERS {(execution.LiveBuyEnabled ? "ON" : "OFF(alert only)")} · " +
+                $"PAPER {(paperTradingPreview ? "ON" : "OFF")} · " +
                 $"BUDGET {execution.Budget:N0} · SLOTS {execution.SlotCount} · " +
                 $"STRATEGIES {settings.Count(x => x.IsEnabled)}/{settings.Count}: {enabledStrategies} · " +
                 $"DUP BUY {(duplicate.AllowAdditionalBuy ? "ON" : "OFF")} / " +
                 $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")} · " +
                 $"MINUTE PRELOAD {(preloadMinutes ? "ON" : "OFF")} / " +
-                $"FILE SAVE {(saveMinuteSeeds ? "ON" : "OFF")}";
+                $"IDLE {preloadIdleSeconds}s / FILE SAVE {(saveMinuteSeeds ? "ON" : "OFF")}";
         }
 
         private void UpdateStrategyProgressRows()
@@ -387,6 +470,7 @@ namespace TradingDashboard
             TryStartStrategyMinutePreloadForSelectedStock();
 
             IReadOnlyList<StrategyEvaluationResult> results = EvaluateEnabledStrategySlots(stock);
+            ProcessPaperTradingPreview(stock, results);
             foreach (StrategyEvaluationResult result in results.Where(ShouldShowStrategyProgressResult))
             {
                 StrategyProgressSnapshot progress = result.Progress ?? StrategyProgressSnapshot.Empty(result.SlotId);
@@ -429,7 +513,7 @@ namespace TradingDashboard
             if (IsStrategyMinuteDataReady(stock))
             {
                 _strategyMinutePreloadCompletedKeys.Add(key);
-                AppendLog($"strategy minute preload READY TO USE: {stock.Code} / {market} / {FormatStrategyMinuteReadiness(stock)}");
+                AppendReadyLog($"strategy minute preload READY TO USE: {stock.Code} / {market} / {FormatStrategyMinuteReadiness(stock)}");
                 return;
             }
 
@@ -439,6 +523,7 @@ namespace TradingDashboard
         private async Task PreloadStrategyMinuteDataForStockAsync(WatchStockItem stock, string key)
         {
             _strategyMinutePreloadRunningKeys.Add(key);
+            UpdateStrategyMinutePreloadControlLock();
             StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 전략 분봉 프리로드 시작";
             AppendLog($"strategy minute preload started: {stock.Code} / {key}");
 
@@ -448,7 +533,7 @@ namespace TradingDashboard
                 _strategyMinutePreloadCompletedKeys.Add(key);
                 string readiness = FormatStrategyMinuteReadiness(stock);
                 StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 전략 분봉 프리로드 완료: {loadedCount:N0}봉";
-                AppendLog($"strategy minute preload READY TO USE: {stock.Code} / {loadedCount:N0}bars / {readiness}");
+                AppendReadyLog($"strategy minute preload READY TO USE: {stock.Code} / {loadedCount:N0}bars / {readiness}");
                 UpdateStrategyProgressRows();
             }
             catch (OperationCanceledException)
@@ -463,6 +548,7 @@ namespace TradingDashboard
             finally
             {
                 _strategyMinutePreloadRunningKeys.Remove(key);
+                UpdateStrategyMinutePreloadControlLock();
             }
         }
 
@@ -490,6 +576,184 @@ namespace TradingDashboard
 
         private bool IsStrategyMinuteSeedFileSaveEnabled() =>
             StrategyMinuteSeedFileSaveToggle != null && IsStrategyToggleOn(StrategyMinuteSeedFileSaveToggle);
+
+        private void StartStrategyMinuteAutoPreload(IEnumerable<WatchStockItem> stocks)
+        {
+            bool wasRunning = _strategyMinuteAutoPreloadStarted;
+            _strategyMinuteAutoPreloadCts?.Cancel();
+
+            if (!IsStrategyMinutePreloadEnabled())
+            {
+                AppendLog("strategy minute auto preload skipped: switch OFF");
+                UpdateStrategyMinutePreloadControlLock();
+                return;
+            }
+
+            List<WatchStockItem> snapshot = [.. (stocks ?? [])
+                .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
+                .GroupBy(stock => NormalizeStockCode(stock.Code), StringComparer.Ordinal)
+                .Select(group => group.First())];
+
+            if (snapshot.Count == 0)
+                return;
+
+            string batchKey = string.Join("|", snapshot
+                .Select(stock => NormalizeStockCode(stock.Code))
+                .OrderBy(code => code, StringComparer.Ordinal));
+            if (string.IsNullOrWhiteSpace(batchKey) ||
+                (_strategyMinuteAutoPreloadBatchKeys.Contains(batchKey) && !_strategyMinuteAutoPreloadStarted))
+                return;
+
+            _strategyMinuteAutoPreloadCts = new CancellationTokenSource();
+            CancellationToken token = _strategyMinuteAutoPreloadCts.Token;
+            TimeSpan idleDelay = ResolveStrategyMinuteAutoPreloadIdleDelay();
+            UpdateStrategyMinutePreloadControlLock();
+            AppendLog(wasRunning
+                ? $"strategy minute auto preload interrupted and rescheduled: {snapshot.Count}stocks / idle {idleDelay.TotalSeconds:0}s"
+                : $"strategy minute auto preload scheduled: {snapshot.Count}stocks / idle {idleDelay.TotalSeconds:0}s");
+            _ = RunStrategyMinuteAutoPreloadAfterIdleAsync(snapshot, batchKey, idleDelay, token);
+        }
+
+        private TimeSpan ResolveStrategyMinuteAutoPreloadIdleDelay()
+        {
+            return TimeSpan.FromSeconds(ResolveStrategyMinuteAutoPreloadIdleSeconds());
+        }
+
+        private int ResolveStrategyMinuteAutoPreloadIdleSeconds()
+        {
+            if (StrategyMinutePreloadIdleSecondsTextBox != null &&
+                int.TryParse(StrategyMinutePreloadIdleSecondsTextBox.Text, out int secondsFromInput))
+                return Math.Clamp(secondsFromInput, 5, 3600);
+
+            return ResolveConfiguredStrategyMinuteAutoPreloadIdleSeconds();
+        }
+
+        private int ResolveConfiguredStrategyMinuteAutoPreloadIdleSeconds()
+        {
+            int seconds = _config.StrategyMinutePreload?.IdleDelaySeconds ?? 180;
+            return Math.Clamp(seconds, 5, 3600);
+        }
+
+        private void UpdateStrategyMinutePreloadControlLock()
+        {
+            bool preloadEnabled = IsStrategyMinutePreloadEnabled();
+            if (StrategyMinutePreloadIdleSecondsTextBox != null)
+                StrategyMinutePreloadIdleSecondsTextBox.IsEnabled = !preloadEnabled;
+            if (StrategyMinuteSeedFileSaveToggle != null)
+                StrategyMinuteSeedFileSaveToggle.IsEnabled = !preloadEnabled;
+        }
+
+        private async Task RunStrategyMinuteAutoPreloadAfterIdleAsync(
+            IReadOnlyList<WatchStockItem> stocks,
+            string batchKey,
+            TimeSpan idleDelay,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(idleDelay, cancellationToken);
+                _strategyMinuteAutoPreloadBatchKeys.Add(batchKey);
+                _strategyMinuteAutoPreloadStarted = true;
+                UpdateStrategyMinutePreloadControlLock();
+                await PreloadStrategyMinuteDataForStocksAsync(stocks, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                if (_strategyMinuteAutoPreloadStarted)
+                {
+                    _strategyMinuteAutoPreloadStarted = false;
+                    UpdateStrategyMinutePreloadControlLock();
+                    AppendLog("strategy minute auto preload interrupted while running");
+                }
+                else
+                {
+                    AppendLog("strategy minute auto preload rescheduled before idle");
+                }
+            }
+        }
+
+        private async Task PreloadStrategyMinuteDataForStocksAsync(IReadOnlyList<WatchStockItem> stocks, CancellationToken cancellationToken)
+        {
+            int completed = 0;
+            AppendLog($"strategy minute auto preload continuous run started: {stocks.Count}stocks");
+
+            foreach (WatchStockItem stock in stocks)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (!IsStrategyMinutePreloadEnabled())
+                {
+                    AppendLog($"strategy minute auto preload stopped: switch OFF / completed {completed:N0}/{stocks.Count:N0}");
+                    _strategyMinuteAutoPreloadStarted = false;
+                    UpdateStrategyMinutePreloadControlLock();
+                    return;
+                }
+
+                string market = ShouldUseNxtDataForStock(stock.Code) ? "NXT" : "KRX";
+                string key = $"{NormalizeStockCode(stock.Code)}|{market}";
+                if (_strategyMinutePreloadCompletedKeys.Contains(key))
+                {
+                    completed++;
+                    AppendReadyLog($"strategy minute auto preload stock already ready: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
+                    continue;
+                }
+
+                if (_strategyMinutePreloadRunningKeys.Contains(key))
+                    continue;
+
+                if (IsStrategyMinuteDataReady(stock))
+                {
+                    _strategyMinutePreloadCompletedKeys.Add(key);
+                    completed++;
+                    AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
+                    continue;
+                }
+
+                await PreloadStrategyMinuteDataForStockAsync(stock, key);
+                completed++;
+                AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {FormatStrategyMinuteReadiness(stock)}");
+            }
+
+            _strategyMinuteAutoPreloadStarted = false;
+            UpdateStrategyMinutePreloadControlLock();
+            AppendReadyLog($"strategy minute auto preload ALL READY TO USE: {completed:N0}/{stocks.Count:N0}stocks");
+        }
+
+        private void ProcessPaperTradingPreview(
+            WatchStockItem stock,
+            IReadOnlyList<StrategyEvaluationResult> results)
+        {
+            StrategyExecutionSettings execution = GetStrategyExecutionSettings();
+            if (!execution.AutoTradingEnabled ||
+                execution.LiveBuyEnabled ||
+                !IsPaperTradingPreviewEnabled() ||
+                stock.LastPrice <= 0)
+                return;
+
+            string armedKey = $"{NormalizeStockCode(stock.Code)}|PAPER_ARMED|{DateTime.Today:yyyyMMdd}";
+            if (_paperTradingPreviewLoggedKeys.Add(armedKey))
+            {
+                AppendLog(
+                    $"PAPER TEST ARMED: {stock.Code} {stock.Name} / price {stock.LastPrice:N0} / " +
+                    $"budget {execution.Budget:N0} / live order BLOCKED");
+            }
+
+            foreach (StrategyEvaluationResult result in results.Where(x => x.HasSignal))
+            {
+                string key = $"{NormalizeStockCode(stock.Code)}|{result.SlotId}|{DateTime.Today:yyyyMMdd}";
+                if (!_paperTradingPreviewLoggedKeys.Add(key))
+                    continue;
+
+                long budget = Math.Max(0, execution.Budget);
+                long quantity = stock.LastPrice > 0 ? budget / stock.LastPrice : 0;
+                AppendLog(
+                    $"PAPER BUY READY TO USE: {stock.Code} {stock.Name} / {result.Name} / " +
+                    $"price {stock.LastPrice:N0} / qty {quantity:N0} / budget {budget:N0} / live order BLOCKED");
+            }
+        }
+
+        private bool IsPaperTradingPreviewEnabled() =>
+            VirtualTradingPreviewToggle != null && IsStrategyToggleOn(VirtualTradingPreviewToggle);
 
         private WatchStockItem? ResolveSelectedProgressStock()
         {
