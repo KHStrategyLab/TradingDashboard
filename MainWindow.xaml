@@ -3481,7 +3481,7 @@
                                         CornerRadius="5"
                                         Padding="8,6"
                                         Margin="0,0,8,0">
-                                    <TextBlock Text="Guide: Balance is live account only. Paper is a separate virtual ledger and never changes live quantity, average price, evaluation, or orders."
+                                    <TextBlock Text="Paper use: turn Live Orders OFF, turn Paper Trading ON, then Engine Start. When minute data is READY, strategy signals mark virtual BUY rows here; 0B updates P/L, and STOP/TARGET closes them on paper only. Live balance, average price, evaluation, and orders never change."
                                                Foreground="{StaticResource TextMutedBrush}"
                                                FontSize="10"
                                                VerticalAlignment="Center"
