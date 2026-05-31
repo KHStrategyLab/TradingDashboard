@@ -42,6 +42,7 @@ namespace TradingDashboard
         private readonly KiwoomTradingClient _tradingClient;
         private readonly TradingCostCalculator _tradingCostCalculator;
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
+        private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
         private readonly Queue<string> _logLines = new();
         private readonly Brush _upColorBrush;
         private readonly Brush _downColorBrush;
@@ -85,6 +86,7 @@ namespace TradingDashboard
         private readonly Dictionary<ChartCacheKey, ChartCacheEntry> _chartMemoryCache = [];
         private long _chartCacheAccessSequence;
         private int _chartRenderVersion;
+        private bool _initialChartFileCachePreloadStarted;
         private string _lastAcceptedWatchSelectionKey = string.Empty;
         private DateTime _lastAcceptedWatchSelectionAt = DateTime.MinValue;
         private CancellationTokenSource? _stockSearchSuggestionCts;
@@ -357,6 +359,7 @@ namespace TradingDashboard
                     AppendLog("watchlist cache save skipped: gate pass 0items");
                 AppendLog($"condition result {stocks.Count}items / gate pass {gatedStocks.Count}items applied");
                 ScheduleWatchlistBasePriceRefresh(gatedStocks, TimeSpan.FromSeconds(30));
+                StartInitialChartFileCachePreload(gatedStocks);
                 _ = StartRealtimeTradeAsync();
             }
             catch (Exception ex)
@@ -527,6 +530,7 @@ namespace TradingDashboard
             ApplyWatchList(cachedStocks);
             AppendLog($"{reason}, watchlist cache {cachedStocks.Count}items applied");
             ScheduleWatchlistBasePriceRefresh(cachedStocks, TimeSpan.FromSeconds(30));
+            StartInitialChartFileCachePreload(cachedStocks);
             _ = StartRealtimeTradeAsync();
             return true;
         }

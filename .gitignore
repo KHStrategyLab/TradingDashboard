@@ -15,6 +15,7 @@ Config/local.settings.json
 Config/local.settings.json.bak
 Config/watchlist_stock_cache.json
 Config/stock_master_cache.json
+Config/chart_candle_cache.json
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)

@@ -75,7 +75,9 @@ Date: 2026-05-31
 | 함수 | 파일 | 역할 | 주의점 |
 |---|---|---|---|
 | `StartSelectedChartRender` | `MainWindow.Chart.cs` | 선택 종목 차트 렌더링 시작 | 화면 차트용이며 전략 판단 seed와 직접 결합하지 않는다. |
-| `RenderSelectedChartAsync` | `MainWindow.Chart.cs` | 일/주/월/분봉 REST 조회와 캐시 적용 | selectionVersion/chartVersion으로 늦은 응답 방어. |
+| `RenderSelectedChartAsync` | `MainWindow.Chart.cs` | 일/주/월/분봉 REST 조회와 캐시 적용 | 메모리 캐시 -> 일/주/月 파일 캐시 -> REST 순서. selectionVersion/chartVersion으로 늦은 응답 방어. |
+| `StartInitialChartFileCachePreload` | `MainWindow.Chart.cs` | 초기 조건식 통과 종목의 일/주/月 파일 캐시 프리로드 | 백그라운드 1회 보조 작업. 분봉은 제외한다. |
+| `ChartCandleCacheStore` | `ChartCandleCacheStore.cs` | `Config/chart_candle_cache.json` 저장/로드 | KRX/NXT/기간 키를 분리한다. 파일은 로컬 캐시라 git에 올리지 않는다. |
 | `GetMinuteCandlesAsync` | `KiwoomRestConditionService.cs` | ka10080 분봉 조회 | KRX=6자리, NXT=`_NX`. NXT 실패 시 KRX fallback 금지. |
 | `ApplyChartCandles` | `MainWindow.Chart.cs` | 조회된 봉을 현재 차트 상태에 적용 | `_currentChartCandles`는 화면 차트 상태다. 경량엔진 캐시와 분리할 것. |
 | `ApplyRealtimeChartTick` | `MainWindow.Chart.cs` | 0B 틱으로 현재 화면 차트 진행봉 갱신 | 선택된 단일 종목 화면 표시용. 전략 판단으로 역류 금지. |

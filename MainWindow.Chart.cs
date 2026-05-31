@@ -107,6 +107,15 @@ namespace TradingDashboard
                     ApplyChartCandles(cachedCandles, selectedStockCode, requestedPeriod, "cache");
                     showedCachedChart = true;
                 }
+                else if (TryGetChartFileCache(cacheKey, count, out List<ChartCandle> fileCachedCandles))
+                {
+                    if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
+                        return;
+
+                    SetChartMemoryCache(cacheKey, fileCachedCandles);
+                    ApplyChartCandles(fileCachedCandles, selectedStockCode, requestedPeriod, "file cache");
+                    showedCachedChart = true;
+                }
 
                 List<ChartCandle> candles;
                 if (IsMinuteChartPeriod(requestedPeriod))
@@ -178,6 +187,19 @@ namespace TradingDashboard
             return false;
         }
 
+        private bool TryGetChartFileCache(ChartCacheKey key, int count, out List<ChartCandle> candles)
+        {
+            if (!IsCalendarChartPeriod(key.Period) ||
+                !_chartCandleFileCacheStore.TryGet(key.Code, key.UseNxtMarket, key.Period.ToString(), count, out List<DailyCandle> fileCandles))
+            {
+                candles = [];
+                return false;
+            }
+
+            candles = [.. fileCandles.TakeLast(count).Select(ToChartCandle)];
+            return candles.Count > 0;
+        }
+
         private void SetChartMemoryCache(ChartCacheKey key, IEnumerable<ChartCandle> candles)
         {
             List<ChartCandle> snapshot = CloneChartCandles(candles.TakeLast(ResolveChartCandleCount(key.Period)));
@@ -212,6 +234,83 @@ namespace TradingDashboard
             return [.. candles
                 .Where(c => c != null)
                 .Select(CloneChartCandle)];
+        }
+
+        private void StartInitialChartFileCachePreload(IEnumerable<WatchStockItem> stocks)
+        {
+            if (_initialChartFileCachePreloadStarted || !_config.Kiwoom.UseRestApi)
+                return;
+
+            List<ChartPreloadStock> snapshot = [.. stocks
+                .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
+                .GroupBy(stock => stock.Code, StringComparer.Ordinal)
+                .Select(group =>
+                {
+                    WatchStockItem stock = group.First();
+                    bool useNxtMarket = stock.SupportsNxt && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow());
+                    return new ChartPreloadStock(stock.Code, useNxtMarket);
+                })];
+
+            if (snapshot.Count == 0)
+                return;
+
+            _initialChartFileCachePreloadStarted = true;
+            _ = Task.Run(() => PreloadInitialChartFileCacheAsync(snapshot));
+        }
+
+        private async Task PreloadInitialChartFileCacheAsync(IReadOnlyList<ChartPreloadStock> stocks)
+        {
+            var sw = Stopwatch.StartNew();
+            int savedSets = 0;
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                Dispatcher.Invoke(() => AppendLog($"chart file cache preload started: {stocks.Count}stocks"));
+
+                foreach (ChartPreloadStock stock in stocks)
+                {
+                    List<DailyCandle> daily = await _kiwoomConditionService
+                        .GetDailyCandlesAsync(stock.Code, stock.UseNxtMarket, ResolveChartCandleCount(ChartPeriod.Daily), CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (daily.Count > 0)
+                    {
+                        _chartCandleFileCacheStore.Upsert(stock.Code, stock.UseNxtMarket, ChartPeriod.Daily.ToString(), daily.TakeLast(ResolveChartCandleCount(ChartPeriod.Daily)));
+                        savedSets++;
+                    }
+
+                    List<DailyCandle> weekly = await _kiwoomConditionService
+                        .GetWeeklyCandlesAsync(stock.Code, stock.UseNxtMarket, ResolveChartCandleCount(ChartPeriod.Weekly), CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (weekly.Count > 0)
+                    {
+                        _chartCandleFileCacheStore.Upsert(stock.Code, stock.UseNxtMarket, ChartPeriod.Weekly.ToString(), weekly.TakeLast(ResolveChartCandleCount(ChartPeriod.Weekly)));
+                        savedSets++;
+                    }
+
+                    List<DailyCandle> monthly = await _kiwoomConditionService
+                        .GetMonthlyCandlesAsync(stock.Code, stock.UseNxtMarket, ResolveChartCandleCount(ChartPeriod.Monthly), CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (monthly.Count > 0)
+                    {
+                        _chartCandleFileCacheStore.Upsert(stock.Code, stock.UseNxtMarket, ChartPeriod.Monthly.ToString(), monthly.TakeLast(ResolveChartCandleCount(ChartPeriod.Monthly)));
+                        savedSets++;
+                    }
+                }
+
+                if (savedSets > 0)
+                {
+                    _chartCandleFileCacheStore.Save();
+                    Dispatcher.Invoke(() => AppendLog($"chart file cache saved: {stocks.Count}stocks / {savedSets}sets / {sw.ElapsedMilliseconds:N0}ms"));
+                }
+                else
+                {
+                    Dispatcher.Invoke(() => AppendLog($"chart file cache save skipped: {stocks.Count}stocks / no data"));
+                }
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => AppendLog($"chart file cache preload skipped: {ex.Message}"));
+            }
         }
 
         private static ChartCandle CloneChartCandle(ChartCandle c)
@@ -1260,6 +1359,8 @@ namespace TradingDashboard
             public DateTime CachedAt { get; set; }
             public long LastAccess { get; set; }
         }
+
+        private sealed record ChartPreloadStock(string Code, bool UseNxtMarket);
 
         private static ChartCandle ToChartCandle(DailyCandle c) => new()
         {
