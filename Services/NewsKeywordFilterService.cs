@@ -42,7 +42,7 @@ namespace TradingDashboard.Services
                 return [];
 
             if (!IsAvailable)
-                return [.. newsItems.Take(count)];
+                return [];
 
             return [.. Rank(newsItems).Take(count).Select(item => item.Item)];
         }

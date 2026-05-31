@@ -68,7 +68,10 @@ namespace TradingDashboard
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _conditionRealtimeEnterSemaphore = new(1, 1);
         private readonly HashSet<string> _conditionRealtimeEnterPendingCodes = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _conditionRealtimeActiveCodes = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _conditionRealtimeGenerationByCode = new(StringComparer.Ordinal);
         private readonly object _conditionRealtimeEnterPendingLock = new();
+        private long _conditionRealtimeGenerationSequence;
         private readonly HashSet<string> _lateNewsSentStockCodes = new(StringComparer.Ordinal);
         private readonly object _lateNewsLock = new();
         private readonly DateTime _lateNewsAppStartedAt = DateTime.Now;

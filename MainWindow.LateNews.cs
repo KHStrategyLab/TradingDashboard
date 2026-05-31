@@ -18,6 +18,12 @@ namespace TradingDashboard
 
             try
             {
+                if (!_newsKeywordFilterService.IsAvailable)
+                {
+                    Dispatcher.Invoke(() => AppendLog($"Late News skipped(keyword dictionary unavailable): {stock.Name} ({stock.Code})"));
+                    return;
+                }
+
                 int count = Math.Clamp(_config.LateNewsAlert.NewsCount, 1, 10);
                 const int candidateCount = 20;
                 List<NewsItem> newsItems = await _newsService.GetLatestNewsAsync(stock.Name, candidateCount, cancellationToken).ConfigureAwait(false);

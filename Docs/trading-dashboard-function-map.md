@@ -89,8 +89,8 @@ Date: 2026-05-31
 | `LoadNewsAsync` | `MainWindow.xaml.cs` | 선택 종목 뉴스 로드 | 선택 버전이 바뀌면 반영하지 않는다. |
 | `LoadMarketNewsAsync` | `MainWindow.xaml.cs` | News 탭 시장 뉴스/검색 조회 | Naver API 제한은 키움 시세 흐름과 분리한다. |
 | `LoadMarketNewsThumbnailsAsync` | `MainWindow.xaml.cs` | 기사 og:image 지연 로드 | 썸네일 실패는 뉴스 표시 실패가 아니다. |
-| `TrySendLateNewsAlertAsync` | `MainWindow.LateNews.cs` | 조건 편입 종목 뉴스 알림 | 매수 신호가 아니라 재료 확인 보조. |
-| `NewsKeywordFilterService.Rank` | `NewsKeywordFilterService.cs` | 뉴스 제목/요약 키워드 점수화 | 코드 하드코딩 대신 JSON 사전을 사용한다. |
+| `TrySendLateNewsAlertAsync` | `MainWindow.LateNews.cs` | 조건 편입 종목 뉴스 알림 | 매수 신호가 아니라 재료 확인 보조. 키워드 사전이 없으면 알림은 skip한다. |
+| `NewsKeywordFilterService.Rank` | `NewsKeywordFilterService.cs` | 뉴스 제목/요약 키워드 점수화 | 코드 하드코딩 대신 JSON 사전을 사용한다. 알림 필터는 사전 실패 시 원본 뉴스를 통과시키지 않는다. |
 | `LoadDisclosuresAsync` | `MainWindow.xaml.cs` | 선택 종목 공시 조회 | 전체 시장 훑기가 아니라 현재 후보/선택 종목 중심. |
 | `DartDisclosureAlertService.TrySendRecentDisclosureAlertAsync` | `DartDisclosureAlertService.cs` | 조건 편입 공시 알림 | 좋은 재료 공시만 우선 통과. 위험 공시는 별도 태그 후보. |
 

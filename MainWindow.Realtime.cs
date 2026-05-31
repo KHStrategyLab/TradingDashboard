@@ -352,30 +352,63 @@ namespace TradingDashboard
             string name = ReadAnyRealtime(item, "302", "stk_nm", "stkNm", "name", "jm_name");
             if (isAdd)
             {
-                if (TryMarkConditionRealtimeEnterPending(code))
-                    _ = ApplyConditionRealtimeAddAsync(code, name);
+                (bool shouldStart, long generation) = MarkConditionRealtimeEnter(code);
+                if (shouldStart)
+                    _ = ApplyConditionRealtimeAddAsync(code, name, generation);
             }
             else
                 ApplyConditionRealtimeRemove(code);
         }
 
-        private bool TryMarkConditionRealtimeEnterPending(string code)
+        private (bool ShouldStart, long Generation) MarkConditionRealtimeEnter(string code)
         {
             lock (_conditionRealtimeEnterPendingLock)
             {
-                return _conditionRealtimeEnterPendingCodes.Add(code);
+                long generation = ++_conditionRealtimeGenerationSequence;
+                _conditionRealtimeActiveCodes.Add(code);
+                _conditionRealtimeGenerationByCode[code] = generation;
+                return (_conditionRealtimeEnterPendingCodes.Add(code), generation);
             }
         }
 
-        private void ClearConditionRealtimeEnterPending(string code)
+        private void MarkConditionRealtimeExit(string code)
+        {
+            lock (_conditionRealtimeEnterPendingLock)
+            {
+                long generation = ++_conditionRealtimeGenerationSequence;
+                _conditionRealtimeActiveCodes.Remove(code);
+                _conditionRealtimeGenerationByCode[code] = generation;
+            }
+        }
+
+        private bool IsConditionRealtimeEnterCurrent(string code, long generation)
+        {
+            lock (_conditionRealtimeEnterPendingLock)
+            {
+                return _conditionRealtimeActiveCodes.Contains(code) &&
+                    _conditionRealtimeGenerationByCode.TryGetValue(code, out long currentGeneration) &&
+                    currentGeneration == generation;
+            }
+        }
+
+        private (bool ShouldRestart, long Generation) ClearConditionRealtimeEnterPending(string code, long completedGeneration)
         {
             lock (_conditionRealtimeEnterPendingLock)
             {
                 _conditionRealtimeEnterPendingCodes.Remove(code);
+                if (_conditionRealtimeActiveCodes.Contains(code) &&
+                    _conditionRealtimeGenerationByCode.TryGetValue(code, out long latestGeneration) &&
+                    latestGeneration != completedGeneration)
+                {
+                    _conditionRealtimeEnterPendingCodes.Add(code);
+                    return (true, latestGeneration);
+                }
+
+                return (false, 0);
             }
         }
 
-        private async Task ApplyConditionRealtimeAddAsync(string code, string name)
+        private async Task ApplyConditionRealtimeAddAsync(string code, string name, long generation)
         {
             try
             {
@@ -386,12 +419,20 @@ namespace TradingDashboard
                 await _conditionRealtimeEnterSemaphore.WaitAsync(ct);
                 try
                 {
-                    (bool handledFromCache, WatchStockItem? addedFromCache) = await ApplyConditionRealtimeAddFromCacheAsync(code, name);
+                    if (!IsConditionRealtimeEnterCurrent(code, generation))
+                        return;
+
+                    (bool handledFromCache, WatchStockItem? addedFromCache) = await ApplyConditionRealtimeAddFromCacheAsync(code, name, generation);
                     if (handledFromCache)
                     {
+                        if (!IsConditionRealtimeEnterCurrent(code, generation))
+                            return;
+
                         if (addedFromCache != null)
                         {
                             await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(addedFromCache, ct);
+                            if (!IsConditionRealtimeEnterCurrent(code, generation))
+                                return;
                             await TrySendLateNewsAlertAsync(addedFromCache, ct);
                         }
 
@@ -400,6 +441,9 @@ namespace TradingDashboard
                     }
 
                     WatchStockItem stock = await _kiwoomConditionService.GetConditionStockAsync(code, name, ct);
+                    if (!IsConditionRealtimeEnterCurrent(code, generation))
+                        return;
+
                     // 장중 실시간 편입은 별도 일봉 게이트 재조회 없이 NEW로만 넘긴다.
                     // 기준봉 통과 여부는 초기 조건식 조회 또는 오늘 캐시에 있는 게이트 결과만 신뢰한다.
                     stock.IsIntradayPreCandidate = true;
@@ -409,6 +453,9 @@ namespace TradingDashboard
 
                     await Dispatcher.InvokeAsync(() =>
                     {
+                        if (!IsConditionRealtimeEnterCurrent(code, generation))
+                            return;
+
                         if (_watchStockByCode.ContainsKey(code))
                             return;
 
@@ -431,9 +478,17 @@ namespace TradingDashboard
                         added = true;
                     });
 
+                    if (!added)
+                        return;
+
                     if (added)
                     {
+                        if (!IsConditionRealtimeEnterCurrent(code, generation))
+                            return;
+
                         await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(stock, ct);
+                        if (!IsConditionRealtimeEnterCurrent(code, generation))
+                            return;
                         await TrySendLateNewsAlertAsync(stock, ct);
                     }
 
@@ -454,14 +509,19 @@ namespace TradingDashboard
             }
             finally
             {
-                ClearConditionRealtimeEnterPending(code);
+                (bool shouldRestart, long nextGeneration) = ClearConditionRealtimeEnterPending(code, generation);
+                if (shouldRestart)
+                    _ = ApplyConditionRealtimeAddAsync(code, name, nextGeneration);
             }
         }
 
-        private async Task<(bool Handled, WatchStockItem? AddedStock)> ApplyConditionRealtimeAddFromCacheAsync(string code, string name)
+        private async Task<(bool Handled, WatchStockItem? AddedStock)> ApplyConditionRealtimeAddFromCacheAsync(string code, string name, long generation)
         {
             return await Dispatcher.InvokeAsync(() =>
             {
+                if (!IsConditionRealtimeEnterCurrent(code, generation))
+                    return (true, (WatchStockItem?)null);
+
                 if (_watchStockByCode.ContainsKey(code))
                     return (true, (WatchStockItem?)null);
 
@@ -520,6 +580,7 @@ namespace TradingDashboard
 
         private void ApplyConditionRealtimeRemove(string code)
         {
+            MarkConditionRealtimeExit(code);
             Dispatcher.Invoke(() =>
             {
                 if (!_watchStockByCode.Remove(code))
