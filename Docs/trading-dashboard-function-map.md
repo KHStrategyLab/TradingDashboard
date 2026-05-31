@@ -64,7 +64,9 @@ Date: 2026-05-31
 | `RegisterRealtime0BAsync` | `MainWindow.Realtime.cs` | 관심종목 0B 주식체결 등록 | 경량엔진 이식 시 현재봉 갱신 입력 후보. |
 | `RegisterSelectedRealtime0DAsync` | `MainWindow.Realtime.cs` | 선택 종목 0D/0H 호가 등록 | 선택 종목 전용. 전체 후보 엔진으로 확대하면 별도 분리 필요. |
 | `ApplyRealtimePayload` | `MainWindow.Realtime.cs` | WebSocket REAL payload 분기 | type별 처리 순서를 바꾸면 호가/조건/0B 반영이 꼬일 수 있다. |
-| `ApplyRealtimeItem` | `MainWindow.Realtime.cs` | 0B 체결 실시간을 watchlist/선택 화면/차트에 반영 | 화면 표시용 0B와 전략 판단용 경량엔진 입력을 분리해야 한다. |
+| `ApplyRealtimeItem` | `MainWindow.Realtime.cs` | 0B 체결 실시간을 watchlist/선택 화면/차트에 반영하고 전략분봉 장부 현재봉 갱신을 호출 | 화면 표시용 0B와 전략 판단용 장부 입력은 같은 원천을 쓰지만, 전략 신호/주문은 여기서 만들지 않는다. |
+| `ApplyRealtimeTickToStrategyMinuteLedger` | `MainWindow.Realtime.cs` | 0B 현재가/시간/거래량을 `StrategyMinuteCacheService`에 받아쓰는 연결부 | 거래량은 누적거래량 `13` 차분 우선, 없으면 체결량 `15` 보조. 종목코드와 KRX/NXT 시장을 맞춰 장부에 넣는다. |
+| `ParseRealtimeTradeTime` | `MainWindow.Realtime.cs` | 0B 체결시간을 오늘 날짜의 `DateTime`으로 변환 | 시간이 없거나 비정상이면 현재 시각을 사용한다. |
 | `ApplyRealtimeHogaItem` | `MainWindow.Realtime.cs` | 0D 호가 rows 반영 | API 1호가는 화면 첫 줄이 아니라 현재가에 가까운 호가다. 매도호가 표시 순서 주의. |
 | `ApplyHogaRows` | `MainWindow.Realtime.cs` | 매도/매수 10호가 UI 컬렉션 갱신 | 빈 응답으로 기존 유효 호가를 지우지 않는다. |
 | `HighlightCenterPriceInHoga` | `MainWindow.Realtime.cs` | 현재가와 같은 호가 칸 강조 | KRX 전일종가 색상 기준과 현재가 강조는 서로 다른 역할이다. |
@@ -132,8 +134,9 @@ Date: 2026-05-31
 | `StrategyMinuteFrameSnapshot` | `StrategyMinuteFrameSnapshot.cs` | 전략에 전달하는 분봉별 숫자 묶음 | 현재봉/직전 확정봉 OHLCV, 이평선, 최근20봉 고/저/최고종가/최저종가/거래량/거래대금을 포함한다. |
 | `StrategyMinuteSnapshotSet` | `StrategyMinuteSnapshotSet.cs` | 종목별 분봉 Snapshot 묶음 | Slot 1=10/3분, Slot 2=15/5분, Slot 3=10/5분처럼 전략이 필요한 조합을 즉시 받을 수 있게 한다. |
 | `StrategyMinuteDataStatus` | `StrategyMinuteDataStatus.cs` | 전략 Progress용 분봉 장부 READY/개수 표시 | 차트 메모리 캐시가 아니라 `StrategyMinuteCacheService` 상태를 기준으로 표시한다. |
-| `LoadStrategyMinuteDataAsync` | `MainWindow.StrategySlots.cs` | 선택 종목의 3/5/10/15분봉 seed 로드 | 받은 분봉은 화면 차트 캐시와 별도로 전략분봉 장부에도 seed로 저장한다. |
-| `BuildStrategyMinuteDataStatus` | `MainWindow.StrategySlots.cs` | 선택 종목의 분봉별 장부 개수 수집 | Slot 1=10/3분, Slot 2=15/5분, Slot 3=10/5분 데이터 단계 확인에 사용한다. |
+| `LoadStrategyMinuteDataAsync` | `MainWindow.StrategySlots.cs` | 선택 종목의 1/3/5/10/15/30분봉 seed 로드 | 받은 분봉은 화면 차트 캐시와 별도로 전략분봉 장부에도 seed로 저장한다. 1분봉은 최소 300개를 받는다. |
+| `TryStartStrategyMinutePreloadForSelectedStock` | `MainWindow.StrategySlots.cs` | 전략실 `분봉 프리로드` 스위치가 ON일 때 선택 종목 분봉 seed 자동 로드 시작 | 종목/시장 키 기준으로 중복 실행을 막고, 완료 후 Progress를 다시 갱신한다. |
+| `BuildStrategyMinuteDataStatus` | `MainWindow.StrategySlots.cs` | 선택 종목의 분봉별 장부 개수 수집 | Slot 1=10/3분, Slot 2=15/5분, Slot 3=10/5분 데이터 단계와 향후 1/30분 전략 확장 확인에 사용한다. |
 | `BuildStrategyMinuteSnapshotSet` | `MainWindow.StrategySlots.cs` | 선택 종목의 전략 Snapshot 세트 생성 | 전략 슬롯은 봉 리스트를 직접 뒤지지 않고 Snapshot 숫자 묶음만 읽는다. |
 
 ## 경량엔진 이식 후보
@@ -146,7 +149,8 @@ Date: 2026-05-31
 |---|---|---|---|
 | 분봉 seed 조회 | `GetMinuteCandlesAsync`, `LoadStrategyMinuteDataAsync` | `MainWindow.MinuteCache.cs` | KRX=6자리, NXT=`_NX`, fallback 금지 |
 | 후보별 캐시 키 | `StrategyMinuteCacheService` | `CandidateMinuteCache`, `BuildMinuteCacheKey` | `종목코드|시장|분봉` |
-| 봉마감 확정봉 입력 | `StrategyMinuteCacheService.ApplyClosedBar` | `ApplyRealtimeTickToCandidateMinuteCache` | 매 틱 저장보다 봉마감 시 OHLCV/거래대금 확정 저장을 우선한다. |
+| 실시간 현재봉 입력 | `ApplyRealtimeTickToStrategyMinuteLedger`, `StrategyMinuteCacheService.ApplyRealtimeTick` | `ApplyRealtimeTickToCandidateMinuteCache` | 0B 현재가와 거래량으로 현재봉을 갱신한다. 신호/주문은 만들지 않는다. |
+| 봉마감 확정봉 입력 | `StrategyMinuteCacheService.ApplyClosedBar` | `ApplyRealtimeTickToCandidateMinuteCache` | 명시적 확정봉 입력구. 향후 봉마감 이벤트나 seed 보강에서 사용한다. |
 | READY 판정 | `StrategyMinuteDataStatus`, `BuildStrategyMinuteDataStatus` | `TryGetReadyCandidateMinuteCache` | 요청 분봉 최소 개수 충족 전 매수 판단 차단 |
 | 상태머신 | 전략 슬롯별 `Evaluate` 확장 | `MainWindow.Strategy.BuySignalCheck.cs` | WAIT -> pullback -> recovery -> signal 흐름 |
 | 주문 연결 | `KiwoomTradingClient` | `EvaluateLiveBuyRiskGuard` | 신호 -> RiskGuard -> 주문 순서. 신호가 주문을 직접 보내지 않는다. |

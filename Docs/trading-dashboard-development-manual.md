@@ -126,10 +126,15 @@
 
 현재 1차 연결 상태:
 
-- Progress 탭의 수동 분봉 로드 버튼은 3/5/10/15분봉을 받아 `StrategyMinuteCacheService`에 seed로 넣는다.
+- `LoadStrategyMinuteDataAsync(...)`는 1/3/5/10/15/30분봉을 받아 `StrategyMinuteCacheService`에 seed로 넣는 내부 로더다.
+- 1분봉은 향후 단기 전략/이평선 확인용으로 최소 300개를 seed로 받는다.
+- 전략실의 `분봉 프리로드` 스위치가 ON이면 선택 종목 기준으로 내부 로더를 자동 실행한다.
+- 전략실의 `파일 저장` 스위치는 seed 파일 저장 모드 표시용이다. 실제 `Storage/StrategyMinuteSeeds` 저장 구현은 다음 단계다.
 - `StrategyMinuteDataStatus`는 차트 메모리 캐시가 아니라 전략분봉 장부의 READY/개수 상태를 표시한다.
 - `StrategyMinuteSnapshotSet`은 전략 슬롯이 요청할 수 있는 분봉별 Snapshot 묶음이다.
-- 0B 실시간 틱을 매 틱마다 전략 장부에 저장하는 연결은 하지 않는다.
+- 0B 실시간 틱은 `StrategyMinuteCacheService.ApplyRealtimeTick(...)`으로 전략 장부의 현재봉을 갱신한다.
+- 0B 거래량은 누적거래량 `13`의 직전값 차분을 우선하고, 차분을 만들 수 없을 때 체결량 `15`를 보조로 사용한다.
+- 0B 연결은 숫자 장부 갱신까지만 담당하며, 매수신호나 주문을 직접 만들지 않는다.
 - 봉마감 확정봉 입력구는 `ApplyClosedBar(...)`로 준비되어 있다.
 
 전략별 기억값은 공통 장부에 넣지 않는다.

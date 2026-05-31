@@ -67,6 +67,9 @@ namespace TradingDashboard
         private readonly Dictionary<string, WatchlistStockCacheEntry> _watchlistMemoryCache = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ClosingSnapshotCacheEntry> _closingSnapshotMemoryCache = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastTickPriceByCode = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _lastStrategyMinuteCumulativeVolumeByKey = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _strategyMinutePreloadCompletedKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _strategyMinutePreloadRunningKeys = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _conditionRealtimeEnterSemaphore = new(1, 1);

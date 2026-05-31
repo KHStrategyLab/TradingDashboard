@@ -45,6 +45,7 @@ namespace TradingDashboard
 
             SyncPaperTradingPreviewState();
             UpdateStrategyControlBoard();
+            TryStartStrategyMinutePreloadForSelectedStock();
         }
 
         private void StrategyControlBoardInput_Changed(object sender, TextChangedEventArgs e)
@@ -55,40 +56,6 @@ namespace TradingDashboard
         private void StrategyProgressFilter_Changed(object sender, RoutedEventArgs e)
         {
             UpdateStrategyProgressRows();
-        }
-
-        private async void LoadStrategyMinuteDataButton_Click(object sender, RoutedEventArgs e)
-        {
-            WatchStockItem? stock = ResolveSelectedProgressStock();
-            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
-            {
-                StrategyMinuteDataLoadStatusText.Text = "분봉을 로드할 종목을 먼저 선택해야 함";
-                return;
-            }
-
-            LoadStrategyMinuteDataButton.IsEnabled = false;
-            StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 분봉 데이터 로드 시작: 3/5/10/15분";
-
-            try
-            {
-                int loadedCount = await LoadStrategyMinuteDataAsync(stock);
-                StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 분봉 데이터 로드 완료: {loadedCount:N0}봉";
-                AppendLog($"strategy minute data loaded: {stock.Code} / {loadedCount:N0}bars");
-            }
-            catch (OperationCanceledException)
-            {
-                StrategyMinuteDataLoadStatusText.Text = "분봉 데이터 로드 취소";
-            }
-            catch (Exception ex)
-            {
-                StrategyMinuteDataLoadStatusText.Text = $"분봉 데이터 로드 실패: {ex.Message}";
-                AppendLog($"strategy minute data load error: {ex.Message}");
-            }
-            finally
-            {
-                LoadStrategyMinuteDataButton.IsEnabled = true;
-                UpdateStrategyProgressRows();
-            }
         }
 
         private void SyncPaperTradingPreviewState()
@@ -219,10 +186,12 @@ namespace TradingDashboard
 
             foreach ((ChartPeriod Period, int Minute) item in new[]
             {
+                (ChartPeriod.Minute1, 1),
                 (ChartPeriod.Minute3, 3),
                 (ChartPeriod.Minute5, 5),
                 (ChartPeriod.Minute10, 10),
-                (ChartPeriod.Minute15, 15)
+                (ChartPeriod.Minute15, 15),
+                (ChartPeriod.Minute30, 30)
             })
             {
                 ChartCacheKey key = CreateChartCacheKey(stock.Code, useNxtMarket, item.Period);
@@ -266,6 +235,9 @@ namespace TradingDashboard
         private static int CalculateStrategyMinuteTargetCount(WatchStockItem stock, int minute)
         {
             int safeMinute = Math.Max(1, minute);
+            if (safeMinute == 1)
+                return 300;
+
             const int daysToCover = 7;
             const int sorSessionMinutesPerDay = 660;
             const int warmupBars = 80;
@@ -283,10 +255,12 @@ namespace TradingDashboard
             string market = useNxtMarket ? "NXT" : "KRX";
             StrategyMinuteDataStatus status = _strategyMinuteCacheService.BuildStatus(stock.Code, market);
 
+            EnsureMinuteDataTarget(status, stock, 1);
             EnsureMinuteDataTarget(status, stock, 3);
             EnsureMinuteDataTarget(status, stock, 5);
             EnsureMinuteDataTarget(status, stock, 10);
             EnsureMinuteDataTarget(status, stock, 15);
+            EnsureMinuteDataTarget(status, stock, 30);
             return status;
         }
 
@@ -297,7 +271,7 @@ namespace TradingDashboard
 
             bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
             string market = useNxtMarket ? "NXT" : "KRX";
-            return _strategyMinuteCacheService.GetSnapshotSet(stock.Code, market, 3, 5, 10, 15);
+            return _strategyMinuteCacheService.GetSnapshotSet(stock.Code, market, 1, 3, 5, 10, 15, 30);
         }
 
         private static List<DailyCandle> ConvertChartCandlesToDailyCandles(IEnumerable<ChartCandle> candles)
@@ -362,6 +336,8 @@ namespace TradingDashboard
 
             StrategyExecutionSettings execution = GetStrategyExecutionSettings();
             StrategyDuplicatePolicy duplicate = GetStrategyDuplicatePolicy();
+            bool preloadMinutes = IsStrategyMinutePreloadEnabled();
+            bool saveMinuteSeeds = IsStrategyMinuteSeedFileSaveEnabled();
             IReadOnlyList<StrategySlotSetting> settings = GetStrategySlotSettings();
             string enabledStrategies = string.Join(", ", settings
                 .Where(x => x.IsEnabled)
@@ -377,7 +353,9 @@ namespace TradingDashboard
                 $"BUDGET {execution.Budget:N0} · SLOTS {execution.SlotCount} · " +
                 $"STRATEGIES {settings.Count(x => x.IsEnabled)}/{settings.Count}: {enabledStrategies} · " +
                 $"DUP BUY {(duplicate.AllowAdditionalBuy ? "ON" : "OFF")} / " +
-                $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")}";
+                $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")} · " +
+                $"MINUTE PRELOAD {(preloadMinutes ? "ON" : "OFF")} / " +
+                $"FILE SAVE {(saveMinuteSeeds ? "ON" : "OFF")}";
         }
 
         private void UpdateStrategyProgressRows()
@@ -406,6 +384,8 @@ namespace TradingDashboard
                 return;
             }
 
+            TryStartStrategyMinutePreloadForSelectedStock();
+
             IReadOnlyList<StrategyEvaluationResult> results = EvaluateEnabledStrategySlots(stock);
             foreach (StrategyEvaluationResult result in results.Where(ShouldShowStrategyProgressResult))
             {
@@ -430,6 +410,86 @@ namespace TradingDashboard
                     (Brush)FindResource("TextMutedBrush")));
             }
         }
+
+        private void TryStartStrategyMinutePreloadForSelectedStock()
+        {
+            if (!IsStrategyMinutePreloadEnabled())
+                return;
+
+            WatchStockItem? stock = ResolveSelectedProgressStock();
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return;
+
+            string market = ShouldUseNxtDataForStock(stock.Code) ? "NXT" : "KRX";
+            string key = $"{NormalizeStockCode(stock.Code)}|{market}";
+            if (_strategyMinutePreloadCompletedKeys.Contains(key) ||
+                _strategyMinutePreloadRunningKeys.Contains(key))
+                return;
+
+            if (IsStrategyMinuteDataReady(stock))
+            {
+                _strategyMinutePreloadCompletedKeys.Add(key);
+                AppendLog($"strategy minute preload READY TO USE: {stock.Code} / {market} / {FormatStrategyMinuteReadiness(stock)}");
+                return;
+            }
+
+            _ = PreloadStrategyMinuteDataForStockAsync(stock, key);
+        }
+
+        private async Task PreloadStrategyMinuteDataForStockAsync(WatchStockItem stock, string key)
+        {
+            _strategyMinutePreloadRunningKeys.Add(key);
+            StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 전략 분봉 프리로드 시작";
+            AppendLog($"strategy minute preload started: {stock.Code} / {key}");
+
+            try
+            {
+                int loadedCount = await LoadStrategyMinuteDataAsync(stock);
+                _strategyMinutePreloadCompletedKeys.Add(key);
+                string readiness = FormatStrategyMinuteReadiness(stock);
+                StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 전략 분봉 프리로드 완료: {loadedCount:N0}봉";
+                AppendLog($"strategy minute preload READY TO USE: {stock.Code} / {loadedCount:N0}bars / {readiness}");
+                UpdateStrategyProgressRows();
+            }
+            catch (OperationCanceledException)
+            {
+                StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 전략 분봉 프리로드 취소";
+            }
+            catch (Exception ex)
+            {
+                StrategyMinuteDataLoadStatusText.Text = $"전략 분봉 프리로드 실패: {ex.Message}";
+                AppendLog($"strategy minute preload error: {ex.Message}");
+            }
+            finally
+            {
+                _strategyMinutePreloadRunningKeys.Remove(key);
+            }
+        }
+
+        private bool IsStrategyMinuteDataReady(WatchStockItem stock)
+        {
+            StrategyMinuteDataStatus status = BuildStrategyMinuteDataStatus(stock);
+            return status.HasAll(1, 3, 5, 10, 15, 30);
+        }
+
+        private string FormatStrategyMinuteReadiness(WatchStockItem stock)
+        {
+            StrategyMinuteDataStatus status = BuildStrategyMinuteDataStatus(stock);
+            return string.Join(" / ", new[] { 1, 3, 5, 10, 15, 30 }
+                .Select(minute =>
+                {
+                    int count = status.GetCount(minute);
+                    int target = status.GetTargetCount(minute);
+                    string state = count >= target ? "READY" : "WAIT";
+                    return $"{minute}m {state} {count:N0}/{target:N0}";
+                }));
+        }
+
+        private bool IsStrategyMinutePreloadEnabled() =>
+            StrategyMinutePreloadToggle == null || IsStrategyToggleOn(StrategyMinutePreloadToggle);
+
+        private bool IsStrategyMinuteSeedFileSaveEnabled() =>
+            StrategyMinuteSeedFileSaveToggle != null && IsStrategyToggleOn(StrategyMinuteSeedFileSaveToggle);
 
         private WatchStockItem? ResolveSelectedProgressStock()
         {

@@ -912,6 +912,8 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(rate))
                 rate = "-";
 
+            ApplyRealtimeTickToStrategyMinuteLedger(code, price, volume, tradeQty, tradeTimeText);
+
             Dispatcher.Invoke(() =>
             {
                 if (!_watchStockByCode.TryGetValue(code, out WatchStockItem? stock))
@@ -1025,9 +1027,77 @@ namespace TradingDashboard
                     InfoTurnoverRateText.Text = _currentStatusMetrics.TurnoverRateText;
                     InfoTradingValueText.Text = _currentStatusMetrics.TradingValueText;
                     ApplyRealtimeChartTick(code, stock.CurrentPrice, volume > 0 ? currentVolume : 0, effectiveTradeQty, tradeTimeText);
+                    UpdateStrategyProgressRows();
 
                 }
             });
+        }
+
+        private void ApplyRealtimeTickToStrategyMinuteLedger(
+            string code,
+            long price,
+            long cumulativeVolume,
+            long fallbackTradeVolume,
+            string tradeTimeText)
+        {
+            if (string.IsNullOrWhiteSpace(code) || price <= 0)
+                return;
+
+            bool useNxtMarket = ShouldUseNxtDataForStock(code);
+            string market = useNxtMarket ? "NXT" : "KRX";
+            string key = $"{NormalizeStockCode(code)}|{market}";
+            long tradeVolume = 0;
+
+            if (cumulativeVolume > 0)
+            {
+                if (_lastStrategyMinuteCumulativeVolumeByKey.TryGetValue(key, out long previousVolume))
+                    tradeVolume = Math.Max(0, cumulativeVolume - previousVolume);
+
+                _lastStrategyMinuteCumulativeVolumeByKey[key] = cumulativeVolume;
+            }
+
+            if (tradeVolume <= 0)
+                tradeVolume = Math.Max(0, fallbackTradeVolume);
+
+            long tradeValue = tradeVolume > 0
+                ? (long)Math.Min(long.MaxValue, price * (double)tradeVolume)
+                : 0;
+
+            _strategyMinuteCacheService.ApplyRealtimeTick(
+                code,
+                market,
+                price,
+                tradeVolume,
+                tradeValue,
+                ParseRealtimeTradeTime(tradeTimeText));
+        }
+
+        private static DateTime ParseRealtimeTradeTime(string tradeTimeText)
+        {
+            string digits = new([.. (tradeTimeText ?? string.Empty).Where(char.IsDigit)]);
+            DateTime now = DateTime.Now;
+
+            if (digits.Length >= 6 &&
+                int.TryParse(digits[..2], out int hour) &&
+                int.TryParse(digits.Substring(2, 2), out int minute) &&
+                int.TryParse(digits.Substring(4, 2), out int second) &&
+                hour is >= 0 and <= 23 &&
+                minute is >= 0 and <= 59 &&
+                second is >= 0 and <= 59)
+            {
+                return new DateTime(now.Year, now.Month, now.Day, hour, minute, second);
+            }
+
+            if (digits.Length >= 4 &&
+                int.TryParse(digits[..2], out hour) &&
+                int.TryParse(digits.Substring(2, 2), out minute) &&
+                hour is >= 0 and <= 23 &&
+                minute is >= 0 and <= 59)
+            {
+                return new DateTime(now.Year, now.Month, now.Day, hour, minute, 0);
+            }
+
+            return now;
         }
 
         private void HighlightCenterPriceInHoga()
