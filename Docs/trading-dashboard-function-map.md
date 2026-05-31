@@ -135,6 +135,7 @@ Date: 2026-05-31
 | `StrategyMinuteSnapshotSet` | `StrategyMinuteSnapshotSet.cs` | 종목별 분봉 Snapshot 묶음 | Slot 1=10/3분, Slot 2=15/5분, Slot 3=10/5분처럼 전략이 필요한 조합을 즉시 받을 수 있게 한다. |
 | `StrategyMinuteDataStatus` | `StrategyMinuteDataStatus.cs` | 전략 Progress용 분봉 장부 READY/개수 표시 | 차트 메모리 캐시가 아니라 `StrategyMinuteCacheService` 상태를 기준으로 표시한다. |
 | `LoadStrategyMinuteDataAsync` | `MainWindow.StrategySlots.cs` | 선택 종목의 1/3/5/10/15/30분봉 seed 로드 | 받은 분봉은 화면 차트 캐시와 별도로 전략분봉 장부에도 seed로 저장한다. 1분봉은 최소 300개를 받는다. |
+| `StrategyMinuteSeedFileStore` | `StrategyMinuteSeedFileStore.cs` | 전략 분봉 seed 파일 읽기/저장 | `Storage/StrategyMinuteSeeds/{yyyyMMdd}/{code}_{market}_{minute}.json`을 사용한다. Git 백업 대상이 아니다. |
 | `TryStartStrategyMinutePreloadForSelectedStock` | `MainWindow.StrategySlots.cs` | 전략실 `분봉 프리로드` 스위치가 ON일 때 선택 종목 분봉 seed 자동 로드 시작 | 종목/시장 키 기준으로 중복 실행을 막고, 완료 후 Progress를 다시 갱신한다. |
 | `StartStrategyMinuteAutoPreload` | `MainWindow.StrategySlots.cs` | 조건식/캐시 감시목록의 전략 분봉 seed 자동 로드 예약 | 감시목록 적용 또는 신규 편입 후 `StrategyMinutePreload.IdleDelaySeconds` idle 뒤 실행한다. 시작 후에는 종목 사이 추가 대기 없이 연속 실행한다. |
 | `StrategyMinutePreloadIdleSecondsTextBox_TextChanged` | `MainWindow.StrategySlots.cs` | 전략실 분봉 프리로드 idle 초 입력값 반영 | 실행 중에는 입력칸을 잠그고, 평상시에는 입력값으로 다음 idle 예약 시간을 바꾼다. |

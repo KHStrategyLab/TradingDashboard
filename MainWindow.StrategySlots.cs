@@ -263,6 +263,7 @@ namespace TradingDashboard
             int totalLoaded = 0;
             bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
             string market = useNxtMarket ? "NXT" : "KRX";
+            bool saveSeedFiles = IsStrategyMinuteSeedFileSaveEnabled();
 
             foreach ((ChartPeriod Period, int Minute) item in new[]
             {
@@ -276,6 +277,22 @@ namespace TradingDashboard
             {
                 ChartCacheKey key = CreateChartCacheKey(stock.Code, useNxtMarket, item.Period);
                 int targetCount = CalculateStrategyMinuteTargetCount(stock, item.Minute);
+                if (saveSeedFiles &&
+                    _strategyMinuteSeedFileStore.TryLoadToday(stock.Code, market, item.Minute, targetCount, out List<DailyCandle> seedFileCandles))
+                {
+                    _strategyMinuteCacheService.Seed(stock.Code, market, item.Minute, seedFileCandles, targetCount);
+                    SetChartMemoryCache(key, [.. seedFileCandles.Select(ToChartCandle)], targetCount);
+                    AppendLog(seedFileCandles.Count >= targetCount
+                        ? $"strategy minute seed file hit: {stock.Code} / {market} / {item.Minute}m / {seedFileCandles.Count:N0}bars"
+                        : $"strategy minute seed file refill: {stock.Code} / {market} / {item.Minute}m / {seedFileCandles.Count:N0}->{targetCount:N0}bars");
+
+                    if (seedFileCandles.Count >= targetCount)
+                    {
+                        totalLoaded += seedFileCandles.Count;
+                        continue;
+                    }
+                }
+
                 int cachedCount = _chartMemoryCache.TryGetValue(key, out ChartCacheEntry? entry)
                     ? entry.Candles.Count
                     : 0;
@@ -290,6 +307,12 @@ namespace TradingDashboard
                             item.Minute,
                             ConvertChartCandlesToDailyCandles(entry.Candles),
                             targetCount);
+                        if (saveSeedFiles)
+                        {
+                            List<DailyCandle> memoryCandles = ConvertChartCandlesToDailyCandles(entry.Candles);
+                            _strategyMinuteSeedFileStore.SaveToday(stock.Code, market, item.Minute, memoryCandles, targetCount);
+                            AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(memoryCandles.Count, targetCount):N0}bars");
+                        }
                     }
 
                     AppendLog($"strategy minute data cache hit: {stock.Code} / {item.Minute}m / {cachedCount:N0}bars");
@@ -305,6 +328,12 @@ namespace TradingDashboard
                 List<ChartCandle> chartCandles = [.. candles.Select(ToChartCandle)];
                 SetChartMemoryCache(key, chartCandles, targetCount);
                 _strategyMinuteCacheService.Seed(stock.Code, market, item.Minute, candles, targetCount);
+                if (saveSeedFiles)
+                {
+                    _strategyMinuteSeedFileStore.SaveToday(stock.Code, market, item.Minute, candles, targetCount);
+                    AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(candles.Count, targetCount):N0}bars");
+                }
+
                 totalLoaded += chartCandles.Count;
                 AppendLog($"strategy minute data cache fill: {stock.Code} / {item.Minute}m / {chartCandles.Count:N0}/{targetCount:N0}bars");
             }

@@ -134,7 +134,8 @@
 - `분봉 프리로드`가 ON이면 `대기시간` 입력칸과 `파일 저장` 스위치를 잠그고, `분봉 프리로드` 스위치는 중단용으로 남겨둔다.
 - idle이 끝나 프리로드가 시작되면 종목 사이에 추가 대기 없이 연속 실행한다. 새 조건 편입이나 스위치 변경이 들어오면 진행 중 배치를 끊고 새 idle 예약으로 다시 잡는다.
 - 장중 조건식 신규 편입 종목도 감시목록에 들어오면 idle 예약에 포함한다.
-- 전략실의 `파일 저장` 스위치는 seed 파일 저장 모드 표시용이다. 실제 `Storage/StrategyMinuteSeeds` 저장 구현은 다음 단계다.
+- 전략실의 `파일 저장` 스위치가 ON이면 `Storage/StrategyMinuteSeeds/{yyyyMMdd}/{code}_{market}_{minute}.json`에 분봉 seed를 저장한다.
+- 다음 프리로드 때 같은 날짜/종목/시장/분봉 파일이 있으면 파일을 먼저 읽고, 목표 개수가 부족한 경우에만 REST로 보충한 뒤 다시 저장한다.
 - `StrategyMinuteDataStatus`는 차트 메모리 캐시가 아니라 전략분봉 장부의 READY/개수 상태를 표시한다.
 - `StrategyMinuteSnapshotSet`은 전략 슬롯이 요청할 수 있는 분봉별 Snapshot 묶음이다.
 - 0B 실시간 틱은 `StrategyMinuteCacheService.ApplyRealtimeTick(...)`으로 전략 장부의 현재봉을 갱신한다.
