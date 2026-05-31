@@ -57,6 +57,40 @@ namespace TradingDashboard
             UpdateStrategyProgressRows();
         }
 
+        private async void LoadStrategyMinuteDataButton_Click(object sender, RoutedEventArgs e)
+        {
+            WatchStockItem? stock = ResolveSelectedProgressStock();
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+            {
+                StrategyMinuteDataLoadStatusText.Text = "분봉을 로드할 종목을 먼저 선택해야 함";
+                return;
+            }
+
+            LoadStrategyMinuteDataButton.IsEnabled = false;
+            StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 분봉 데이터 로드 시작: 3/5/10/15분";
+
+            try
+            {
+                int loadedCount = await LoadStrategyMinuteDataAsync(stock);
+                StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 분봉 데이터 로드 완료: {loadedCount:N0}봉";
+                AppendLog($"strategy minute data loaded: {stock.Code} / {loadedCount:N0}bars");
+            }
+            catch (OperationCanceledException)
+            {
+                StrategyMinuteDataLoadStatusText.Text = "분봉 데이터 로드 취소";
+            }
+            catch (Exception ex)
+            {
+                StrategyMinuteDataLoadStatusText.Text = $"분봉 데이터 로드 실패: {ex.Message}";
+                AppendLog($"strategy minute data load error: {ex.Message}");
+            }
+            finally
+            {
+                LoadStrategyMinuteDataButton.IsEnabled = true;
+                UpdateStrategyProgressRows();
+            }
+        }
+
         private void SyncPaperTradingPreviewState()
         {
             if (AutoTradingEnabledToggle == null || VirtualTradingPreviewToggle == null)
@@ -109,7 +143,7 @@ namespace TradingDashboard
         private bool IsLockedStrategyConfigurationToggle(ToggleButton toggle) =>
             ReferenceEquals(toggle, StrategySlotBaseCandleChaseToggle) ||
             ReferenceEquals(toggle, StrategySlotPullbackToggle) ||
-            ReferenceEquals(toggle, StrategySlotPrevLimitToggle) ||
+            ReferenceEquals(toggle, StrategySlotMiddleToggle) ||
             ReferenceEquals(toggle, StrategySlotThemeAssistToggle) ||
             ReferenceEquals(toggle, DuplicateBuyPolicyToggle) ||
             ReferenceEquals(toggle, DuplicateAlertPolicyToggle);
@@ -145,16 +179,16 @@ namespace TradingDashboard
         [
             new(
                 StrategySlotId.BaseCandleChase,
-                "10min Base Candle Chase",
+                "SOR 10min MA60 + 3min Breakout",
                 IsStrategyToggleOn(StrategySlotBaseCandleChaseToggle)),
             new(
                 StrategySlotId.ThreeMinutePullback,
-                "3min Pullback",
+                "SOR 15min MA60 + 5min Breakout",
                 IsStrategyToggleOn(StrategySlotPullbackToggle)),
             new(
-                StrategySlotId.PrevLimitBodyRecovery,
-                "Prev Limit Body Recovery",
-                IsStrategyToggleOn(StrategySlotPrevLimitToggle)),
+                StrategySlotId.SorTenMinuteFiveMinuteBreakout,
+                "SOR 10min MA60 + 5min Breakout",
+                IsStrategyToggleOn(StrategySlotMiddleToggle)),
             new(
                 StrategySlotId.ThemeDisclosureAssist,
                 "Theme / Disclosure Assist",
@@ -168,11 +202,129 @@ namespace TradingDashboard
                 Stock = stock,
                 Metrics = _currentStatusMetrics,
                 ChartCandleCount = _currentChartCandles.Count,
+                MinuteData = BuildStrategyMinuteDataStatus(stock),
+                MinuteSnapshots = BuildStrategyMinuteSnapshotSet(stock),
                 Market = _isNxtMarketMode ? "NXT" : "KRX",
                 IsOwned = IsStockOwned(stock)
             };
 
             return _strategySlotRegistry.EvaluateEnabled(GetStrategySlotSettings(), context);
+        }
+
+        private async Task<int> LoadStrategyMinuteDataAsync(WatchStockItem stock)
+        {
+            int totalLoaded = 0;
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+            string market = useNxtMarket ? "NXT" : "KRX";
+
+            foreach ((ChartPeriod Period, int Minute) item in new[]
+            {
+                (ChartPeriod.Minute3, 3),
+                (ChartPeriod.Minute5, 5),
+                (ChartPeriod.Minute10, 10),
+                (ChartPeriod.Minute15, 15)
+            })
+            {
+                ChartCacheKey key = CreateChartCacheKey(stock.Code, useNxtMarket, item.Period);
+                int targetCount = CalculateStrategyMinuteTargetCount(stock, item.Minute);
+                int cachedCount = _chartMemoryCache.TryGetValue(key, out ChartCacheEntry? entry)
+                    ? entry.Candles.Count
+                    : 0;
+
+                if (cachedCount >= targetCount)
+                {
+                    if (entry != null)
+                    {
+                        _strategyMinuteCacheService.Seed(
+                            stock.Code,
+                            market,
+                            item.Minute,
+                            ConvertChartCandlesToDailyCandles(entry.Candles),
+                            targetCount);
+                    }
+
+                    AppendLog($"strategy minute data cache hit: {stock.Code} / {item.Minute}m / {cachedCount:N0}bars");
+                    totalLoaded += cachedCount;
+                    continue;
+                }
+
+                StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} {item.Minute}분 로드 중... ({cachedCount:N0}/{targetCount:N0})";
+                IReadOnlyList<DailyCandle> candles = await _kiwoomConditionService
+                    .GetMinuteCandlesAsync(stock.Code, item.Minute, useNxtMarket, targetCount)
+                    .ConfigureAwait(true);
+
+                List<ChartCandle> chartCandles = [.. candles.Select(ToChartCandle)];
+                SetChartMemoryCache(key, chartCandles, targetCount);
+                _strategyMinuteCacheService.Seed(stock.Code, market, item.Minute, candles, targetCount);
+                totalLoaded += chartCandles.Count;
+                AppendLog($"strategy minute data cache fill: {stock.Code} / {item.Minute}m / {chartCandles.Count:N0}/{targetCount:N0}bars");
+            }
+
+            return totalLoaded;
+        }
+
+        private static int CalculateStrategyMinuteTargetCount(WatchStockItem stock, int minute)
+        {
+            int safeMinute = Math.Max(1, minute);
+            const int daysToCover = 7;
+            const int sorSessionMinutesPerDay = 660;
+            const int warmupBars = 80;
+            int barsForBaseCandleRange = (int)Math.Ceiling(daysToCover * sorSessionMinutesPerDay / (double)safeMinute) + warmupBars;
+
+            return Math.Max(MinuteChartCandleCount, barsForBaseCandleRange);
+        }
+
+        private StrategyMinuteDataStatus BuildStrategyMinuteDataStatus(WatchStockItem? stock)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return new StrategyMinuteDataStatus();
+
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+            string market = useNxtMarket ? "NXT" : "KRX";
+            StrategyMinuteDataStatus status = _strategyMinuteCacheService.BuildStatus(stock.Code, market);
+
+            EnsureMinuteDataTarget(status, stock, 3);
+            EnsureMinuteDataTarget(status, stock, 5);
+            EnsureMinuteDataTarget(status, stock, 10);
+            EnsureMinuteDataTarget(status, stock, 15);
+            return status;
+        }
+
+        private StrategyMinuteSnapshotSet? BuildStrategyMinuteSnapshotSet(WatchStockItem? stock)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return null;
+
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+            string market = useNxtMarket ? "NXT" : "KRX";
+            return _strategyMinuteCacheService.GetSnapshotSet(stock.Code, market, 3, 5, 10, 15);
+        }
+
+        private static List<DailyCandle> ConvertChartCandlesToDailyCandles(IEnumerable<ChartCandle> candles)
+        {
+            return [.. (candles ?? [])
+                .Where(c => c != null && c.Close > 0 && !string.IsNullOrWhiteSpace(c.Date))
+                .Select(c => new DailyCandle
+                {
+                    Date = c.Date,
+                    Open = c.Open,
+                    High = c.High,
+                    Low = c.Low,
+                    Close = c.Close,
+                    Volume = c.Volume,
+                    TradingValue = c.Volume > 0 && c.Close > 0
+                        ? (long)Math.Min(long.MaxValue, c.Close * c.Volume)
+                        : 0
+                })];
+        }
+
+        private void EnsureMinuteDataTarget(
+            StrategyMinuteDataStatus status,
+            WatchStockItem stock,
+            int minute)
+        {
+            int targetCount = CalculateStrategyMinuteTargetCount(stock, minute);
+            status.SetCount(minute, status.GetCount(minute), targetCount);
         }
 
         private StrategyDuplicatePolicy GetStrategyDuplicatePolicy() =>
@@ -306,7 +458,7 @@ namespace TradingDashboard
             {
                 StrategySlotId.BaseCandleChase => IsStrategyToggleOn(ProgressFilterBaseCandleChaseToggle),
                 StrategySlotId.ThreeMinutePullback => IsStrategyToggleOn(ProgressFilterPullbackToggle),
-                StrategySlotId.PrevLimitBodyRecovery => IsStrategyToggleOn(ProgressFilterPrevLimitToggle),
+                StrategySlotId.SorTenMinuteFiveMinuteBreakout => IsStrategyToggleOn(ProgressFilterMiddleToggle),
                 StrategySlotId.ThemeDisclosureAssist => IsStrategyToggleOn(ProgressFilterThemeAssistToggle),
                 _ => false
             };

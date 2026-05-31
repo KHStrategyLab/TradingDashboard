@@ -4,7 +4,7 @@ namespace TradingDashboard.Services.Strategies
     {
         BaseCandleChase,
         ThreeMinutePullback,
-        PrevLimitBodyRecovery,
+        SorTenMinuteFiveMinuteBreakout,
         ThemeDisclosureAssist
     }
 }

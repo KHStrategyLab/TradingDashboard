@@ -121,21 +121,33 @@ Date: 2026-05-31
 | `TryRejectEngineLockedStrategyChange` | `MainWindow.StrategySlots.cs` | Engine Start 중 전략 설정 변경 차단 | 실행 중 전략 슬롯/중복 정책 변경을 되돌린다. |
 | `UpdateStrategyProgressRows` | `MainWindow.StrategySlots.cs` | 선택 종목의 전략 평가 결과를 Progress 탭에 표시 | `StrategyProgressSnapshot`의 0~70/70~100 표준 진행률을 UI에 표시한다. |
 | `StrategySlotRegistry.EvaluateEnabled` | `StrategySlotRegistry.cs` | registry 기준 전략 평가 호출 | 새 전략은 registry 등록과 descriptor 문서 경로가 같이 필요하다. |
+| `SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot.Evaluate` | `SorTenMinuteAggressive/SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot.cs` | Slot 1 공격형 전략 진행률 평가 | 현재는 알림/검증용 Progress만 반환한다. 실주문 연결 금지. |
+| `SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot.Evaluate` | `SorFifteenMinuteStable/SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot.cs` | Slot 2 안정형 주전략 진행률 평가 | 현재는 알림/검증용 Progress만 반환한다. 실주문 연결 금지. |
+| `SorTenMinuteMa60FiveMinuteBreakoutStrategySlot.Evaluate` | `SorTenMinuteMiddle/SorTenMinuteMa60FiveMinuteBreakoutStrategySlot.cs` | Slot 3 중간형 전략 진행률 평가 | 현재는 알림/검증용 Progress만 반환한다. 실주문 연결 금지. |
 | `StrategyEvaluationResult.Waiting` | `StrategyEvaluationResult.cs` | 전략 미구현/대기 상태 결과 생성 | 대기 상태를 매수 후보로 해석하면 안 된다. |
 | `StrategyProgressSnapshot.Empty` | `StrategyProgressSnapshot.cs` | Progress 기본값 | 0% WAIT. 실제 단계 계산 전 표시용. |
 | `StrategyProgressCalculator.Build` | `StrategyProgressCalculator.cs` | 전략별 단계 수를 공통 진행률로 변환 | 매수 전 단계는 0~70%, 보유 후 매도 단계는 70~100% 안에서 자동 분배한다. |
+| `StrategyMinuteCacheService` | `StrategyMinuteCacheService.cs` | 종목별/시장별/분봉별 전략분봉 장부 | 화면 차트가 아니라 전략실 데이터관리부다. `ApplyClosedBar`로 봉마감 확정봉을 받아쓰고 이평선을 고정한다. |
+| `StrategyMinuteBar` | `StrategyMinuteBar.cs` | 확정 분봉 OHLCV/거래대금/이평선 저장 단위 | MA5/10/20/60/200/240/480은 봉마감 후 계산되어 해당 봉에 고정된다. |
+| `StrategyMinuteFrameSnapshot` | `StrategyMinuteFrameSnapshot.cs` | 전략에 전달하는 분봉별 숫자 묶음 | 현재봉/직전 확정봉 OHLCV, 이평선, 최근20봉 고/저/최고종가/최저종가/거래량/거래대금을 포함한다. |
+| `StrategyMinuteSnapshotSet` | `StrategyMinuteSnapshotSet.cs` | 종목별 분봉 Snapshot 묶음 | Slot 1=10/3분, Slot 2=15/5분, Slot 3=10/5분처럼 전략이 필요한 조합을 즉시 받을 수 있게 한다. |
+| `StrategyMinuteDataStatus` | `StrategyMinuteDataStatus.cs` | 전략 Progress용 분봉 장부 READY/개수 표시 | 차트 메모리 캐시가 아니라 `StrategyMinuteCacheService` 상태를 기준으로 표시한다. |
+| `LoadStrategyMinuteDataAsync` | `MainWindow.StrategySlots.cs` | 선택 종목의 3/5/10/15분봉 seed 로드 | 받은 분봉은 화면 차트 캐시와 별도로 전략분봉 장부에도 seed로 저장한다. |
+| `BuildStrategyMinuteDataStatus` | `MainWindow.StrategySlots.cs` | 선택 종목의 분봉별 장부 개수 수집 | Slot 1=10/3분, Slot 2=15/5분, Slot 3=10/5분 데이터 단계 확인에 사용한다. |
+| `BuildStrategyMinuteSnapshotSet` | `MainWindow.StrategySlots.cs` | 선택 종목의 전략 Snapshot 세트 생성 | 전략 슬롯은 봉 리스트를 직접 뒤지지 않고 Snapshot 숫자 묶음만 읽는다. |
 
 ## 경량엔진 이식 후보
 
-현재 TradingDashboard에는 화면 차트와 전략 슬롯 뼈대가 있으나, KHStrategyLab의 경량엔진처럼 후보별 숫자 장부가 아직 분리되어 있지 않다.
-이식할 때는 새 엔진을 화면 차트 함수에 직접 붙이지 않는다.
+현재 TradingDashboard에는 `StrategyMinuteCacheService` 1차 장부가 들어갔다.
+이 장부는 화면 차트 함수가 아니라 전략실 데이터관리부가 소유한다.
+다음 단계는 후보 편입 시 seed 자동 로드, 봉마감 확정봉 입력, 전략별 RuntimeState 연결이다.
 
 | 필요 역할 | 현재 참고 함수/파일 | KHStrategyLab 참고 | 기준 |
 |---|---|---|---|
-| 분봉 seed 조회 | `GetMinuteCandlesAsync` | `MainWindow.MinuteCache.cs` | KRX=6자리, NXT=`_NX`, fallback 금지 |
-| 후보별 캐시 키 | 새 모델 필요 | `CandidateMinuteCache`, `BuildMinuteCacheKey` | `종목코드|KRX`, `종목코드|NXT` |
-| 현재봉 갱신 입력 | `ApplyRealtimeItem`, `ApplyRealtimeMinuteChartTick` | `ApplyRealtimeTickToCandidateMinuteCache` | 화면 차트와 전략 캐시 갱신을 분리 |
-| READY 판정 | 새 서비스 필요 | `TryGetReadyCandidateMinuteCache` | 10분봉/5분봉 최소 개수 충족 전 매수 판단 차단 |
+| 분봉 seed 조회 | `GetMinuteCandlesAsync`, `LoadStrategyMinuteDataAsync` | `MainWindow.MinuteCache.cs` | KRX=6자리, NXT=`_NX`, fallback 금지 |
+| 후보별 캐시 키 | `StrategyMinuteCacheService` | `CandidateMinuteCache`, `BuildMinuteCacheKey` | `종목코드|시장|분봉` |
+| 봉마감 확정봉 입력 | `StrategyMinuteCacheService.ApplyClosedBar` | `ApplyRealtimeTickToCandidateMinuteCache` | 매 틱 저장보다 봉마감 시 OHLCV/거래대금 확정 저장을 우선한다. |
+| READY 판정 | `StrategyMinuteDataStatus`, `BuildStrategyMinuteDataStatus` | `TryGetReadyCandidateMinuteCache` | 요청 분봉 최소 개수 충족 전 매수 판단 차단 |
 | 상태머신 | 전략 슬롯별 `Evaluate` 확장 | `MainWindow.Strategy.BuySignalCheck.cs` | WAIT -> pullback -> recovery -> signal 흐름 |
 | 주문 연결 | `KiwoomTradingClient` | `EvaluateLiveBuyRiskGuard` | 신호 -> RiskGuard -> 주문 순서. 신호가 주문을 직접 보내지 않는다. |
 

@@ -2130,7 +2130,7 @@
                                                        Foreground="{StaticResource TextMainBrush}"
                                                        FontSize="13"
                                                        FontWeight="Bold"/>
-                                            <TextBlock Text="1. 조건00 MA 회복초입(기존 등록) · KRX 일봉 기준봉 / 10분 MA5·20·60 / 5분 20봉 신고가"
+                                            <TextBlock Text="1. SOR 10분 기준 + 3분 공격형 · 10분 MA60 / 3분 20봉 신고가"
                                                        Foreground="{StaticResource TextMainBrush}"
                                                        FontSize="11"
                                                        Margin="0,7,0,0"
@@ -2140,27 +2140,17 @@
                                                        FontSize="11"
                                                        Margin="0,4,0,0"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="3. SOR 10분 눌림 + 5분 돌파(중간형) · KRX 일봉 기준봉 / 10분 MA60 / 5분 20봉 신고가"
+                                            <TextBlock Text="후보. SOR 10분 눌림 + 5분 돌파(중간형) · KRX 일봉 기준봉 / 10분 MA60 / 5분 20봉 신고가"
                                                        Foreground="{StaticResource TextMainBrush}"
                                                        FontSize="11"
                                                        Margin="0,4,0,0"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="4. SOR 10분 기준 + 3분 공격형(오늘 추가) · 10분 MA60 / 3분 20봉 신고가"
-                                                       Foreground="{StaticResource TextMainBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,4,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="5. 전일상한가 몸통 눌림 시가회복 · KRX 일봉 기준봉 / 5분 반등선 / 시가회복"
-                                                       Foreground="{StaticResource TextMainBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,4,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="6. 당일 1분 장대양봉 눌림(10순위 후보) · 1분 MA60 / 기준봉 중심값 / 1분 거래대금"
+                                            <TextBlock Text="보관. 당일 1분 장대양봉 눌림(10순위 후보) · 1분 MA60 / 기준봉 중심값 / 1분 거래대금"
                                                        Foreground="{StaticResource TextMutedBrush}"
                                                        FontSize="11"
                                                        Margin="0,4,0,0"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="7. 테마·공시·뉴스 보조 · 이평선 없음 / 재료 확인 전용 / 단독매수 없음"
+                                            <TextBlock Text="보조. 테마·공시·뉴스 · 이평선 없음 / 재료 확인 전용 / 단독매수 없음"
                                                        Foreground="{StaticResource TextMutedBrush}"
                                                        FontSize="11"
                                                        Margin="0,4,0,0"
@@ -2179,7 +2169,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Slot 1 · 10min Base Candle Chase"
+                                                <TextBlock Text="Slot 1 · SOR 10min MA60 + 3min Breakout"
                                                            Foreground="{StaticResource TextMainBrush}"
                                                            FontSize="15"
                                                            FontWeight="Bold"
@@ -2202,12 +2192,12 @@
                                                            FontSize="10"
                                                            FontWeight="SemiBold"/>
                                             </Border>
-                                            <TextBlock Text="10min volume/value burst, high breakout, not overextended"
+                                            <TextBlock Text="10min MA60 pullback/recovery, then 3min 20-bar breakout"
                                                        Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="Stop: base mid or breakout -1.5% · Target: base range extension"
+                                            <TextBlock Text="Stop: -1.5%, 10min MA60 loss, or pullback low loss · Target: +3%, +5~6% trail"
                                                        Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
@@ -2226,7 +2216,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Slot 2 · 3min Pullback"
+                                                <TextBlock Text="Slot 2 · SOR 15min MA60 + 5min Breakout"
                                                            Foreground="{StaticResource TextMainBrush}"
                                                            FontSize="15"
                                                            FontWeight="Bold"
@@ -2249,12 +2239,12 @@
                                                            FontSize="10"
                                                            FontWeight="SemiBold"/>
                                             </Border>
-                                            <TextBlock Text="After base candle, wait for pullback, reaction, confirmation"
+                                            <TextBlock Text="Daily MA60 open zone, 15min MA60 pullback, then 5min 20-bar breakout"
                                                        Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="Stop: reaction candle low · Target: base high recovery first"
+                                            <TextBlock Text="Stop: 15min MA60 loss or pullback low · Target: +3%, then trail"
                                                        Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
@@ -2262,46 +2252,46 @@
                                         </StackPanel>
                                     </ToggleButton>
 
-                                    <ToggleButton x:Name="StrategySlotPrevLimitToggle"
+                                    <ToggleButton x:Name="StrategySlotMiddleToggle"
                                                   Style="{StaticResource StrategySlotToggleStyle}"
                                                   Checked="StrategySlotToggle_Changed"
                                                   Unchecked="StrategySlotToggle_Changed"
-                                                  IsChecked="False">
+                                                  IsChecked="True">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Slot 3 · Prev Limit Body Recovery"
+                                                <TextBlock Text="Slot 3 · SOR 10min MA60 + 5min Breakout"
                                                            Foreground="{StaticResource TextMainBrush}"
                                                            FontSize="15"
                                                            FontWeight="Bold"
                                                            VerticalAlignment="Center"/>
                                                 <Button Grid.Column="1"
                                                         Content="설명"
-                                                        Tag="PrevLimitBodyRecovery"
+                                                        Tag="SorTenMinuteFiveMinuteBreakout"
                                                         Style="{StaticResource StrategyDetailButtonStyle}"
                                                         Click="StrategyDetailButton_Click"/>
                                             </Grid>
                                             <Border HorizontalAlignment="Left"
-                                                    Background="#2A2020"
-                                                    BorderBrush="{StaticResource PalettePink}"
+                                                    Background="#17243A"
+                                                    BorderBrush="{StaticResource PaletteSkyBlue}"
                                                     BorderThickness="1"
                                                     CornerRadius="4"
                                                     Padding="6,1"
                                                     Margin="0,5,0,0">
-                                                <TextBlock Text="KRX 전용 · 기준봉 KRX 일봉"
-                                                           Foreground="{StaticResource PalettePink}"
+                                                <TextBlock Text="SOR · KRX 기준가 고정"
+                                                           Foreground="{StaticResource PaletteSkyBlue}"
                                                            FontSize="10"
                                                            FontWeight="SemiBold"/>
                                             </Border>
-                                            <TextBlock Text="KRX base candle, body pullback, open recovery signal"
+                                            <TextBlock Text="10min MA60 pullback/recovery, then 5min 20-bar breakout"
                                                        Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="Reserved for KHStrategyLab strategy import"
+                                            <TextBlock Text="Stop: 10min MA60 loss or pullback low · Target: +3%, then trail"
                                                        Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
@@ -2320,7 +2310,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Slot 4 · Theme / Disclosure Assist"
+                                                <TextBlock Text="Assist · Theme / Disclosure"
                                                            Foreground="{StaticResource TextMainBrush}"
                                                            FontSize="15"
                                                            FontWeight="Bold"
@@ -2492,7 +2482,8 @@
                               Margin="10">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="9*"/>
+                                <RowDefinition Height="1*"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0"
@@ -2529,13 +2520,14 @@
                                                       Unchecked="StrategyProgressFilter_Changed"
                                                       Style="{StaticResource StrategyFilterChipStyle}"/>
                                         <ToggleButton x:Name="ProgressFilterPullbackToggle"
-                                                      Content="3min Pullback"
+                                                      Content="15m+5m"
                                                       IsChecked="True"
                                                       Checked="StrategyProgressFilter_Changed"
                                                       Unchecked="StrategyProgressFilter_Changed"
                                                       Style="{StaticResource StrategyFilterChipStyle}"/>
-                                        <ToggleButton x:Name="ProgressFilterPrevLimitToggle"
-                                                      Content="Prev Limit"
+                                        <ToggleButton x:Name="ProgressFilterMiddleToggle"
+                                                      Content="10m+5m"
+                                                      IsChecked="True"
                                                       Checked="StrategyProgressFilter_Changed"
                                                       Unchecked="StrategyProgressFilter_Changed"
                                                       Style="{StaticResource StrategyFilterChipStyle}"/>
@@ -3016,107 +3008,37 @@
                                             </Grid>
                                         </StackPanel>
                                     </Border>
-
-                                    <Border Background="{StaticResource BgInnerBrush}"
-                                            BorderBrush="{StaticResource LineSoftBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="6"
-                                            Padding="10">
-                                        <StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Prev Limit Body Recovery"
-                                                           Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="12"
-                                                           FontWeight="SemiBold"/>
-                                                <TextBlock Grid.Column="1"
-                                                           Text="KRX"
-                                                           Foreground="{StaticResource PalettePink}"
-                                                           FontSize="11"
-                                                           FontWeight="Bold"/>
-                                            </Grid>
-                                            <Grid Margin="0,8,0,0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="58"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="40"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0"
-                                                           Text="회복강도"
-                                                           Style="{StaticResource StrategyStrengthLabelStyle}"/>
-                                                <ProgressBar Grid.Column="1"
-                                                             Minimum="0"
-                                                             Maximum="100"
-                                                             Value="20"
-                                                             Foreground="{StaticResource PalettePink}"
-                                                             Style="{StaticResource StrategyStrengthProgressBarStyle}"
-                                                             VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="2"
-                                                           Text="20%"
-                                                           Foreground="{StaticResource PalettePink}"
-                                                           FontSize="11"
-                                                           FontWeight="SemiBold"
-                                                           TextAlignment="Right"
-                                                           VerticalAlignment="Center"/>
-                                            </Grid>
-                                            <Grid Margin="0,12,0,0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Grid.Column="0" Style="{StaticResource StrategyStepCircleStyle}" BorderBrush="{StaticResource PaletteSkyBlue}">
-                                                    <TextBlock Text="1" Foreground="{StaticResource PaletteSkyBlue}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <Border Grid.Column="1" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
-                                                <Border Grid.Column="2" Style="{StaticResource StrategyStepCircleStyle}">
-                                                    <TextBlock Text="2" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <Border Grid.Column="3" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
-                                                <Border Grid.Column="4" Style="{StaticResource StrategyStepCircleStyle}">
-                                                    <TextBlock Text="3" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <Border Grid.Column="5" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
-                                                <Border Grid.Column="6" Style="{StaticResource StrategyStepCircleStyle}">
-                                                    <TextBlock Text="4" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <Border Grid.Column="7" Height="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" Margin="4,0"/>
-                                                <Border Grid.Column="8" Style="{StaticResource StrategyStepCircleStyle}">
-                                                    <TextBlock Text="5" Foreground="{StaticResource TextMutedBrush}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </Grid>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="52"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="기준봉" Style="{StaticResource StrategyStepLabelStyle}"/>
-                                                <TextBlock Grid.Column="2" Text="몸통눌림" Style="{StaticResource StrategyStepLabelStyle}"/>
-                                                <TextBlock Grid.Column="4" Text="탈출봉" Style="{StaticResource StrategyStepLabelStyle}"/>
-                                                <TextBlock Grid.Column="6" Text="시가회복" Style="{StaticResource StrategyStepLabelStyle}"/>
-                                                <TextBlock Grid.Column="8" Text="후보" Style="{StaticResource StrategyStepLabelStyle}"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
                                     </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
+
+                            <Border Grid.Row="2"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    CornerRadius="6"
+                                    Padding="10"
+                                    Margin="0,8,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="LoadStrategyMinuteDataButton"
+                                            Content="분봉 데이터 로드"
+                                            Width="132"
+                                            Height="30"
+                                            Click="LoadStrategyMinuteDataButton_Click"/>
+                                    <TextBlock Grid.Column="1"
+                                               x:Name="StrategyMinuteDataLoadStatusText"
+                                               Text="선택 종목의 3/5/10/15분 데이터를 캐시에 채우면 Progress가 갱신됨"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0"
+                                               TextWrapping="Wrap"/>
+                                </Grid>
+                            </Border>
                         </Grid>
                     </TabItem>
 

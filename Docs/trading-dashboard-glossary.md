@@ -227,6 +227,7 @@ NXT 시장 데이터 조회용 종목코드 suffix다.
 
 기존 KHStrategyLab 주전략이다.
 현재 TradingDashboard의 `Kiwoom.ConditionSeq01` 설정값을 뜻하는 말이 아니라, 기존 전략 문서에서 쓰던 전략명이다.
+현재 TradingDashboard 전략 슬롯에서는 폐기되어 active 전략으로 평가하지 않는다.
 
 ```text
 KRX 일봉 기준봉

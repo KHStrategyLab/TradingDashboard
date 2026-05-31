@@ -1,5 +1,11 @@
 # Prev Limit Body Recovery
 
+## 상태
+
+폐기된 전략이다.
+현재 TradingDashboard의 전략 슬롯 UI와 registry에는 연결하지 않는다.
+이 문서는 과거 검토 이력 확인용으로만 보관한다.
+
 ## 역할
 
 전일 상한가급 기준봉의 몸통 안으로 눌린 뒤, 시가 회복 흐름을 보는 전략이다.

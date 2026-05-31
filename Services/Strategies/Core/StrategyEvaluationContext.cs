@@ -10,6 +10,10 @@ namespace TradingDashboard.Services.Strategies
 
         public int ChartCandleCount { get; init; }
 
+        public StrategyMinuteDataStatus MinuteData { get; init; } = new();
+
+        public StrategyMinuteSnapshotSet? MinuteSnapshots { get; init; }
+
         public string Market { get; init; } = string.Empty;
 
         public bool IsOwned { get; init; }

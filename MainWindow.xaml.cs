@@ -17,6 +17,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using TradingDashboard.Models;
 using TradingDashboard.Services;
+using TradingDashboard.Services.Strategies;
 using TradingDashboard.Services.Trading;
 
 namespace TradingDashboard
@@ -41,6 +42,7 @@ namespace TradingDashboard
         private readonly KiwoomRestConditionService _kiwoomConditionService;
         private readonly KiwoomTradingClient _tradingClient;
         private readonly TradingCostCalculator _tradingCostCalculator;
+        private readonly StrategyMinuteCacheService _strategyMinuteCacheService = new();
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
         private readonly Queue<LogLineEntry> _logLines = new();

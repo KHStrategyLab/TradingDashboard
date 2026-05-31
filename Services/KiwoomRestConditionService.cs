@@ -309,44 +309,45 @@ namespace TradingDashboard.Services
             // Base price and colors still use the KRX previous close locked by MainWindow.
             string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
 
-            using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/chart");
-            req.Headers.TryAddWithoutValidation("authorization", $"Bearer {token}");
-            req.Headers.TryAddWithoutValidation("api-id", "ka10080");
-            req.Headers.TryAddWithoutValidation("cont-yn", "N");
-            req.Headers.TryAddWithoutValidation("next-key", "");
-            req.Content = new StringContent(JsonSerializer.Serialize(new
+            var candles = new List<DailyCandle>();
+            var body = new
             {
                 stk_cd = requestCode,
                 tic_scope = minute.ToString(),
                 upd_stkpc_tp = "1",
                 base_dt = System.DateTime.Now.ToString("yyyyMMdd")
-            }), Encoding.UTF8, "application/json");
+            };
 
-            using HttpResponseMessage response = await SendKiwoomRestAsync(req, "ka10080", cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                return [];
-
-            string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            using JsonDocument doc = JsonDocument.Parse(json);
-            JsonElement array = FindArrayByKeySafe(doc.RootElement, "stk_min_pole_chart_qry");
-            if (array.ValueKind != JsonValueKind.Array)
-                array = FindFirstArray(doc.RootElement);
-            if (array.ValueKind != JsonValueKind.Array)
-                return [];
-
-            var candles = new List<DailyCandle>();
-            foreach (JsonElement item in array.EnumerateArray())
+            int targetCount = Math.Max(1, takeCount);
+            int maxPages = Math.Clamp((targetCount / 200) + 3, 1, 12);
+            await foreach (JsonElement root in PostApiRootPagesAsync(token, "ka10080", "/api/dostk/chart", body, maxPages, cancellationToken).ConfigureAwait(false))
             {
-                DailyCandle? candle = ParseDailyCandle(item);
-                if (candle != null && candle.Close > 0 && !string.IsNullOrWhiteSpace(candle.Date))
-                    candles.Add(candle);
+                JsonElement array = FindArrayByKeySafe(root, "stk_min_pole_chart_qry");
+                if (array.ValueKind != JsonValueKind.Array)
+                    array = FindFirstArray(root);
+                if (array.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (JsonElement item in array.EnumerateArray())
+                {
+                    DailyCandle? candle = ParseDailyCandle(item);
+                    if (candle != null && candle.Close > 0 && !string.IsNullOrWhiteSpace(candle.Date))
+                        candles.Add(candle);
+                }
+
+                int uniqueCount = candles
+                    .Select(c => c.Date)
+                    .Distinct(System.StringComparer.Ordinal)
+                    .Count();
+                if (uniqueCount >= targetCount)
+                    break;
             }
 
             return [.. candles
                 .GroupBy(c => c.Date, System.StringComparer.Ordinal)
                 .Select(g => g.First())
                 .OrderBy(c => c.Date)
-                .TakeLast(takeCount)];
+                .TakeLast(targetCount)];
         }
 
         public async Task<List<DailyCandle>> GetMonthlyCandlesAsync(string code, bool useNxtMarket = false, int takeCount = 80, CancellationToken cancellationToken = default)

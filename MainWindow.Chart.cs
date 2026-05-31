@@ -167,6 +167,7 @@ namespace TradingDashboard
             ResetChartViewport();
 
             DrawFullChart(reason);
+            UpdateStrategyProgressRows();
         }
 
         private ChartCacheKey CreateChartCacheKey(string stockCode, bool useNxtMarket, ChartPeriod period)
@@ -202,7 +203,12 @@ namespace TradingDashboard
 
         private void SetChartMemoryCache(ChartCacheKey key, IEnumerable<ChartCandle> candles)
         {
-            List<ChartCandle> snapshot = CloneChartCandles(candles.TakeLast(ResolveChartCandleCount(key.Period)));
+            SetChartMemoryCache(key, candles, ResolveChartCandleCount(key.Period));
+        }
+
+        private void SetChartMemoryCache(ChartCacheKey key, IEnumerable<ChartCandle> candles, int retainCount)
+        {
+            List<ChartCandle> snapshot = CloneChartCandles(candles.TakeLast(Math.Max(1, retainCount)));
             if (snapshot.Count == 0)
                 return;
 

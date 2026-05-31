@@ -15,9 +15,9 @@ namespace TradingDashboard.Services.Strategies
         public static StrategySlotRegistry CreateDefault() =>
             new(
             [
-                new BaseCandleChaseStrategySlot(),
-                new ThreeMinutePullbackStrategySlot(),
-                new PrevLimitBodyRecoveryStrategySlot(),
+                new SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot(),
+                new SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot(),
+                new SorTenMinuteMa60FiveMinuteBreakoutStrategySlot(),
                 new ThemeDisclosureAssistStrategySlot()
             ]);
 
