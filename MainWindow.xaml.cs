@@ -48,6 +48,7 @@ namespace TradingDashboard
         private readonly StrategyOrderJournalStore _strategyOrderJournalStore = new();
         private readonly StrategyPositionLedgerStore _strategyPositionLedgerStore = new();
         private readonly PaperPositionLedgerStore _paperPositionLedgerStore = new();
+        private readonly PaperTradeMarkStore _paperTradeMarkStore = new();
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
         private readonly Queue<LogLineEntry> _logLines = new();

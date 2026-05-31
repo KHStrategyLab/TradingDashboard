@@ -21,6 +21,7 @@ Storage/StrategyAnchors/
 Storage/StrategyOrderJournal/
 Storage/StrategyPositions/
 Storage/PaperPositions/
+Storage/PaperTradeMarks/
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)

@@ -189,6 +189,7 @@ Paper Trading:
 - Paper는 가상계좌/가상장부/가상표시만 담당한다.
 - Paper 수량, 평균가, 평가손익은 실제 잔고와 섞지 않는다.
 - Paper 장부는 `Storage/PaperPositions/{yyyyMMdd}.json`에 별도로 둔다.
+- Paper 사건 기록은 `Storage/PaperTradeMarks/{yyyyMMdd}.json`에 별도로 둔다. BUY/STOP/TARGET마다 시간, 가격, 수량, 금액, 손익, 사유를 기록한다.
 - Balance 탭 하단의 Paper 미니 그리드는 실제 잔고 아래 약 15% 영역에 표시하고, 맨 아래 가이드 카드는 Paper가 실주문/실잔고를 바꾸지 않는다는 원칙을 고정 표시한다.
 - 1단계 Paper BUY는 전략 신호 시 그 순간 가격을 가상 진입가로 찍고, 종목/Slot/가격/수량/시간/사유를 `OPEN` 상태로 저장한다. 실제 주문, 주문번호, 체결조회는 없다.
 - 2단계 Paper P/L은 0B 현재가가 들어올 때 `OPEN` Paper 포지션의 현재가, 평가손익, 손익률만 갱신한다. 실제 잔고 수량/평균가/총평가에는 반영하지 않는다.
@@ -203,7 +204,7 @@ Paper Trading:
 - `RUN STATE`, `MINUTE READY`, `WAIT DATA`, `RUNNING` 표시는 분봉 장부 준비 상태와 감시 상태를 나눠 보여준다.
 - 자동 프리로드는 실제 READY 확인 후에만 `completed`와 `stock done`을 올린다. 실패 종목은 `failed`로 남기고 `ALL READY TO USE`에 포함하지 않는다.
 - `겹침 매수 ON`에서는 같은 종목의 다른 Slot 신호를 막지 않는다. 같은 종목+같은 Slot의 당일 재진입만 막는다.
-- 런타임 장부 `Storage/StrategyMinuteSeeds`, `Storage/StrategyAnchors`, `Storage/StrategyOrderJournal`, `Storage/StrategyPositions`, `Storage/PaperPositions`는 GitHub 백업 대상이 아니다.
+- 런타임 장부 `Storage/StrategyMinuteSeeds`, `Storage/StrategyAnchors`, `Storage/StrategyOrderJournal`, `Storage/StrategyPositions`, `Storage/PaperPositions`, `Storage/PaperTradeMarks`는 GitHub 백업 대상이 아니다.
 
 전략별 기억값은 공통 장부에 넣지 않는다.
 

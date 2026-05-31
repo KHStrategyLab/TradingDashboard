@@ -56,6 +56,7 @@ namespace TradingDashboard
 
             _paperPositions.Add(entry);
             SavePaperPositions();
+            SavePaperTradeMark(entry, "BUY", now, result.Name);
             return entry;
         }
 
@@ -121,9 +122,37 @@ namespace TradingDashboard
             entry.Reason = string.IsNullOrWhiteSpace(entry.Reason)
                 ? exitReason
                 : $"{entry.Reason} / {exitReason}";
+            SavePaperTradeMark(entry, exitReason, now, exitReason);
             AppendReadyLog(
                 $"PAPER {exitReason} MARKED: {entry.Code} {entry.Name} / {entry.SlotTag} / " +
                 $"entry {entry.EntryPrice:N0} / exit {entry.CurrentPrice:N0} / pnl {entry.ProfitLoss:N0} ({entry.ProfitRate:0.##}%)");
+        }
+
+        private void SavePaperTradeMark(PaperPositionLedgerEntry entry, string eventName, string time, string reason)
+        {
+            long price = string.Equals(eventName, "BUY", StringComparison.OrdinalIgnoreCase)
+                ? entry.EntryPrice
+                : entry.CurrentPrice;
+
+            _paperTradeMarkStore.AppendToday(new PaperTradeMarkEntry
+            {
+                Id = $"{time}|{entry.Key}|{eventName}",
+                Date = DateTime.Today.ToString("yyyyMMdd"),
+                Time = time,
+                PositionKey = entry.Key,
+                Code = entry.Code,
+                Name = entry.Name,
+                SlotTag = entry.SlotTag,
+                Event = eventName,
+                Quantity = entry.Quantity,
+                Price = price,
+                Amount = price * entry.Quantity,
+                EntryPrice = entry.EntryPrice,
+                ProfitLoss = string.Equals(eventName, "BUY", StringComparison.OrdinalIgnoreCase) ? 0 : entry.ProfitLoss,
+                ProfitRate = string.Equals(eventName, "BUY", StringComparison.OrdinalIgnoreCase) ? 0 : entry.ProfitRate,
+                Reason = reason,
+                Memo = "paper only"
+            });
         }
 
         private void SavePaperPositions()
