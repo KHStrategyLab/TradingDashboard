@@ -1038,7 +1038,7 @@ namespace TradingDashboard
                 execution.LiveBuyEnabled ||
                 !IsPaperTradingPreviewEnabled() ||
                 !IsStrategyMinuteDataReady(stock) ||
-                stock.LastPrice <= 0)
+                ResolveStrategySignalPrice(stock) <= 0)
                 return;
 
             string armedKey = $"{NormalizeStockCode(stock.Code)}|PAPER_ARMED|{DateTime.Today:yyyyMMdd}";
@@ -1055,11 +1055,13 @@ namespace TradingDashboard
                 if (!_paperTradingPreviewLoggedKeys.Add(key))
                     continue;
 
-                long budget = Math.Max(0, execution.Budget);
-                long quantity = stock.LastPrice > 0 ? budget / stock.LastPrice : 0;
-                AppendLog(
-                    $"PAPER BUY READY TO USE: {stock.Code} {stock.Name} / {result.Name} / " +
-                    $"price {stock.LastPrice:N0} / qty {quantity:N0} / budget {budget:N0} / live order BLOCKED");
+                PaperPositionLedgerEntry? entry = TryRecordPaperBuy(stock, result, execution);
+                if (entry == null)
+                    continue;
+
+                AppendReadyLog(
+                    $"PAPER BUY MARKED: {stock.Code} {stock.Name} / {entry.SlotTag} / {result.Name} / " +
+                    $"price {entry.EntryPrice:N0} / qty {entry.Quantity:N0} / virtual only");
             }
         }
 
