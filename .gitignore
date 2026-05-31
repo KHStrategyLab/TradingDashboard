@@ -19,6 +19,8 @@ Config/chart_candle_cache.json
 Storage/StrategyMinuteSeeds/
 Storage/StrategyAnchors/
 Storage/StrategyOrderJournal/
+Storage/StrategyPositions/
+Storage/PaperPositions/
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)

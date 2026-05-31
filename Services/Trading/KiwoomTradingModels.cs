@@ -107,7 +107,10 @@ namespace TradingDashboard.Services.Trading
         long PurchaseAmount,
         long EvaluationAmount,
         long EvaluationProfit,
-        decimal ProfitRate);
+        decimal ProfitRate)
+    {
+        public string PositionTag { get; init; } = string.Empty;
+    }
 
     public sealed record KiwoomBalanceSnapshot(
         string SourceApi,

@@ -187,6 +187,29 @@ namespace TradingDashboard.Services.Strategies
             }
         }
 
+        public bool TryGetBarAt(
+            string code,
+            string market,
+            int minute,
+            DateTime sourceTime,
+            out StrategyMinuteBar bar)
+        {
+            bar = new StrategyMinuteBar();
+            string normalizedCode = NormalizeCode(code);
+            string normalizedMarket = NormalizeMarket(market);
+            if (string.IsNullOrWhiteSpace(normalizedCode) || minute <= 0 || sourceTime == DateTime.MinValue)
+                return false;
+
+            lock (_syncRoot)
+            {
+                if (!_stockCaches.TryGetValue(BuildStockKey(normalizedCode, normalizedMarket), out StrategyStockMinuteCache? stockCache) ||
+                    !stockCache.Frames.TryGetValue(minute, out StrategyMinuteBlock? block))
+                    return false;
+
+                return block.TryGetBarAt(sourceTime, out bar);
+            }
+        }
+
         private StrategyMinuteBlock GetOrCreateBlock(string code, string market, int minute)
         {
             string stockKey = BuildStockKey(code, market);

@@ -143,12 +143,19 @@ namespace TradingDashboard
 
                 long unfilled = openOrders.Sum(order => Math.Max(0, order.UnfilledQuantity));
                 long filled = fills.Sum(fill => Math.Max(0, fill.FilledQuantity));
+                StrategyPositionLedgerEntry? positionEntry = SaveStrategyBuyPosition(stock, result, orderResult, fills);
 
                 Dispatcher.Invoke(() =>
                 {
                     AppendLog(
                         $"LIVE BUY AUDIT: {stock.Code} {stock.Name} / {result.Name} / " +
                         $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
+                    if (positionEntry != null)
+                    {
+                        AppendReadyLog(
+                            $"STRATEGY POSITION TAGGED: {stock.Code} {stock.Name} / {positionEntry.SlotTag} / " +
+                            $"qty {positionEntry.Quantity:N0} / avg {positionEntry.AveragePrice:N0} / entry5m low {positionEntry.Entry5MinuteLow:N0}");
+                    }
                     SaveStrategyOrderJournal(
                         BuildStrategyLiveBuyOrderKey(stock, result),
                         "BUY",

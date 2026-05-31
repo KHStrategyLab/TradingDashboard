@@ -6,11 +6,11 @@ namespace TradingDashboard.Services.Strategies
         public ThemeDisclosureAssistStrategySlot()
             : base(new StrategySlotDescriptor(
                 StrategySlotId.ThemeDisclosureAssist,
-                "Theme / Disclosure Assist",
+                "Manual Buy Stop Assist",
                 StrategyMarketScope.Assist,
-                "보조",
-                "Theme, disclosure, and news tags only",
-                "공시, 뉴스, 테마 태그를 이용해 후보의 우선순위를 보조한다. 이 슬롯은 단독 매수신호를 만들지 않고, 좋은 재료 확인이나 위험 태그 표시만 담당한다.",
+                "ASSIST",
+                "Manual holdings stop-loss only",
+                "No buy signal. Watches holdings without an automatic strategy tag and raises a stop signal from the entry 5-minute low or a 5-minute MA5 breakdown.",
                 "Docs/Strategies/theme-disclosure-assist.md"))
         {
         }
@@ -18,29 +18,30 @@ namespace TradingDashboard.Services.Strategies
         public override StrategyEvaluationResult Evaluate(StrategyEvaluationContext context)
         {
             bool hasStock = context.Stock != null;
-            bool gatePassed = context.Stock?.GateBaseCandleFound == true;
+            bool isOwned = context.IsOwned;
+            bool hasFiveMinuteData = context.MinuteSnapshots?.Get(5)?.Ma5 > 0;
 
             StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
                 Id,
-                "ASSIST",
-                "assist tracking",
+                "MANUAL_STOP",
+                "manual holding stop assist",
                 [
                     StrategyProgressCalculator.Step("condition", "condition", hasStock),
-                    StrategyProgressCalculator.Step("gate", "base gate", gatePassed),
-                    StrategyProgressCalculator.Step("news", "news tags", false),
-                    StrategyProgressCalculator.Step("disclosure", "filing tags", false),
-                    StrategyProgressCalculator.Step("theme", "theme link", false)
+                    StrategyProgressCalculator.Step("manual-holding", "manual holding", isOwned),
+                    StrategyProgressCalculator.Step("5m-data", "5m stop data", hasFiveMinuteData),
+                    StrategyProgressCalculator.Step("entry-low", "entry 5m low anchor", false),
+                    StrategyProgressCalculator.Step("stop-signal", "stop signal", false)
                 ],
                 isOwned: false,
-                strengthPercent: gatePassed ? 28 : hasStock ? 14 : 0,
-                strengthLabel: "보조강도");
+                strengthPercent: isOwned && hasFiveMinuteData ? 35 : hasStock ? 10 : 0,
+                strengthLabel: "stop assist");
 
             return new StrategyEvaluationResult(
                 Id,
                 Name,
                 false,
-                "ASSIST",
-                "theme, disclosure, and news tag checks pending",
+                "MANUAL_STOP",
+                "manual holdings only; no buy signal",
                 progress);
         }
     }

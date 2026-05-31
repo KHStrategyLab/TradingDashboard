@@ -6,6 +6,7 @@
         Height="1080"
         MinWidth="1200"
         MinHeight="700"
+        Icon="Assets/AppIcon.ico"
         WindowState="Maximized"
         Background="#121212"
         Foreground="#E0E0E0"
@@ -2314,7 +2315,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Assist · Theme / Disclosure"
+                                                <TextBlock Text="Assist · Manual Buy Stop"
                                                            Foreground="{StaticResource TextMainBrush}"
                                                            FontSize="15"
                                                            FontWeight="Bold"
@@ -2337,12 +2338,12 @@
                                                            FontSize="10"
                                                            FontWeight="SemiBold"/>
                                             </Border>
-                                            <TextBlock Text="News, disclosure, and theme tags only; no buy signal yet"
+                                            <TextBlock Text="Manual holdings only; no buy signal"
                                                        Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="Low priority assistant slot"
+                                            <TextBlock Text="Stop: entry 5m low or 5m MA5 breakdown"
                                                        Style="{StaticResource CardSubTextStyle}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"
@@ -3137,7 +3138,8 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="9*"/>
+                                <RowDefinition Height="7.5*"/>
+                                <RowDefinition Height="1.5*"/>
                                 <RowDefinition Height="1*"/>
                             </Grid.RowDefinitions>
 
@@ -3336,7 +3338,7 @@
                                                   PreviewMouseMove="BalanceHoldingsDataGrid_PreviewMouseMove"
                                                   PreviewMouseUp="BalanceHoldingsDataGrid_PreviewMouseUp">
                                         <DataGrid x:Name="BalanceHoldingsScrollableDataGrid"
-                                                  Width="636"
+                                                  Width="736"
                                                   AutoGenerateColumns="False"
                                                   HeadersVisibility="Column"
                                                   CanUserAddRows="False"
@@ -3375,6 +3377,7 @@
                                                 <DataGridTextColumn Header="Able" Binding="{Binding OrderableQuantity, StringFormat={}{0:N0}}" Width="86"/>
                                                 <DataGridTextColumn Header="Avg" Binding="{Binding AverageBuyPrice, StringFormat={}{0:N0}}" Width="90"/>
                                                 <DataGridTextColumn Header="Now" Binding="{Binding CurrentPrice, StringFormat={}{0:N0}}" Width="90"/>
+                                                <DataGridTextColumn Header="Tag" Binding="{Binding PositionTag}" Width="100"/>
                                                 <DataGridTextColumn Header="Eval" Binding="{Binding EvaluationAmount, StringFormat={}{0:N0}}" Width="110"/>
                                                 <DataGridTextColumn Header="P/L" Binding="{Binding EvaluationProfit, StringFormat={}{0:N0}}" Width="100"/>
                                                 <DataGridTextColumn Header="Rate" Binding="{Binding ProfitRate, StringFormat={}{0:N2}%}" Width="74"/>
@@ -3386,18 +3389,104 @@
 
                             <Grid Grid.Row="3"
                                   Margin="0,8,0,0"
+                                  MinHeight="96">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Background="#10181A"
+                                        BorderBrush="#3BC9C6"
+                                        BorderThickness="1"
+                                        CornerRadius="5,0,0,5"
+                                        Padding="8">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Paper"
+                                                   Foreground="#7FF7EA"
+                                                   FontSize="12"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock Text="virtual only"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="10"
+                                                   Margin="0,4,0,0"/>
+                                        <TextBlock Text="no live order"
+                                                   Foreground="#7FF7EA"
+                                                   FontSize="10"
+                                                   Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <DataGrid x:Name="PaperPositionsDataGrid"
+                                          Grid.Column="1"
+                                          AutoGenerateColumns="False"
+                                          HeadersVisibility="Column"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          IsReadOnly="True"
+                                          GridLinesVisibility="Horizontal"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                                          ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                          Background="#10181A"
+                                          Foreground="{StaticResource TextMainBrush}"
+                                          BorderThickness="0"
+                                          RowBackground="#10181A"
+                                          AlternatingRowBackground="#121E20"
+                                          HorizontalGridLinesBrush="#21484A"
+                                          RowHeaderWidth="0"
+                                          FontSize="10">
+                                    <DataGrid.ColumnHeaderStyle>
+                                        <Style TargetType="{x:Type DataGridColumnHeader}">
+                                            <Setter Property="Background" Value="#162426"/>
+                                            <Setter Property="Foreground" Value="#7FF7EA"/>
+                                            <Setter Property="BorderBrush" Value="#21484A"/>
+                                            <Setter Property="Padding" Value="6,4"/>
+                                            <Setter Property="FontSize" Value="10"/>
+                                        </Style>
+                                    </DataGrid.ColumnHeaderStyle>
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="{x:Type DataGridCell}">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+                                            <Setter Property="BorderBrush" Value="#21484A"/>
+                                            <Setter Property="Padding" Value="6,3"/>
+                                        </Style>
+                                    </DataGrid.CellStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="150"/>
+                                        <DataGridTextColumn Header="Slot" Binding="{Binding SlotTag}" Width="86"/>
+                                        <DataGridTextColumn Header="State" Binding="{Binding Status}" Width="72"/>
+                                        <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, StringFormat={}{0:N0}}" Width="70"/>
+                                        <DataGridTextColumn Header="Entry" Binding="{Binding EntryPrice, StringFormat={}{0:N0}}" Width="86"/>
+                                        <DataGridTextColumn Header="Now" Binding="{Binding CurrentPrice, StringFormat={}{0:N0}}" Width="86"/>
+                                        <DataGridTextColumn Header="P/L" Binding="{Binding ProfitLoss, StringFormat={}{0:N0}}" Width="90"/>
+                                        <DataGridTextColumn Header="Rate" Binding="{Binding ProfitRate, StringFormat={}{0:N2}%}" Width="72"/>
+                                        <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+
+                            <Grid Grid.Row="4"
+                                  Margin="0,8,0,0"
                                   MinHeight="34">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0"
-                                           Text="MTS match: kt00018 main · 04 realtime · kt00005 check"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="10"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"/>
+                                <Border Grid.Column="0"
+                                        Background="{StaticResource BgInnerBrush}"
+                                        BorderBrush="{StaticResource LineSoftBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="8,6"
+                                        Margin="0,0,8,0">
+                                    <TextBlock Text="Guide: Balance is live account only. Paper is a separate virtual ledger and never changes live quantity, average price, evaluation, or orders."
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                </Border>
 
                                 <Button x:Name="BalanceRefreshButton"
                                         Grid.Column="1"

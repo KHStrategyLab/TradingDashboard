@@ -102,7 +102,7 @@ namespace TradingDashboard
 
                 _balanceHoldings.Clear();
                 foreach (KiwoomHolding holding in snapshot.Holdings.OrderByDescending(x => Math.Abs(x.EvaluationAmount)))
-                    _balanceHoldings.Add(holding);
+                    _balanceHoldings.Add(DecorateHoldingPositionTag(holding));
                 UpdateStrategyProgressRows();
 
                 BalanceTotalPurchaseText.Text = $"{snapshot.TotalPurchaseAmount:N0}";

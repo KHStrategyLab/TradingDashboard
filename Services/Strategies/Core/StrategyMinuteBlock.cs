@@ -215,6 +215,23 @@ namespace TradingDashboard.Services.Strategies
             return true;
         }
 
+        public bool TryGetBarAt(DateTime sourceTime, out StrategyMinuteBar bar)
+        {
+            DateTime bucketTime = FloorMinute(sourceTime, Minute);
+            StrategyMinuteBar? match = CurrentBar?.BucketTime == bucketTime
+                ? CurrentBar
+                : CompletedBars.LastOrDefault(item => item.BucketTime == bucketTime);
+
+            if (match == null)
+            {
+                bar = new StrategyMinuteBar();
+                return false;
+            }
+
+            bar = match.Clone();
+            return true;
+        }
+
         private void AppendClosedBar(StrategyMinuteBar bar)
         {
             bar.BucketTime = FloorMinute(bar.BucketTime, Minute);

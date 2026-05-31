@@ -46,6 +46,8 @@ namespace TradingDashboard
         private readonly StrategyMinuteSeedFileStore _strategyMinuteSeedFileStore = new();
         private readonly StrategyAnchorStore _strategyAnchorStore = new();
         private readonly StrategyOrderJournalStore _strategyOrderJournalStore = new();
+        private readonly StrategyPositionLedgerStore _strategyPositionLedgerStore = new();
+        private readonly PaperPositionLedgerStore _paperPositionLedgerStore = new();
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
         private readonly Queue<LogLineEntry> _logLines = new();
@@ -65,6 +67,7 @@ namespace TradingDashboard
         private readonly ObservableCollection<HogaLevel> _sellHogaLevels = [];
         private readonly ObservableCollection<HogaLevel> _buyHogaLevels = [];
         private readonly ObservableCollection<KiwoomHolding> _balanceHoldings = [];
+        private readonly ObservableCollection<PaperPositionLedgerEntry> _paperPositions = [];
         private readonly List<NewsItem> _marketNewsCache = [];
         private readonly Dictionary<string, WatchStockItem> _watchStockByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, WatchlistStockCacheEntry> _watchlistMemoryCache = new(StringComparer.Ordinal);
@@ -81,6 +84,9 @@ namespace TradingDashboard
         private readonly HashSet<string> _strategyLiveSellOrderKeys = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DateTime> _strategyLiveOrderRetryAfterByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DateTime> _strategyLiveOrderBlockedLogAfterByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, StrategyPositionLedgerEntry> _strategyPositionLedgerByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ManualBuyStopAnchor> _manualBuyStopAnchorsByCode = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _manualBuyStopAnchorLoadingCodes = new(StringComparer.Ordinal);
         private readonly object _strategyLiveOrderLock = new();
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
@@ -198,6 +204,8 @@ namespace TradingDashboard
             _tradingClient.ApiLimitLog += message => Dispatcher.Invoke(() => AppendLog(message));
             _tradingCostCalculator = new TradingCostCalculator(_config.TradingCosts);
             LoadStrategyOrderJournal();
+            LoadStrategyPositionLedger();
+            LoadPaperPositionLedger();
             LoadWatchlistCache();
             WatchListBox.ItemsSource = _watchStocks;
             RecentWatchListBox.ItemsSource = _recentViewedStocks;
@@ -205,6 +213,7 @@ namespace TradingDashboard
             RecentTradeListBox.ItemsSource = _recentTrades;
             BalanceHoldingsDataGrid.ItemsSource = _balanceHoldings;
             BalanceHoldingsScrollableDataGrid.ItemsSource = _balanceHoldings;
+            PaperPositionsDataGrid.ItemsSource = _paperPositions;
             SellQtyListBox.ItemsSource = _sellHogaLevels;
             SellPriceListBox.ItemsSource = _sellHogaLevels;
             BuyPriceListBox.ItemsSource = _buyHogaLevels;
