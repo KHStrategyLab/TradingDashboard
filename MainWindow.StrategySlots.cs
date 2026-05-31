@@ -15,6 +15,7 @@ namespace TradingDashboard
     {
         private readonly StrategySlotRegistry _strategySlotRegistry = StrategySlotRegistry.CreateDefault();
         private readonly System.Collections.ObjectModel.ObservableCollection<StrategyProgressRow> _strategyProgressRows = [];
+        private const int StrategyMinuteRequiredCandleCount = 120;
         private bool _isRevertingLockedStrategyToggle;
         private bool _isInitializingStrategyControls = true;
 
@@ -56,6 +57,8 @@ namespace TradingDashboard
             LogStrategyToggleState(sender);
             UpdateStrategyControlBoard();
             UpdateStrategyMinutePreloadControlLock();
+            if (ShouldStartRequiredStrategyMinutePreload(sender))
+                StartStrategyMinuteAutoPreload(_watchStocks, force: true, immediate: true);
             if (ShouldStartSelectedStrategyMinutePreload(sender))
                 TryStartStrategyMinutePreloadForSelectedStock();
             if (ShouldRescheduleStrategyMinuteAutoPreload(sender))
@@ -109,6 +112,12 @@ namespace TradingDashboard
         private bool ShouldStartSelectedStrategyMinutePreload(object sender)
         {
             return ReferenceEquals(sender, StrategyMinutePreloadToggle);
+        }
+
+        private bool ShouldStartRequiredStrategyMinutePreload(object sender)
+        {
+            return ReferenceEquals(sender, AutoTradingEnabledToggle) &&
+                IsStrategyToggleOn(AutoTradingEnabledToggle);
         }
 
         private void SyncPaperTradingPreviewState()
@@ -427,16 +436,7 @@ namespace TradingDashboard
 
         private static int CalculateStrategyMinuteTargetCount(WatchStockItem stock, int minute)
         {
-            int safeMinute = Math.Max(1, minute);
-            if (safeMinute == 1)
-                return 300;
-
-            const int daysToCover = 7;
-            const int sorSessionMinutesPerDay = 660;
-            const int warmupBars = 80;
-            int barsForBaseCandleRange = (int)Math.Ceiling(daysToCover * sorSessionMinutesPerDay / (double)safeMinute) + warmupBars;
-
-            return Math.Max(MinuteChartCandleCount, barsForBaseCandleRange);
+            return StrategyMinuteRequiredCandleCount;
         }
 
         private StrategyMinuteDataStatus BuildStrategyMinuteDataStatus(WatchStockItem? stock)
@@ -584,7 +584,7 @@ namespace TradingDashboard
             if (!execution.AutoTradingEnabled)
                 return readiness.IsAllReady ? "READY" : "WATCH OFF";
 
-            if (preloadMinutes && (readiness.TotalCount == 0 || !readiness.IsAllReady))
+            if (readiness.TotalCount == 0 || !readiness.IsAllReady)
                 return "WAIT DATA";
 
             return "RUNNING";
@@ -769,12 +769,19 @@ namespace TradingDashboard
         private bool IsStrategyMinuteSeedFileSaveEnabled() =>
             StrategyMinuteSeedFileSaveToggle != null && IsStrategyToggleOn(StrategyMinuteSeedFileSaveToggle);
 
-        private void StartStrategyMinuteAutoPreload(IEnumerable<WatchStockItem> stocks)
+        private void StartStrategyMinuteAutoPreload(IEnumerable<WatchStockItem> stocks, bool force = false, bool immediate = false)
         {
             bool wasRunning = _strategyMinuteAutoPreloadStarted;
+            if (force && wasRunning)
+            {
+                AppendLog("strategy minute required preload already running");
+                UpdateStrategyControlBoard();
+                return;
+            }
+
             _strategyMinuteAutoPreloadCts?.Cancel();
 
-            if (!IsStrategyMinutePreloadEnabled())
+            if (!force && !IsStrategyMinutePreloadEnabled())
             {
                 AppendLog("strategy minute auto preload skipped: switch OFF");
                 UpdateStrategyMinutePreloadControlLock();
@@ -793,17 +800,19 @@ namespace TradingDashboard
                 .Select(stock => NormalizeStockCode(stock.Code))
                 .OrderBy(code => code, StringComparer.Ordinal));
             if (string.IsNullOrWhiteSpace(batchKey) ||
-                (_strategyMinuteAutoPreloadBatchKeys.Contains(batchKey) && !_strategyMinuteAutoPreloadStarted))
+                (!force && _strategyMinuteAutoPreloadBatchKeys.Contains(batchKey) && !_strategyMinuteAutoPreloadStarted))
                 return;
 
             _strategyMinuteAutoPreloadCts = new CancellationTokenSource();
             CancellationToken token = _strategyMinuteAutoPreloadCts.Token;
-            TimeSpan idleDelay = ResolveStrategyMinuteAutoPreloadIdleDelay();
+            TimeSpan idleDelay = immediate ? TimeSpan.Zero : ResolveStrategyMinuteAutoPreloadIdleDelay();
             UpdateStrategyMinutePreloadControlLock();
             AppendLog(wasRunning
                 ? $"strategy minute auto preload interrupted and rescheduled: {snapshot.Count}stocks / idle {idleDelay.TotalSeconds:0}s"
-                : $"strategy minute auto preload scheduled: {snapshot.Count}stocks / idle {idleDelay.TotalSeconds:0}s");
-            _ = RunStrategyMinuteAutoPreloadAfterIdleAsync(snapshot, batchKey, idleDelay, token);
+                : force
+                    ? $"strategy minute required preload started by Engine Start: {snapshot.Count}stocks"
+                    : $"strategy minute auto preload scheduled: {snapshot.Count}stocks / idle {idleDelay.TotalSeconds:0}s");
+            _ = RunStrategyMinuteAutoPreloadAfterIdleAsync(snapshot, batchKey, idleDelay, token, force);
         }
 
         private TimeSpan ResolveStrategyMinuteAutoPreloadIdleDelay()
@@ -839,7 +848,8 @@ namespace TradingDashboard
             IReadOnlyList<WatchStockItem> stocks,
             string batchKey,
             TimeSpan idleDelay,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool force)
         {
             try
             {
@@ -848,7 +858,7 @@ namespace TradingDashboard
                 _strategyMinuteAutoPreloadStarted = true;
                 UpdateStrategyMinutePreloadControlLock();
                 UpdateStrategyControlBoard();
-                await PreloadStrategyMinuteDataForStocksAsync(stocks, cancellationToken);
+                await PreloadStrategyMinuteDataForStocksAsync(stocks, cancellationToken, force);
             }
             catch (OperationCanceledException)
             {
@@ -866,7 +876,7 @@ namespace TradingDashboard
             }
         }
 
-        private async Task PreloadStrategyMinuteDataForStocksAsync(IReadOnlyList<WatchStockItem> stocks, CancellationToken cancellationToken)
+        private async Task PreloadStrategyMinuteDataForStocksAsync(IReadOnlyList<WatchStockItem> stocks, CancellationToken cancellationToken, bool force)
         {
             int completed = 0;
             AppendLog($"strategy minute auto preload continuous run started: {stocks.Count}stocks");
@@ -875,7 +885,7 @@ namespace TradingDashboard
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!IsStrategyMinutePreloadEnabled())
+                if (!force && !IsStrategyMinutePreloadEnabled())
                 {
                     AppendLog($"strategy minute auto preload stopped: switch OFF / completed {completed:N0}/{stocks.Count:N0}");
                     _strategyMinuteAutoPreloadStarted = false;
