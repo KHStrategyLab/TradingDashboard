@@ -301,10 +301,12 @@ namespace TradingDashboard
                 {
                     _chartCandleFileCacheStore.Save();
                     Dispatcher.Invoke(() => AppendLog($"chart file cache saved: {stocks.Count}stocks / {savedSets}sets / {sw.ElapsedMilliseconds:N0}ms"));
+                    Dispatcher.Invoke(() => AppendReadyLog("Download done. READY"));
                 }
                 else
                 {
                     Dispatcher.Invoke(() => AppendLog($"chart file cache save skipped: {stocks.Count}stocks / no data"));
+                    Dispatcher.Invoke(() => AppendReadyLog("READY"));
                 }
             }
             catch (Exception ex)

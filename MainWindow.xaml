@@ -1523,19 +1523,20 @@
                                        FontWeight="Bold"
                                        VerticalAlignment="Center"/>
 
-                            <TextBox Grid.Row="1"
-                                     x:Name="LeftLogTextBox"
-                                     Margin="0,6,0,0"
-                                     Background="#101010"
-                                     Foreground="{StaticResource TextSubBrush}"
-                                     BorderBrush="{StaticResource LineSoftBrush}"
-                                     BorderThickness="1"
-                                     FontSize="11"
-                                     IsReadOnly="True"
-                                     TextWrapping="Wrap"
-                                     VerticalScrollBarVisibility="Hidden"
-                                     HorizontalScrollBarVisibility="Disabled"
-                                     MouseDoubleClick="LeftLogTextBox_MouseDoubleClick"/>
+                            <RichTextBox Grid.Row="1"
+                                         x:Name="LeftLogTextBox"
+                                         Margin="0,6,0,0"
+                                         Background="#101010"
+                                         Foreground="{StaticResource TextSubBrush}"
+                                         BorderBrush="{StaticResource LineSoftBrush}"
+                                         BorderThickness="1"
+                                         FontSize="11"
+                                         IsReadOnly="True"
+                                         VerticalScrollBarVisibility="Hidden"
+                                         HorizontalScrollBarVisibility="Disabled"
+                                         MouseDoubleClick="LeftLogTextBox_MouseDoubleClick">
+                                <FlowDocument PagePadding="4,3,4,3"/>
+                            </RichTextBox>
                         </Grid>
                     </Border>
                 </Grid>

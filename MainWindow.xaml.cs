@@ -43,7 +43,7 @@ namespace TradingDashboard
         private readonly TradingCostCalculator _tradingCostCalculator;
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
-        private readonly Queue<string> _logLines = new();
+        private readonly Queue<LogLineEntry> _logLines = new();
         private readonly Brush _upColorBrush;
         private readonly Brush _downColorBrush;
         private readonly Brush _aggressiveBuyQtyBrush;
@@ -2178,14 +2178,68 @@ namespace TradingDashboard
             }
 
             string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-            _logLines.Enqueue(line);
+            _logLines.Enqueue(new LogLineEntry(line, false));
 
             while (_logLines.Count > MaxLogLines)
             {
                 _logLines.Dequeue();
             }
 
-            LeftLogTextBox.Text = string.Join(Environment.NewLine, _logLines);
+            RenderLogLines();
+        }
+
+        private void AppendReadyLog(string message)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => AppendReadyLog(message));
+                return;
+            }
+
+            string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            _logLines.Enqueue(new LogLineEntry(line, true));
+
+            while (_logLines.Count > MaxLogLines)
+            {
+                _logLines.Dequeue();
+            }
+
+            RenderLogLines();
+        }
+
+        private void RenderLogLines()
+        {
+            LeftLogTextBox.Document.Blocks.Clear();
+            Brush normalLogBrush = (Brush)FindResource("TextSubBrush");
+
+            foreach (LogLineEntry entry in _logLines)
+            {
+                var paragraph = new Paragraph(new Run(entry.Text))
+                {
+                    Margin = new Thickness(0),
+                    LineHeight = 14,
+                    Foreground = entry.IsReady
+                        ? new SolidColorBrush(Color.FromRgb(183, 255, 74))
+                        : normalLogBrush,
+                    FontWeight = entry.IsReady ? FontWeights.Bold : FontWeights.Normal
+                };
+
+                if (entry.IsReady)
+                {
+                    paragraph.TextEffects = new TextEffectCollection
+                    {
+                        new()
+                        {
+                            Foreground = new SolidColorBrush(Color.FromArgb(150, 183, 255, 74)),
+                            PositionStart = 0,
+                            PositionCount = entry.Text.Length
+                        }
+                    };
+                }
+
+                LeftLogTextBox.Document.Blocks.Add(paragraph);
+            }
+
             LeftLogTextBox.ScrollToEnd();
         }
 
@@ -2195,6 +2249,8 @@ namespace TradingDashboard
             _logLines.Clear();
             AppendLog("Log cleared");
         }
+
+        private sealed record LogLineEntry(string Text, bool IsReady);
 
         private void SetStartupLoading(bool isVisible, string message, string statusLine1 = "", string statusLine2 = "")
         {
