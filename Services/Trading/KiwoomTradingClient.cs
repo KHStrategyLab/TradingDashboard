@@ -485,7 +485,9 @@ namespace TradingDashboard.Services.Trading
         {
             ArgumentNullException.ThrowIfNull(request);
             ValidateCommonOrderFields(request.StockCode, request.Quantity);
-            _ = NormalizeOrderMarket(request.Market);
+            string market = NormalizeOrderMarket(request.Market);
+            if (IsSorOrNxtOrderMarket(market))
+                ValidateSorNxtLimitOrder(request);
         }
 
         private static void ValidateModifyRequest(KiwoomModifyOrderRequest request)
@@ -494,7 +496,10 @@ namespace TradingDashboard.Services.Trading
             ValidateCommonOrderFields(request.StockCode, request.Quantity);
             if (string.IsNullOrWhiteSpace(request.OriginalOrderNo))
                 throw new ArgumentException("Original order number is required.", nameof(request));
-            _ = NormalizeOrderMarket(request.Market);
+            string market = NormalizeOrderMarket(request.Market);
+            if (IsSorOrNxtOrderMarket(market) &&
+                request.OrderPrice <= 0)
+                throw new ArgumentException("SOR/NXT modify orders require a positive limit price.", nameof(request));
         }
 
         private static void ValidateCancelRequest(KiwoomCancelOrderRequest request)
@@ -514,6 +519,35 @@ namespace TradingDashboard.Services.Trading
 
             if (quantity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(quantity), "Order quantity must be positive.");
+        }
+
+        private static void ValidateSorNxtLimitOrder(KiwoomOrderRequest request)
+        {
+            string tradeType = string.IsNullOrWhiteSpace(request.TradeType)
+                ? KiwoomTradingConstants.TradeTypeLimit
+                : request.TradeType.Trim();
+
+            if (tradeType == KiwoomTradingConstants.TradeTypeMarket)
+                throw new ArgumentException("SOR/NXT market orders are blocked. Use a current-price tick-offset limit order.", nameof(request));
+
+            if (tradeType != KiwoomTradingConstants.TradeTypeLimit)
+                throw new ArgumentException($"SOR/NXT orders allow limit orders only. Trade type '{tradeType}' is blocked.", nameof(request));
+
+            if (request.OrderPrice <= 0)
+                throw new ArgumentException("SOR/NXT orders require a positive limit price.", nameof(request));
+
+            if (!request.UsesTickOffsetLimit || request.ReferencePrice <= 0)
+                throw new ArgumentException("SOR/NXT orders must be built from the current price with an explicit tick offset.", nameof(request));
+
+            long expectedPrice = KiwoomOrderPriceRules.ApplyTickOffset(request.ReferencePrice, request.TickOffset);
+            if (request.OrderPrice != expectedPrice)
+                throw new ArgumentException($"SOR/NXT order price must match current-price tick offset. Expected {expectedPrice:N0}, got {request.OrderPrice:N0}.", nameof(request));
+        }
+
+        private static bool IsSorOrNxtOrderMarket(string market)
+        {
+            return string.Equals(market, KiwoomTradingConstants.MarketSor, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(market, KiwoomTradingConstants.MarketNxt, StringComparison.OrdinalIgnoreCase);
         }
 
         private static DateTime ResolveRealizedProfitQueryDate(DateTime now)

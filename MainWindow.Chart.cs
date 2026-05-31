@@ -179,6 +179,12 @@ namespace TradingDashboard
         {
             if (_chartMemoryCache.TryGetValue(key, out ChartCacheEntry? entry) && entry.Candles.Count > 0)
             {
+                if (entry.Candles.Count < count)
+                {
+                    candles = [];
+                    return false;
+                }
+
                 entry.LastAccess = ++_chartCacheAccessSequence;
                 candles = CloneChartCandles(entry.Candles.TakeLast(count));
                 return candles.Count > 0;

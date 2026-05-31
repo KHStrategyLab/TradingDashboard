@@ -140,6 +140,7 @@
 - 전략실 전광판 첫 줄은 운전 상태와 분봉 장부 준비 개수(`MINUTE READY ready/total`)를 표시한다.
 - 기준봉 날짜의 분봉 seed가 준비되면 5/10/15/30분봉에서 `Low <= MA60 <= High`인 마지막 봉을 찾아 `Storage/StrategyAnchors/{baseDate}/{code}_{market}.json`에 저장한다.
 - 전략 앵커에는 KRX 전일종가 기준가(`BasePrice`, `BasePriceDate`, `BasePriceSource`)와 MA60 터치 시각/가격/시고저종/거래량/거래대금을 같이 남긴다.
+- MA60 터치를 찾지 못한 분봉은 앵커 파일의 `MissingMa60TouchMinutes`에 남겨 실행 후 검증할 수 있게 한다.
 - 전략실의 `파일 저장` 스위치가 ON이면 `Storage/StrategyMinuteSeeds/{yyyyMMdd}/{code}_{market}_{minute}.json`에 분봉 seed를 저장한다.
 - 다음 프리로드 때 같은 날짜/종목/시장/분봉 파일이 있으면 파일을 먼저 읽고, 목표 개수가 부족한 경우에만 REST로 보충한 뒤 다시 저장한다.
 - 선택 종목 프리로드와 자동 프리로드가 겹치면 자동 프리로드는 해당 종목 완료를 기다린 뒤 READY/파일 저장 상태에 포함한다.
@@ -150,6 +151,20 @@
 - 0B 연결은 숫자 장부 갱신까지만 담당하며, 매수신호나 주문을 직접 만들지 않는다.
 - 테스트 매매는 `Engine Start ON + Live Orders OFF + Paper Trading ON` 조합으로 사용한다. 분봉 장부 READY 전에는 Paper BUY 로그도 내지 않는다.
 - 봉마감 확정봉 입력구는 `ApplyClosedBar(...)`로 준비되어 있다.
+
+2026-06-01 기준 전략 엔진/주문 연결 상태:
+
+- `StrategyMinuteBlock`은 종목/시장/분봉별 숫자 블록이다. seed, 현재봉, 완료봉, MA5/10/20/60/200/240/480, 20봉 고저/거래량을 관리한다.
+- `StrategyMinuteCacheService`는 블록을 소유하고, 전략 슬롯에는 `StrategyMinuteSnapshotSet`만 전달한다.
+- 전략 슬롯은 원본 봉/파일/REST를 직접 보지 않고 Snapshot의 `MA60`, `20봉 고가`, 현재가 기준으로 신호 후보만 만든다.
+- `ProcessStrategySignalAlerts(...)`는 `HasSignal`을 로그/텔레그램에 남기고, `Live Orders`가 ON일 때만 라이브 매수 가드로 넘긴다.
+- 라이브 매수는 SOR 현재가 `+1틱 지정가`만 사용한다. 시장가, 0원 주문, 수동 지정가는 `KiwoomTradingClient` 검증 단계에서 차단한다.
+- 라이브 매수 가드는 시장 시간/0s 상태, 보유 여부, 분봉 READY, 예산, 슬롯수, 같은 종목/같은 날 중복 주문을 확인한다.
+- 주문 성공 후 `ka10075` 미체결, `ka10076` 체결 조회를 실행하고 잔고를 자동 갱신한다.
+- 보유 종목은 `ProcessStrategyExitAlerts(...)`에서 평균매입가 대비 `STOP -1.5%`, `TARGET1 +3.0%`를 감시한다.
+- `STOP`은 매도가능 전량, `TARGET1`은 매도가능 수량의 50%를 SOR 현재가 `-1틱 지정가`로 보낸다.
+- `TARGET1`과 `STOP` 매도 주문 키는 분리한다. 1차 익절 이후에도 같은 날 손절 신호가 오면 별도로 차단/실행 판단할 수 있게 한다.
+- 라이브 주문 키는 비동기 경합을 피하기 위해 `_strategyLiveOrderLock`으로 보호한다.
 
 전략별 기억값은 공통 장부에 넣지 않는다.
 

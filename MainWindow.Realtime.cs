@@ -430,6 +430,9 @@ namespace TradingDashboard
 
                         if (addedFromCache != null)
                         {
+                            await TrySendConditionEnterAlertAsync(addedFromCache, "cache re-enter", ct);
+                            if (!IsConditionRealtimeEnterCurrent(code, generation))
+                                return;
                             await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(addedFromCache, ct);
                             if (!IsConditionRealtimeEnterCurrent(code, generation))
                                 return;
@@ -487,6 +490,9 @@ namespace TradingDashboard
                         if (!IsConditionRealtimeEnterCurrent(code, generation))
                             return;
 
+                        await TrySendConditionEnterAlertAsync(stock, "new enter", ct);
+                        if (!IsConditionRealtimeEnterCurrent(code, generation))
+                            return;
                         await _disclosureAlertService.TrySendRecentDisclosureAlertAsync(stock, ct);
                         if (!IsConditionRealtimeEnterCurrent(code, generation))
                             return;
@@ -938,6 +944,9 @@ namespace TradingDashboard
                 stock.PriceBrush = code == _selectedStockCode && stock.CurrentPrice > 0
                     ? ResolveHogaBrushByKrxPrevClose(stock.CurrentPrice)
                     : change > 0 ? _upColorBrush : change < 0 ? _downColorBrush : _whiteBrush;
+
+                ProcessStrategySignalAlerts(stock, EvaluateEnabledStrategySlots(stock));
+                ProcessStrategyExitAlerts(stock);
 
                 if (code == _selectedStockCode)
                 {

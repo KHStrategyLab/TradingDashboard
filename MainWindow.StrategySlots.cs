@@ -659,6 +659,7 @@ namespace TradingDashboard
             TryStartStrategyMinutePreloadForSelectedStock();
 
             IReadOnlyList<StrategyEvaluationResult> results = EvaluateEnabledStrategySlots(stock);
+            ProcessStrategySignalAlerts(stock, results);
             ProcessPaperTradingPreview(stock, results);
             foreach (StrategyEvaluationResult result in results.Where(ShouldShowStrategyProgressResult))
             {
@@ -746,21 +747,67 @@ namespace TradingDashboard
 
         private bool IsStrategyMinuteDataReady(WatchStockItem stock)
         {
-            StrategyMinuteDataStatus status = BuildStrategyMinuteDataStatus(stock);
-            return status.HasAll(1, 3, 5, 10, 15, 30);
+            StrategyMinuteSnapshotSet? snapshots = BuildStrategyMinuteSnapshotSet(stock);
+            if (snapshots == null)
+                return false;
+
+            IReadOnlyList<StrategySlotSetting> enabledSettings = [.. GetStrategySlotSettings().Where(x => x.IsEnabled)];
+            bool hasMinuteStrategy = false;
+            foreach (StrategySlotSetting setting in enabledSettings)
+            {
+                switch (setting.Id)
+                {
+                    case StrategySlotId.BaseCandleChase:
+                        hasMinuteStrategy = true;
+                        if (!snapshots.HasMa60AndBreakout20(10, 3))
+                            return false;
+                        break;
+                    case StrategySlotId.ThreeMinutePullback:
+                        hasMinuteStrategy = true;
+                        if (!snapshots.HasMa60AndBreakout20(15, 5))
+                            return false;
+                        break;
+                    case StrategySlotId.SorTenMinuteFiveMinuteBreakout:
+                        hasMinuteStrategy = true;
+                        if (!snapshots.HasMa60AndBreakout20(10, 5))
+                            return false;
+                        break;
+                }
+            }
+
+            return hasMinuteStrategy || enabledSettings.Count > 0;
         }
 
         private string FormatStrategyMinuteReadiness(WatchStockItem stock)
         {
             StrategyMinuteDataStatus status = BuildStrategyMinuteDataStatus(stock);
-            return string.Join(" / ", new[] { 1, 3, 5, 10, 15, 30 }
-                .Select(minute =>
+            StrategyMinuteSnapshotSet? snapshots = BuildStrategyMinuteSnapshotSet(stock);
+            List<string> parts = [];
+
+            foreach (StrategySlotSetting setting in GetStrategySlotSettings().Where(x => x.IsEnabled))
+            {
+                switch (setting.Id)
                 {
-                    int count = status.GetCount(minute);
-                    int target = status.GetTargetCount(minute);
-                    string state = count >= target ? "READY" : "WAIT";
-                    return $"{minute}m {state} {count:N0}/{target:N0}";
-                }));
+                    case StrategySlotId.BaseCandleChase:
+                        parts.Add(snapshots?.FormatMa60AndBreakout20(10, 3) ?? "10m:MA60 wait / 3m:20H wait");
+                        break;
+                    case StrategySlotId.ThreeMinutePullback:
+                        parts.Add(snapshots?.FormatMa60AndBreakout20(15, 5) ?? "15m:MA60 wait / 5m:20H wait");
+                        break;
+                    case StrategySlotId.SorTenMinuteFiveMinuteBreakout:
+                        parts.Add(snapshots?.FormatMa60AndBreakout20(10, 5) ?? "10m:MA60 wait / 5m:20H wait");
+                        break;
+                }
+            }
+
+            if (parts.Count > 0)
+                return string.Join(" / ", parts.Distinct());
+
+            if (GetStrategySlotSettings().Any(x => x.IsEnabled))
+                return "minute indicators not required";
+
+            return string.Join(" / ", new[] { 1, 3, 5, 10, 15, 30 }
+                .Select(minute => $"{minute}m {status.GetCount(minute):N0}/{status.GetTargetCount(minute):N0}"));
         }
 
         private bool IsStrategyMinutePreloadEnabled() =>

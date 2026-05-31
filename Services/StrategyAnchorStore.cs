@@ -26,8 +26,7 @@ namespace TradingDashboard.Services
         {
             if (document == null ||
                 string.IsNullOrWhiteSpace(document.Code) ||
-                string.IsNullOrWhiteSpace(document.BaseDate) ||
-                document.Ma60Touches.Count == 0)
+                string.IsNullOrWhiteSpace(document.BaseDate))
                 return;
 
             lock (_sync)

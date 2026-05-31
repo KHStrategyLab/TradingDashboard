@@ -9,15 +9,32 @@ namespace TradingDashboard.Services.Trading
         long Quantity,
         long OrderPrice,
         string TradeType,
-        string ConditionPrice = "")
+        string ConditionPrice = "",
+        long ReferencePrice = 0,
+        int TickOffset = 0,
+        bool UsesTickOffsetLimit = false)
     {
-        public static KiwoomOrderRequest SorMarket(string stockCode, long quantity) =>
+        public static KiwoomOrderRequest SorLimitFromCurrentPrice(string stockCode, long quantity, long currentPrice, int tickOffset) =>
             new(
                 KiwoomTradingConstants.MarketSor,
                 stockCode,
                 quantity,
-                0,
-                KiwoomTradingConstants.TradeTypeMarket);
+                KiwoomOrderPriceRules.ApplyTickOffset(currentPrice, tickOffset),
+                KiwoomTradingConstants.TradeTypeLimit,
+                ReferencePrice: currentPrice,
+                TickOffset: tickOffset,
+                UsesTickOffsetLimit: true);
+
+        public static KiwoomOrderRequest NxtLimitFromCurrentPrice(string stockCode, long quantity, long currentPrice, int tickOffset) =>
+            new(
+                KiwoomTradingConstants.MarketNxt,
+                stockCode,
+                quantity,
+                KiwoomOrderPriceRules.ApplyTickOffset(currentPrice, tickOffset),
+                KiwoomTradingConstants.TradeTypeLimit,
+                ReferencePrice: currentPrice,
+                TickOffset: tickOffset,
+                UsesTickOffsetLimit: true);
     }
 
     public sealed record KiwoomModifyOrderRequest(

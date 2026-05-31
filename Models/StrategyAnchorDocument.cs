@@ -18,6 +18,7 @@ namespace TradingDashboard.Models
         public string BasePriceSource { get; set; } = string.Empty;
         public string SavedAt { get; set; } = string.Empty;
         public Dictionary<int, StrategyMa60TouchAnchor> Ma60Touches { get; set; } = [];
+        public List<int> MissingMa60TouchMinutes { get; set; } = [];
     }
 
     public sealed class StrategyMa60TouchAnchor

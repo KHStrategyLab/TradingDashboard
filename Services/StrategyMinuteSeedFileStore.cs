@@ -48,8 +48,7 @@ namespace TradingDashboard.Services
 
                     candles = [.. (document.Candles ?? [])
                         .Where(candle => candle != null && !string.IsNullOrWhiteSpace(candle.Date) && candle.Close > 0)
-                        .OrderBy(candle => candle.Date)
-                        .TakeLast(Math.Max(1, targetCount))];
+                        .OrderBy(candle => candle.Date)];
 
                     return candles.Count > 0;
                 }
@@ -68,8 +67,7 @@ namespace TradingDashboard.Services
 
             List<DailyCandle> snapshot = [.. (candles ?? [])
                 .Where(candle => candle != null && !string.IsNullOrWhiteSpace(candle.Date) && candle.Close > 0)
-                .OrderBy(candle => candle.Date)
-                .TakeLast(Math.Max(1, targetCount))];
+                .OrderBy(candle => candle.Date)];
 
             if (snapshot.Count == 0)
                 return;
@@ -77,6 +75,31 @@ namespace TradingDashboard.Services
             lock (_sync)
             {
                 string path = BuildPath(DateTime.Now, code, market, minute);
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        string existingJson = File.ReadAllText(path);
+                        StrategyMinuteSeedFileDocument? existing = JsonSerializer.Deserialize<StrategyMinuteSeedFileDocument>(existingJson, JsonOptions);
+                        if (existing != null &&
+                            string.Equals(NormalizeCode(existing.Code), NormalizeCode(code), StringComparison.Ordinal) &&
+                            string.Equals(NormalizeMarket(existing.Market), NormalizeMarket(market), StringComparison.Ordinal) &&
+                            existing.Minute == minute)
+                        {
+                            snapshot = [.. (existing.Candles ?? [])
+                                .Concat(snapshot)
+                                .Where(candle => candle != null && !string.IsNullOrWhiteSpace(candle.Date) && candle.Close > 0)
+                                .GroupBy(candle => candle.Date, StringComparer.Ordinal)
+                                .Select(group => group.Last())
+                                .OrderBy(candle => candle.Date)];
+                        }
+                    }
+                    catch
+                    {
+                        // If the existing seed cannot be read, replace it with the fresh snapshot.
+                    }
+                }
+
                 string? directory = Path.GetDirectoryName(path);
                 if (!string.IsNullOrWhiteSpace(directory))
                     Directory.CreateDirectory(directory);

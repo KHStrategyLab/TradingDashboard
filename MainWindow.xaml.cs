@@ -74,6 +74,11 @@ namespace TradingDashboard
         private readonly HashSet<string> _strategyMinutePreloadRunningKeys = new(StringComparer.Ordinal);
         private readonly HashSet<string> _strategyMinuteAutoPreloadBatchKeys = new(StringComparer.Ordinal);
         private readonly HashSet<string> _paperTradingPreviewLoggedKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _strategySignalAlertLoggedKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _strategyLiveBuyOrderKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _strategyExitAlertLoggedKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _strategyLiveSellOrderKeys = new(StringComparer.Ordinal);
+        private readonly object _strategyLiveOrderLock = new();
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _conditionRealtimeEnterSemaphore = new(1, 1);
@@ -85,6 +90,9 @@ namespace TradingDashboard
         private readonly HashSet<string> _lateNewsSentStockCodes = new(StringComparer.Ordinal);
         private readonly object _lateNewsLock = new();
         private readonly DateTime _lateNewsAppStartedAt = DateTime.Now;
+        private readonly HashSet<string> _conditionEnterAlertSentStockCodes = new(StringComparer.Ordinal);
+        private readonly object _conditionEnterAlertLock = new();
+        private DateTime _conditionEnterAlertSentDate = DateTime.Today;
         private const int MinuteChartCandleCount = 700;
         private const int DailyChartRealtimeDrawIntervalMs = 350;
         private const int MinuteChartRealtimeDrawIntervalMs = 1500;
