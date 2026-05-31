@@ -245,6 +245,15 @@ namespace TradingDashboard
                 return;
             }
 
+            if (IsStockOwned(stock))
+            {
+                _strategyProgressRows.Add(StrategyProgressRow.Placeholder(
+                    $"{stock.Name} · owned",
+                    "보유 종목은 기본 제외. 수동 편입 기능이 붙기 전까지 전략 체크하지 않음",
+                    (Brush)FindResource("TextMutedBrush")));
+                return;
+            }
+
             IReadOnlyList<StrategyEvaluationResult> results = EvaluateEnabledStrategySlots(stock);
             foreach (StrategyEvaluationResult result in results.Where(ShouldShowStrategyProgressResult))
             {
