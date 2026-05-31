@@ -15,7 +15,42 @@ namespace TradingDashboard.Services.Strategies
         {
         }
 
-        public override StrategyEvaluationResult Evaluate(StrategyEvaluationContext context) =>
-            StrategyEvaluationResult.Waiting(Id, Name, "KRX base candle import pending");
+        public override StrategyEvaluationResult Evaluate(StrategyEvaluationContext context)
+        {
+            bool hasStock = context.Stock != null;
+            bool gatePassed = context.Stock?.GateBaseCandleFound == true;
+            bool hasBasePrice = context.Stock?.LastPrice > 0 || context.Metrics.BasePriceText != "-";
+            bool hasChart = context.ChartCandleCount > 0;
+
+            StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
+                Id,
+                context.IsOwned ? "OWNED" : "WAIT",
+                context.IsOwned ? "position tracking" : "KRX recovery tracking",
+                [
+                    StrategyProgressCalculator.Step("condition", "condition", hasStock),
+                    StrategyProgressCalculator.Step("gate", "KRX gate", gatePassed),
+                    StrategyProgressCalculator.Step("base-price", "KRX base", hasBasePrice),
+                    StrategyProgressCalculator.Step("daily-chart", "daily data", hasChart),
+                    StrategyProgressCalculator.Step("body-pullback", "body pullback", false),
+                    StrategyProgressCalculator.Step("recovery", "open recovery", false),
+                    StrategyProgressCalculator.Step("breakout", "escape high", false),
+                    StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
+                ],
+                [
+                    StrategyProgressCalculator.Step("stop", "body stop", false),
+                    StrategyProgressCalculator.Step("target", "target", false),
+                    StrategyProgressCalculator.Step("exit", "exit done", false)
+                ],
+                isOwned: context.IsOwned,
+                strengthPercent: gatePassed ? 40 : hasStock ? 12 : 0);
+
+            return new StrategyEvaluationResult(
+                Id,
+                Name,
+                false,
+                context.IsOwned ? "TRACK" : "WAIT",
+                context.IsOwned ? "exit tracking after recovery buy" : "KRX body recovery checks pending",
+                progress);
+        }
     }
 }

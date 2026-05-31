@@ -11,5 +11,7 @@ namespace TradingDashboard.Services.Strategies
         public int ChartCandleCount { get; init; }
 
         public string Market { get; init; } = string.Empty;
+
+        public bool IsOwned { get; init; }
     }
 }

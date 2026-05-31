@@ -168,7 +168,8 @@ namespace TradingDashboard
                 Stock = stock,
                 Metrics = _currentStatusMetrics,
                 ChartCandleCount = _currentChartCandles.Count,
-                Market = _isNxtMarketMode ? "NXT" : "KRX"
+                Market = _isNxtMarketMode ? "NXT" : "KRX",
+                IsOwned = IsStockOwned(stock)
             };
 
             return _strategySlotRegistry.EvaluateEnabled(GetStrategySlotSettings(), context);
@@ -254,7 +255,7 @@ namespace TradingDashboard
                 _strategyProgressRows.Add(new StrategyProgressRow(
                     $"{stock.Name} · {result.Name}",
                     result.StateText,
-                    string.IsNullOrWhiteSpace(result.Summary) ? progress.StateText : result.Summary,
+                    FormatStrategyProgressSummary(result, progress),
                     Math.Clamp(progress.ProgressPercent, 0, 100),
                     $"{Math.Clamp(progress.ProgressPercent, 0, 100):0}%",
                     accentBrush));
@@ -306,12 +307,32 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(_selectedStockCode))
                 return false;
 
+            return IsStockOwned(_selectedStockCode);
+        }
+
+        private bool IsStockOwned(WatchStockItem? stock) =>
+            stock != null && IsStockOwned(stock.Code);
+
+        private bool IsStockOwned(string stockCode)
+        {
+            if (string.IsNullOrWhiteSpace(stockCode))
+                return false;
+
             return _balanceHoldings.Any(holding =>
                 holding.HoldingQuantity > 0 &&
                 string.Equals(
                     NormalizeStockCode(holding.StockCode),
-                    NormalizeStockCode(_selectedStockCode),
+                    NormalizeStockCode(stockCode),
                     StringComparison.Ordinal));
+        }
+
+        private static string FormatStrategyProgressSummary(StrategyEvaluationResult result, StrategyProgressSnapshot progress)
+        {
+            string summary = string.IsNullOrWhiteSpace(result.Summary) ? progress.StateText : result.Summary;
+            if (progress.TotalSteps <= 0)
+                return summary;
+
+            return $"{summary} · step {progress.CurrentStep}/{progress.TotalSteps}";
         }
 
         private Brush ResolveStrategyProgressBrush(StrategyMarketScope? marketScope, double progressPercent)

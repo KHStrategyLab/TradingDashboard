@@ -119,10 +119,11 @@ Date: 2026-05-31
 | `EvaluateEnabledStrategySlots` | `MainWindow.StrategySlots.cs` | 켜진 전략 슬롯만 평가 | 주문 여부 판단 금지. 전략 결과만 반환한다. |
 | `UpdateStrategyControlBoard` | `MainWindow.StrategySlots.cs` | Engine/Live Orders/예산/슬롯/중복 정책 표시 | 전광판은 실행 상태 표시다. 주문 실행 자체가 아니다. |
 | `TryRejectEngineLockedStrategyChange` | `MainWindow.StrategySlots.cs` | Engine Start 중 전략 설정 변경 차단 | 실행 중 전략 슬롯/중복 정책 변경을 되돌린다. |
-| `UpdateStrategyProgressRows` | `MainWindow.StrategySlots.cs` | 선택 종목의 전략 평가 결과를 Progress 탭에 표시 | 아직 실제 전략 단계 계산은 대기. `StrategyProgressSnapshot`이 들어오면 UI가 받는다. |
+| `UpdateStrategyProgressRows` | `MainWindow.StrategySlots.cs` | 선택 종목의 전략 평가 결과를 Progress 탭에 표시 | `StrategyProgressSnapshot`의 0~70/70~100 표준 진행률을 UI에 표시한다. |
 | `StrategySlotRegistry.EvaluateEnabled` | `StrategySlotRegistry.cs` | registry 기준 전략 평가 호출 | 새 전략은 registry 등록과 descriptor 문서 경로가 같이 필요하다. |
 | `StrategyEvaluationResult.Waiting` | `StrategyEvaluationResult.cs` | 전략 미구현/대기 상태 결과 생성 | 대기 상태를 매수 후보로 해석하면 안 된다. |
 | `StrategyProgressSnapshot.Empty` | `StrategyProgressSnapshot.cs` | Progress 기본값 | 0% WAIT. 실제 단계 계산 전 표시용. |
+| `StrategyProgressCalculator.Build` | `StrategyProgressCalculator.cs` | 전략별 단계 수를 공통 진행률로 변환 | 매수 전 단계는 0~70%, 보유 후 매도 단계는 70~100% 안에서 자동 분배한다. |
 
 ## 경량엔진 이식 후보
 

@@ -15,7 +15,42 @@ namespace TradingDashboard.Services.Strategies
         {
         }
 
-        public override StrategyEvaluationResult Evaluate(StrategyEvaluationContext context) =>
-            StrategyEvaluationResult.Waiting(Id, Name, "base candle -, breakout -, stop -, target -");
+        public override StrategyEvaluationResult Evaluate(StrategyEvaluationContext context)
+        {
+            bool hasStock = context.Stock != null;
+            bool gatePassed = context.Stock?.GateBaseCandleFound == true;
+            bool hasBasePrice = context.Stock?.LastPrice > 0 || context.Metrics.BasePriceText != "-";
+            bool hasChart = context.ChartCandleCount > 0;
+
+            StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
+                Id,
+                context.IsOwned ? "OWNED" : "WAIT",
+                context.IsOwned ? "position tracking" : "candidate tracking",
+                [
+                    StrategyProgressCalculator.Step("condition", "condition", hasStock),
+                    StrategyProgressCalculator.Step("gate", "base gate", gatePassed),
+                    StrategyProgressCalculator.Step("base-price", "KRX base", hasBasePrice),
+                    StrategyProgressCalculator.Step("chart", "10min data", hasChart),
+                    StrategyProgressCalculator.Step("base-candle", "10min burst", false),
+                    StrategyProgressCalculator.Step("breakout", "high breakout", false),
+                    StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
+                ],
+                [
+                    StrategyProgressCalculator.Step("stop", "stop guard", false),
+                    StrategyProgressCalculator.Step("target1", "target 1", false),
+                    StrategyProgressCalculator.Step("trail", "trail", false),
+                    StrategyProgressCalculator.Step("exit", "exit done", false)
+                ],
+                isOwned: context.IsOwned,
+                strengthPercent: gatePassed ? 42 : hasStock ? 14 : 0);
+
+            return new StrategyEvaluationResult(
+                Id,
+                Name,
+                false,
+                context.IsOwned ? "TRACK" : "WAIT",
+                context.IsOwned ? "exit tracking after buy" : "base candle and breakout checks pending",
+                progress);
+        }
     }
 }

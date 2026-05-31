@@ -15,7 +15,33 @@ namespace TradingDashboard.Services.Strategies
         {
         }
 
-        public override StrategyEvaluationResult Evaluate(StrategyEvaluationContext context) =>
-            StrategyEvaluationResult.Waiting(Id, Name, "theme -, disclosure -, news -");
+        public override StrategyEvaluationResult Evaluate(StrategyEvaluationContext context)
+        {
+            bool hasStock = context.Stock != null;
+            bool gatePassed = context.Stock?.GateBaseCandleFound == true;
+
+            StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
+                Id,
+                "ASSIST",
+                "assist tracking",
+                [
+                    StrategyProgressCalculator.Step("condition", "condition", hasStock),
+                    StrategyProgressCalculator.Step("gate", "base gate", gatePassed),
+                    StrategyProgressCalculator.Step("news", "news tags", false),
+                    StrategyProgressCalculator.Step("disclosure", "filing tags", false),
+                    StrategyProgressCalculator.Step("theme", "theme link", false)
+                ],
+                isOwned: false,
+                strengthPercent: gatePassed ? 28 : hasStock ? 14 : 0,
+                strengthLabel: "보조강도");
+
+            return new StrategyEvaluationResult(
+                Id,
+                Name,
+                false,
+                "ASSIST",
+                "theme, disclosure, and news tag checks pending",
+                progress);
+        }
     }
 }
