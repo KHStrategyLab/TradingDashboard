@@ -1726,6 +1726,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0"
@@ -2542,8 +2543,10 @@
                                                Margin="10,0,0,0"/>
                                 </Grid>
                             </Border>
+                                </StackPanel>
+                            </ScrollViewer>
 
-                            <Border Grid.Row="6"
+                            <Border Grid.Row="2"
                                     BorderBrush="#123A25"
                                     BorderThickness="1"
                                     Background="#07140D"
@@ -2570,8 +2573,6 @@
                                                TextWrapping="Wrap"/>
                                 </Grid>
                             </Border>
-                                </StackPanel>
-                            </ScrollViewer>
                         </Grid>
                     </TabItem>
 

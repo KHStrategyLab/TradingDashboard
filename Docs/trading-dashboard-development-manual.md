@@ -122,26 +122,27 @@
 - 확정봉 저장 직후 이평선을 다시 계산해서 해당 봉에 고정한다.
 - 현재 진행봉은 참고값일 수 있으나, 매수/매도 확정 조건은 기본적으로 마감된 확정봉 기준이다.
 - 화면 차트 `_currentChartCandles`는 표시용이며, 전략 장부의 소유자가 아니다.
-- 분봉 파일 캐시는 아직 사용하지 않는다. 장중 전략 seed는 메모리 장부 기준이다.
+- 분봉 파일 캐시는 사용자가 `파일 저장`을 켠 경우에만 seed 재사용 용도로 사용한다. 장중 판단은 파일이 아니라 메모리 전략 장부 기준이다.
 
 현재 1차 연결 상태:
 
 - `LoadStrategyMinuteDataAsync(...)`는 1/3/5/10/15/30분봉을 받아 `StrategyMinuteCacheService`에 seed로 넣는 내부 로더다.
 - 1분봉은 향후 단기 전략/이평선 확인용으로 최소 300개를 seed로 받는다.
 - 전략실의 `분봉 프리로드` 스위치가 ON이면 조건식/캐시 감시목록 적용 후 idle 예약을 걸고, 사람이 종목을 하나씩 선택하지 않아도 감시목록 분봉 seed를 자동 로드한다.
-- idle 대기 시간은 전략실의 `대기시간` 입력칸 또는 `Config/local.settings.json`의 `StrategyMinutePreload.IdleDelaySeconds`로 조절한다. 기본값은 180초다.
+- idle 대기 시간은 전략실의 `대기시간` 입력칸 또는 `Config/local.settings.json`의 `StrategyMinutePreload.IdleDelaySeconds`로 조절한다. 입력칸 변경값은 `local.settings.json`에 저장되며, 기본값은 180초다.
 - `파일 저장` 스위치와 `대기시간` 입력칸은 `분봉 프리로드`를 켜기 전에 정한다.
 - `분봉 프리로드`가 ON이면 `대기시간` 입력칸과 `파일 저장` 스위치를 잠그고, `분봉 프리로드` 스위치는 중단용으로 남겨둔다.
 - idle이 끝나 프리로드가 시작되면 종목 사이에 추가 대기 없이 연속 실행한다. 새 조건 편입이나 스위치 변경이 들어오면 진행 중 배치를 끊고 새 idle 예약으로 다시 잡는다.
 - 장중 조건식 신규 편입 종목도 감시목록에 들어오면 idle 예약에 포함한다.
 - 전략실의 `파일 저장` 스위치가 ON이면 `Storage/StrategyMinuteSeeds/{yyyyMMdd}/{code}_{market}_{minute}.json`에 분봉 seed를 저장한다.
 - 다음 프리로드 때 같은 날짜/종목/시장/분봉 파일이 있으면 파일을 먼저 읽고, 목표 개수가 부족한 경우에만 REST로 보충한 뒤 다시 저장한다.
+- 선택 종목 프리로드와 자동 프리로드가 겹치면 자동 프리로드는 해당 종목 완료를 기다린 뒤 READY/파일 저장 상태에 포함한다.
 - `StrategyMinuteDataStatus`는 차트 메모리 캐시가 아니라 전략분봉 장부의 READY/개수 상태를 표시한다.
 - `StrategyMinuteSnapshotSet`은 전략 슬롯이 요청할 수 있는 분봉별 Snapshot 묶음이다.
 - 0B 실시간 틱은 `StrategyMinuteCacheService.ApplyRealtimeTick(...)`으로 전략 장부의 현재봉을 갱신한다.
 - 0B 거래량은 누적거래량 `13`의 직전값 차분을 우선하고, 차분을 만들 수 없을 때 체결량 `15`를 보조로 사용한다.
 - 0B 연결은 숫자 장부 갱신까지만 담당하며, 매수신호나 주문을 직접 만들지 않는다.
-- 테스트 매매는 `Engine Start ON + Live Orders OFF + Paper Trading ON` 조합으로 사용한다. 이 모드는 로그에 `PAPER TEST ARMED` / `PAPER BUY READY TO USE`를 남기고 실주문은 차단한다.
+- 테스트 매매는 `Engine Start ON + Live Orders OFF + Paper Trading ON` 조합으로 사용한다. 분봉 장부 READY 전에는 Paper BUY 로그도 내지 않는다.
 - 봉마감 확정봉 입력구는 `ApplyClosedBar(...)`로 준비되어 있다.
 
 전략별 기억값은 공통 장부에 넣지 않는다.
@@ -946,7 +947,7 @@ NXT/KRX:
   - 주봉 최대 300개
   - 월봉 최대 180개
 - 제외:
-  - 분봉은 파일 캐시하지 않는다.
+  - 화면 차트 파일 캐시는 분봉을 저장하지 않는다. 전략분봉 seed 파일은 별도 저장소 `Storage/StrategyMinuteSeeds`를 사용한다.
 - 초기 조건식 결과에서 기준봉 게이트를 통과한 종목만 대상으로 한다.
 - 프로그램 구동 후 백그라운드에서 1회만 조회하고 파일에 저장한다.
 - 시작 직후 REST 경쟁을 줄이기 위해 몇 초 대기한 뒤 프리로드를 시작한다.

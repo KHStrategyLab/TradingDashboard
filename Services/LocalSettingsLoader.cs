@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TradingDashboard.Models;
 
 namespace TradingDashboard.Services
@@ -8,6 +9,15 @@ namespace TradingDashboard.Services
     public static class LocalSettingsLoader
     {
         private const string DefaultRelativePath = "Config/local.settings.json";
+        private static readonly JsonSerializerOptions WriteOptions = new()
+        {
+            WriteIndented = true
+        };
+        private static readonly JsonDocumentOptions ReadNodeOptions = new()
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        };
 
         public static AppConfig Load(string? path = null)
         {
@@ -33,6 +43,29 @@ namespace TradingDashboard.Services
 
             AppConfig config = JsonSerializer.Deserialize<AppConfig>(json, options) ?? new AppConfig();
             return config;
+        }
+
+        public static void SaveStrategyMinutePreloadIdleDelaySeconds(int seconds, string? path = null)
+        {
+            string settingsPath = string.IsNullOrWhiteSpace(path)
+                ? ResolveSettingsPath()
+                : path;
+
+            if (string.IsNullOrWhiteSpace(settingsPath) || !File.Exists(settingsPath))
+                return;
+
+            JsonNode root = JsonNode.Parse(File.ReadAllText(settingsPath), documentOptions: ReadNodeOptions) ?? new JsonObject();
+            if (root is not JsonObject rootObject)
+                return;
+
+            if (rootObject["StrategyMinutePreload"] is not JsonObject preloadObject)
+            {
+                preloadObject = [];
+                rootObject["StrategyMinutePreload"] = preloadObject;
+            }
+
+            preloadObject["IdleDelaySeconds"] = Math.Clamp(seconds, 5, 3600);
+            File.WriteAllText(settingsPath, rootObject.ToJsonString(WriteOptions));
         }
 
         private static string ResolveSettingsPath()

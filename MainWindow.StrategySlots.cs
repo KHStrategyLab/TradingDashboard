@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using TradingDashboard.Models;
+using TradingDashboard.Services;
 using TradingDashboard.Services.Strategies;
 
 namespace TradingDashboard
@@ -78,7 +79,16 @@ namespace TradingDashboard
                 int clampedSeconds = Math.Clamp(seconds, 5, 3600);
                 _config.StrategyMinutePreload ??= new StrategyMinutePreloadSettings();
                 _config.StrategyMinutePreload.IdleDelaySeconds = clampedSeconds;
-                AppendLog($"strategy minute preload idle seconds set: {clampedSeconds}s");
+                try
+                {
+                    LocalSettingsLoader.SaveStrategyMinutePreloadIdleDelaySeconds(clampedSeconds);
+                    AppendLog($"strategy minute preload idle seconds saved: {clampedSeconds}s");
+                }
+                catch (Exception ex)
+                {
+                    AppendLog($"strategy minute preload idle seconds save error: {ex.Message}");
+                }
+
                 StartStrategyMinuteAutoPreload(_watchStocks);
             }
         }
@@ -722,17 +732,30 @@ namespace TradingDashboard
                 string key = $"{NormalizeStockCode(stock.Code)}|{market}";
                 if (_strategyMinutePreloadCompletedKeys.Contains(key))
                 {
+                    SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(stock, market);
                     completed++;
                     AppendReadyLog($"strategy minute auto preload stock already ready: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
                     continue;
                 }
 
                 if (_strategyMinutePreloadRunningKeys.Contains(key))
+                {
+                    await WaitForStrategyMinutePreloadToFinishAsync(key, cancellationToken);
+                    if (IsStrategyMinuteDataReady(stock))
+                    {
+                        _strategyMinutePreloadCompletedKeys.Add(key);
+                        SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(stock, market);
+                        completed++;
+                        AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
+                    }
+
                     continue;
+                }
 
                 if (IsStrategyMinuteDataReady(stock))
                 {
                     _strategyMinutePreloadCompletedKeys.Add(key);
+                    SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(stock, market);
                     completed++;
                     AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
                     continue;
@@ -748,6 +771,46 @@ namespace TradingDashboard
             AppendReadyLog($"strategy minute auto preload ALL READY TO USE: {completed:N0}/{stocks.Count:N0}stocks");
         }
 
+        private async Task WaitForStrategyMinutePreloadToFinishAsync(string key, CancellationToken cancellationToken)
+        {
+            while (_strategyMinutePreloadRunningKeys.Contains(key))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Delay(250, cancellationToken);
+            }
+        }
+
+        private void SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(WatchStockItem stock, string market)
+        {
+            if (!IsStrategyMinuteSeedFileSaveEnabled())
+                return;
+
+            bool useNxtMarket = string.Equals(market, "NXT", StringComparison.Ordinal);
+            foreach ((ChartPeriod Period, int Minute) item in new[]
+            {
+                (ChartPeriod.Minute1, 1),
+                (ChartPeriod.Minute3, 3),
+                (ChartPeriod.Minute5, 5),
+                (ChartPeriod.Minute10, 10),
+                (ChartPeriod.Minute15, 15),
+                (ChartPeriod.Minute30, 30)
+            })
+            {
+                ChartCacheKey key = CreateChartCacheKey(stock.Code, useNxtMarket, item.Period);
+                int targetCount = CalculateStrategyMinuteTargetCount(stock, item.Minute);
+                if (!_chartMemoryCache.TryGetValue(key, out ChartCacheEntry? entry) ||
+                    entry.Candles.Count <= 0)
+                    continue;
+
+                List<DailyCandle> candles = ConvertChartCandlesToDailyCandles(entry.Candles);
+                if (candles.Count <= 0)
+                    continue;
+
+                _strategyMinuteSeedFileStore.SaveToday(stock.Code, market, item.Minute, candles, targetCount);
+                AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(candles.Count, targetCount):N0}bars");
+            }
+        }
+
         private void ProcessPaperTradingPreview(
             WatchStockItem stock,
             IReadOnlyList<StrategyEvaluationResult> results)
@@ -756,6 +819,7 @@ namespace TradingDashboard
             if (!execution.AutoTradingEnabled ||
                 execution.LiveBuyEnabled ||
                 !IsPaperTradingPreviewEnabled() ||
+                !IsStrategyMinuteDataReady(stock) ||
                 stock.LastPrice <= 0)
                 return;
 
