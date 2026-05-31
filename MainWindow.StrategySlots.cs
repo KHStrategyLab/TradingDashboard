@@ -245,11 +245,11 @@ namespace TradingDashboard
                 return;
             }
 
-            if (IsStockOwned(stock))
+            if (IsStockOwned(stock) && !GetStrategyDuplicatePolicy().AllowAdditionalBuy)
             {
                 _strategyProgressRows.Add(StrategyProgressRow.Placeholder(
                     $"{stock.Name} · owned",
-                    "보유 종목은 기본 제외. 수동 편입 기능이 붙기 전까지 전략 체크하지 않음",
+                    "보유 종목 · 중복매수 OFF라서 자동매수 편입 대상에서 제외",
                     (Brush)FindResource("TextMutedBrush")));
                 return;
             }
