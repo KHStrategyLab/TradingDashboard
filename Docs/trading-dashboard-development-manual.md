@@ -133,7 +133,12 @@
 - `파일 저장` 스위치와 `대기시간` 입력칸은 `분봉 프리로드`를 켜기 전에 정한다.
 - `분봉 프리로드`가 ON이면 `대기시간` 입력칸과 `파일 저장` 스위치를 잠그고, `분봉 프리로드` 스위치는 중단용으로 남겨둔다.
 - idle이 끝나 프리로드가 시작되면 종목 사이에 추가 대기 없이 연속 실행한다. 새 조건 편입이나 스위치 변경이 들어오면 진행 중 배치를 끊고 새 idle 예약으로 다시 잡는다.
+- `Engine Start`, `Live Orders`, `Paper Trading`, 예산/슬롯 변경은 진행 중인 분봉 프리로드 배치를 끊지 않는다.
 - 장중 조건식 신규 편입 종목도 감시목록에 들어오면 idle 예약에 포함한다.
+- 오른쪽 상단 램프는 전략 감시 운전 상태를 `READY`, `RUNNING`, `WAIT DATA`, `BLOCK`, `WATCH OFF`로 표시한다.
+- 전략실 전광판 첫 줄은 운전 상태와 분봉 장부 준비 개수(`MINUTE READY ready/total`)를 표시한다.
+- 기준봉 날짜의 분봉 seed가 준비되면 5/10/15/30분봉에서 `Low <= MA60 <= High`인 마지막 봉을 찾아 `Storage/StrategyAnchors/{baseDate}/{code}_{market}.json`에 저장한다.
+- 전략 앵커에는 KRX 전일종가 기준가(`BasePrice`, `BasePriceDate`, `BasePriceSource`)와 MA60 터치 시각/가격/시고저종/거래량/거래대금을 같이 남긴다.
 - 전략실의 `파일 저장` 스위치가 ON이면 `Storage/StrategyMinuteSeeds/{yyyyMMdd}/{code}_{market}_{minute}.json`에 분봉 seed를 저장한다.
 - 다음 프리로드 때 같은 날짜/종목/시장/분봉 파일이 있으면 파일을 먼저 읽고, 목표 개수가 부족한 경우에만 REST로 보충한 뒤 다시 저장한다.
 - 선택 종목 프리로드와 자동 프리로드가 겹치면 자동 프리로드는 해당 종목 완료를 기다린 뒤 READY/파일 저장 상태에 포함한다.

@@ -182,6 +182,53 @@ namespace TradingDashboard.Services.Strategies
             return new StrategyMinuteSnapshotSet(normalizedCode, normalizedMarket, frames);
         }
 
+        public bool TryGetLastMa60TouchAnchor(
+            string code,
+            string market,
+            int minute,
+            DateTime baseDate,
+            out StrategyMa60TouchAnchor anchor)
+        {
+            anchor = new StrategyMa60TouchAnchor();
+            string normalizedCode = NormalizeCode(code);
+            string normalizedMarket = NormalizeMarket(market);
+            if (string.IsNullOrWhiteSpace(normalizedCode) || minute <= 0 || baseDate == DateTime.MinValue)
+                return false;
+
+            lock (_syncRoot)
+            {
+                if (!_stockCaches.TryGetValue(BuildStockKey(normalizedCode, normalizedMarket), out StrategyStockMinuteCache? stockCache) ||
+                    !stockCache.Frames.TryGetValue(minute, out StrategyMinuteFrameCache? frame))
+                    return false;
+
+                StrategyMinuteBar? touch = frame.CompletedBars
+                    .Where(bar => bar.Ma60 > 0 &&
+                        bar.BucketTime.Date == baseDate.Date &&
+                        bar.Low <= bar.Ma60 &&
+                        bar.High >= bar.Ma60)
+                    .OrderBy(bar => bar.BucketTime)
+                    .LastOrDefault();
+
+                if (touch == null)
+                    return false;
+
+                anchor = new StrategyMa60TouchAnchor
+                {
+                    Minute = minute,
+                    Time = touch.BucketTime,
+                    TouchPrice = (long)Math.Round(touch.Ma60, MidpointRounding.AwayFromZero),
+                    Ma60 = touch.Ma60,
+                    Open = touch.Open,
+                    High = touch.High,
+                    Low = touch.Low,
+                    Close = touch.Close,
+                    Volume = touch.Volume,
+                    TradingValue = touch.TradingValue
+                };
+                return true;
+            }
+        }
+
         private StrategyMinuteFrameCache GetOrCreateFrame(string code, string market, int minute)
         {
             string stockKey = BuildStockKey(code, market);

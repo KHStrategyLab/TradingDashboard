@@ -56,8 +56,10 @@ namespace TradingDashboard
             LogStrategyToggleState(sender);
             UpdateStrategyControlBoard();
             UpdateStrategyMinutePreloadControlLock();
-            TryStartStrategyMinutePreloadForSelectedStock();
-            StartStrategyMinuteAutoPreload(_watchStocks);
+            if (ShouldStartSelectedStrategyMinutePreload(sender))
+                TryStartStrategyMinutePreloadForSelectedStock();
+            if (ShouldRescheduleStrategyMinuteAutoPreload(sender))
+                StartStrategyMinuteAutoPreload(_watchStocks);
         }
 
         private void StrategyControlBoardInput_Changed(object sender, TextChangedEventArgs e)
@@ -97,6 +99,16 @@ namespace TradingDashboard
         {
             LogStrategyToggleState(sender);
             UpdateStrategyProgressRows();
+        }
+
+        private bool ShouldRescheduleStrategyMinuteAutoPreload(object sender)
+        {
+            return ReferenceEquals(sender, StrategyMinutePreloadToggle);
+        }
+
+        private bool ShouldStartSelectedStrategyMinutePreload(object sender)
+        {
+            return ReferenceEquals(sender, StrategyMinutePreloadToggle);
         }
 
         private void SyncPaperTradingPreviewState()
@@ -348,7 +360,69 @@ namespace TradingDashboard
                 AppendLog($"strategy minute data cache fill: {stock.Code} / {item.Minute}m / {chartCandles.Count:N0}/{targetCount:N0}bars");
             }
 
+            SaveStrategyAnchorForStock(stock, market);
             return totalLoaded;
+        }
+
+        private void SaveStrategyAnchorForStock(WatchStockItem stock, string market)
+        {
+            if (stock == null ||
+                string.IsNullOrWhiteSpace(stock.Code) ||
+                string.IsNullOrWhiteSpace(stock.GateBaseCandleDate) ||
+                !TryParseYyyyMMdd(stock.GateBaseCandleDate, out DateTime baseDate))
+                return;
+
+            var touches = new Dictionary<int, StrategyMa60TouchAnchor>();
+            foreach (int minute in new[] { 5, 10, 15, 30 })
+            {
+                if (_strategyMinuteCacheService.TryGetLastMa60TouchAnchor(stock.Code, market, minute, baseDate, out StrategyMa60TouchAnchor touch))
+                {
+                    touches[minute] = touch;
+                    AppendLog($"strategy anchor ma60 touch: {stock.Code} / {market} / {minute}m / {touch.Time:HH:mm} / ma60 {touch.Ma60:0.##}");
+                }
+                else
+                {
+                    AppendLog($"strategy anchor ma60 touch missing: {stock.Code} / {market} / {minute}m / {stock.GateBaseCandleDate}");
+                }
+            }
+
+            if (touches.Count == 0)
+                return;
+
+            WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stock.Code);
+            var document = new StrategyAnchorDocument
+            {
+                Code = NormalizeStockCode(stock.Code),
+                Market = string.Equals(market, "NXT", StringComparison.OrdinalIgnoreCase) ? "NXT" : "KRX",
+                BaseDate = baseDate.ToString("yyyyMMdd"),
+                GateBaseCandleFound = stock.GateBaseCandleFound,
+                GateBaseCandleOffset = stock.GateBaseCandleOffset,
+                GateBaseCandleMarket = stock.GateBaseCandleMarket,
+                GateBaseCandleChangeRate = stock.GateBaseCandleChangeRate,
+                GateBaseCandleTradeValue = stock.GateBaseCandleTradeValue,
+                BasePrice = cache?.BasePrice ?? 0,
+                BasePriceDate = cache?.BasePriceDate ?? string.Empty,
+                BasePriceSource = cache?.BasePriceSource ?? string.Empty,
+                SavedAt = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                Ma60Touches = touches
+            };
+
+            _strategyAnchorStore.Save(document);
+            AppendReadyLog($"strategy anchor saved: {stock.Code} / {market} / base {document.BaseDate} / {touches.Count}/4 ma60 touches");
+        }
+
+        private static bool TryParseYyyyMMdd(string text, out DateTime date)
+        {
+            string digits = new([.. (text ?? string.Empty).Where(char.IsDigit)]);
+            if (digits.Length >= 8)
+                digits = digits[..8];
+
+            return DateTime.TryParseExact(
+                digits,
+                "yyyyMMdd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out date);
         }
 
         private static int CalculateStrategyMinuteTargetCount(WatchStockItem stock, int minute)
@@ -460,6 +534,8 @@ namespace TradingDashboard
             bool saveMinuteSeeds = IsStrategyMinuteSeedFileSaveEnabled();
             int preloadIdleSeconds = ResolveStrategyMinuteAutoPreloadIdleSeconds();
             IReadOnlyList<StrategySlotSetting> settings = GetStrategySlotSettings();
+            StrategyWatchReadiness readiness = BuildStrategyWatchReadiness();
+            string runState = ResolveStrategyRunStateText(execution, preloadMinutes, settings, readiness);
             string enabledStrategies = string.Join(", ", settings
                 .Where(x => x.IsEnabled)
                 .Select(x => x.Name));
@@ -467,7 +543,12 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(enabledStrategies))
                 enabledStrategies = "none";
 
+            UpdateStrategyRunLamp(runState);
+
             StrategyControlBoardText.Text =
+                $"RUN STATE {runState} · " +
+                $"MINUTE READY {readiness.ReadyCount:N0}/{readiness.TotalCount:N0} · " +
+                $"{ResolveStrategyRunDetailText(runState, readiness)}\n" +
                 $"MODE {execution.ExecutionModeText} · " +
                 $"ENGINE {(execution.AutoTradingEnabled ? "ON" : "OFF")} · " +
                 $"LIVE ORDERS {(execution.LiveBuyEnabled ? "ON" : "OFF(alert only)")} · " +
@@ -478,6 +559,75 @@ namespace TradingDashboard
                 $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")} · " +
                 $"MINUTE PRELOAD {(preloadMinutes ? "ON" : "OFF")} / " +
                 $"IDLE {preloadIdleSeconds}s / FILE SAVE {(saveMinuteSeeds ? "ON" : "OFF")}";
+        }
+
+        private StrategyWatchReadiness BuildStrategyWatchReadiness()
+        {
+            List<WatchStockItem> stocks = [.. (_watchStocks ?? [])
+                .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
+                .GroupBy(stock => NormalizeStockCode(stock.Code), StringComparer.Ordinal)
+                .Select(group => group.First())];
+
+            int ready = stocks.Count(IsStrategyMinuteDataReady);
+            return new StrategyWatchReadiness(ready, stocks.Count);
+        }
+
+        private string ResolveStrategyRunStateText(
+            StrategyExecutionSettings execution,
+            bool preloadMinutes,
+            IReadOnlyList<StrategySlotSetting> settings,
+            StrategyWatchReadiness readiness)
+        {
+            if (settings.Count(x => x.IsEnabled) == 0)
+                return "BLOCK";
+
+            if (!execution.AutoTradingEnabled)
+                return readiness.IsAllReady ? "READY" : "WATCH OFF";
+
+            if (preloadMinutes && (readiness.TotalCount == 0 || !readiness.IsAllReady))
+                return "WAIT DATA";
+
+            return "RUNNING";
+        }
+
+        private static string ResolveStrategyRunDetailText(string runState, StrategyWatchReadiness readiness)
+        {
+            return runState switch
+            {
+                "READY" => "minute ledger READY; press Engine Start to monitor",
+                "RUNNING" => "monitoring active",
+                "WAIT DATA" => readiness.TotalCount == 0
+                    ? "waiting for watch stocks; monitoring starts after minute ledger READY"
+                    : "minute ledger preparing; monitoring starts as stocks become READY",
+                "BLOCK" => "strategy setup blocked; enable at least one strategy",
+                _ => readiness.TotalCount > 0
+                    ? "watch is OFF; data can preload in the background"
+                    : "watch is OFF; no watch stocks loaded"
+            };
+        }
+
+        private void UpdateStrategyRunLamp(string runState)
+        {
+            if (StrategyRunLampText == null || StrategyRunLampEllipse == null)
+                return;
+
+            StrategyRunLampText.Text = runState;
+            Brush brush = runState switch
+            {
+                "READY" => (Brush)FindResource("PaletteLightGreen"),
+                "RUNNING" => (Brush)FindResource("PaletteGreen"),
+                "WAIT DATA" => (Brush)FindResource("PaletteYellow"),
+                "BLOCK" => (Brush)FindResource("PaletteRed"),
+                _ => (Brush)FindResource("TextMutedBrush")
+            };
+
+            StrategyRunLampText.Foreground = brush;
+            StrategyRunLampEllipse.Fill = brush;
+        }
+
+        private readonly record struct StrategyWatchReadiness(int ReadyCount, int TotalCount)
+        {
+            public bool IsAllReady => TotalCount > 0 && ReadyCount >= TotalCount;
         }
 
         private void UpdateStrategyProgressRows()
@@ -563,6 +713,7 @@ namespace TradingDashboard
         {
             _strategyMinutePreloadRunningKeys.Add(key);
             UpdateStrategyMinutePreloadControlLock();
+            UpdateStrategyControlBoard();
             StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 전략 분봉 프리로드 시작";
             AppendLog($"strategy minute preload started: {stock.Code} / {key}");
 
@@ -573,6 +724,7 @@ namespace TradingDashboard
                 string readiness = FormatStrategyMinuteReadiness(stock);
                 StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} 전략 분봉 프리로드 완료: {loadedCount:N0}봉";
                 AppendReadyLog($"strategy minute preload READY TO USE: {stock.Code} / {loadedCount:N0}bars / {readiness}");
+                UpdateStrategyControlBoard();
                 UpdateStrategyProgressRows();
             }
             catch (OperationCanceledException)
@@ -588,6 +740,7 @@ namespace TradingDashboard
             {
                 _strategyMinutePreloadRunningKeys.Remove(key);
                 UpdateStrategyMinutePreloadControlLock();
+                UpdateStrategyControlBoard();
             }
         }
 
@@ -694,6 +847,7 @@ namespace TradingDashboard
                 _strategyMinuteAutoPreloadBatchKeys.Add(batchKey);
                 _strategyMinuteAutoPreloadStarted = true;
                 UpdateStrategyMinutePreloadControlLock();
+                UpdateStrategyControlBoard();
                 await PreloadStrategyMinuteDataForStocksAsync(stocks, cancellationToken);
             }
             catch (OperationCanceledException)
@@ -702,6 +856,7 @@ namespace TradingDashboard
                 {
                     _strategyMinuteAutoPreloadStarted = false;
                     UpdateStrategyMinutePreloadControlLock();
+                    UpdateStrategyControlBoard();
                     AppendLog("strategy minute auto preload interrupted while running");
                 }
                 else
@@ -725,6 +880,7 @@ namespace TradingDashboard
                     AppendLog($"strategy minute auto preload stopped: switch OFF / completed {completed:N0}/{stocks.Count:N0}");
                     _strategyMinuteAutoPreloadStarted = false;
                     UpdateStrategyMinutePreloadControlLock();
+                    UpdateStrategyControlBoard();
                     return;
                 }
 
@@ -734,6 +890,7 @@ namespace TradingDashboard
                 {
                     SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(stock, market);
                     completed++;
+                    UpdateStrategyControlBoard();
                     AppendReadyLog($"strategy minute auto preload stock already ready: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
                     continue;
                 }
@@ -746,6 +903,7 @@ namespace TradingDashboard
                         _strategyMinutePreloadCompletedKeys.Add(key);
                         SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(stock, market);
                         completed++;
+                        UpdateStrategyControlBoard();
                         AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
                     }
 
@@ -757,17 +915,20 @@ namespace TradingDashboard
                     _strategyMinutePreloadCompletedKeys.Add(key);
                     SaveStrategyMinuteSeedFilesFromMemoryIfEnabled(stock, market);
                     completed++;
+                    UpdateStrategyControlBoard();
                     AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {market} / {FormatStrategyMinuteReadiness(stock)}");
                     continue;
                 }
 
                 await PreloadStrategyMinuteDataForStockAsync(stock, key);
                 completed++;
+                UpdateStrategyControlBoard();
                 AppendReadyLog($"strategy minute auto preload stock done: {completed:N0}/{stocks.Count:N0} / {stock.Code} {stock.Name} / {FormatStrategyMinuteReadiness(stock)}");
             }
 
             _strategyMinuteAutoPreloadStarted = false;
             UpdateStrategyMinutePreloadControlLock();
+            UpdateStrategyControlBoard();
             AppendReadyLog($"strategy minute auto preload ALL READY TO USE: {completed:N0}/{stocks.Count:N0}stocks");
         }
 

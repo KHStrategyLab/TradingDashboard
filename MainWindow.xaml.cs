@@ -44,6 +44,7 @@ namespace TradingDashboard
         private readonly TradingCostCalculator _tradingCostCalculator;
         private readonly StrategyMinuteCacheService _strategyMinuteCacheService = new();
         private readonly StrategyMinuteSeedFileStore _strategyMinuteSeedFileStore = new();
+        private readonly StrategyAnchorStore _strategyAnchorStore = new();
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
         private readonly Queue<LogLineEntry> _logLines = new();
