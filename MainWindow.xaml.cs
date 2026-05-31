@@ -2261,35 +2261,36 @@ namespace TradingDashboard
             Brush normalLogBrush = (Brush)FindResource("TextSubBrush");
 
             foreach (LogLineEntry entry in _logLines)
-            {
-                var paragraph = new Paragraph(new Run(entry.Text))
-                {
-                    Margin = new Thickness(0),
-                    LineHeight = 14,
-                    Foreground = entry.IsReady
-                        ? new SolidColorBrush(Color.FromRgb(183, 255, 74))
-                        : normalLogBrush,
-                    FontWeight = entry.IsReady ? FontWeights.Bold : FontWeights.Normal
-                };
-
-                if (entry.IsReady)
-                {
-                    paragraph.TextEffects = new TextEffectCollection
-                    {
-                        new()
-                        {
-                            Foreground = new SolidColorBrush(Color.FromArgb(150, 183, 255, 74)),
-                            PositionStart = 0,
-                            PositionCount = entry.Text.Length
-                        }
-                    };
-                }
-
-                LeftLogTextBox.Document.Blocks.Add(paragraph);
-            }
+                LeftLogTextBox.Document.Blocks.Add(CreateLogParagraph(entry, normalLogBrush));
 
             LeftLogTextBox.ScrollToEnd();
         }
+
+        private static Paragraph CreateLogParagraph(LogLineEntry entry, Brush normalLogBrush)
+        {
+            var paragraph = new Paragraph(new Run(entry.Text))
+            {
+                Margin = new Thickness(0),
+                LineHeight = 14,
+                Foreground = entry.IsReady ? new SolidColorBrush(Color.FromRgb(183, 255, 74)) : normalLogBrush,
+                FontWeight = entry.IsReady ? FontWeights.Bold : FontWeights.Normal
+            };
+
+            if (entry.IsReady)
+                paragraph.TextEffects = CreateReadyLogTextEffects(entry.Text.Length);
+
+            return paragraph;
+        }
+
+        private static TextEffectCollection CreateReadyLogTextEffects(int textLength) =>
+        [
+            new()
+            {
+                Foreground = new SolidColorBrush(Color.FromArgb(150, 183, 255, 74)),
+                PositionStart = 0,
+                PositionCount = textLength
+            }
+        ];
 
         private void LeftLogTextBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
