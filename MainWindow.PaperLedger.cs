@@ -78,6 +78,7 @@ namespace TradingDashboard
                 entry.ProfitLoss = CalculatePaperProfitLoss(entry);
                 entry.ProfitRate = CalculatePaperProfitRate(entry);
                 entry.UpdatedAt = now;
+                TryClosePaperPosition(entry, now);
                 changed = true;
             }
 
@@ -99,6 +100,30 @@ namespace TradingDashboard
                 return 0;
 
             return (entry.CurrentPrice - entry.EntryPrice) / (decimal)entry.EntryPrice * 100m;
+        }
+
+        private void TryClosePaperPosition(PaperPositionLedgerEntry entry, string now)
+        {
+            if (!string.Equals(entry.Status, "OPEN", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string exitReason = string.Empty;
+            if (entry.ProfitRate <= StrategyStopLossRate)
+                exitReason = "STOP";
+            else if (entry.ProfitRate >= StrategyFirstTargetRate)
+                exitReason = "TARGET1";
+
+            if (string.IsNullOrWhiteSpace(exitReason))
+                return;
+
+            entry.Status = "CLOSED";
+            entry.ExitTime = now;
+            entry.Reason = string.IsNullOrWhiteSpace(entry.Reason)
+                ? exitReason
+                : $"{entry.Reason} / {exitReason}";
+            AppendReadyLog(
+                $"PAPER {exitReason} MARKED: {entry.Code} {entry.Name} / {entry.SlotTag} / " +
+                $"entry {entry.EntryPrice:N0} / exit {entry.CurrentPrice:N0} / pnl {entry.ProfitLoss:N0} ({entry.ProfitRate:0.##}%)");
         }
 
         private void SavePaperPositions()
