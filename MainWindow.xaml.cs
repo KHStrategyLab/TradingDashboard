@@ -1247,6 +1247,7 @@ namespace TradingDashboard
             if (selectedItem is WatchStockItem recentStock)
                 AddRecentViewedStock(recentStock);
 
+            StartSelectedChartRender();
             _ = LoadNewsAsync(stockName, selectionVersion, requestToken);
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
             await LoadSelectedBasePriceAsync(stockCode, selectionVersion, requestToken);
@@ -1258,7 +1259,6 @@ namespace TradingDashboard
                 return;
 
             _ = RegisterSelectedRealtime0DIfReadyAsync();
-            StartSelectedChartRender();
             _ = LoadSelectedStockStatusAsync(stockCode, selectionVersion, requestToken);
             _ = LoadKrxClosingSnapshotIfNeededAsync(stockCode, selectionVersion, requestToken);
         }

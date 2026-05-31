@@ -39,7 +39,7 @@ Date: 2026-05-31
 | 함수 | 파일 | 역할 | 주의점 |
 |---|---|---|---|
 | `WatchListBox_SelectionChanged` | `MainWindow.xaml.cs` | watchlist 선택 이벤트 진입점 | 중복 선택 방어와 cancellation 흐름을 거친다. |
-| `LoadNewsForSelectedStockAsync` | `MainWindow.xaml.cs` | 선택 종목의 기준가, 호가, 차트, 뉴스, 공시, 상태 조회 시작 | `_selectionVersion`과 `_selectedRequestCts`가 늦은 응답 차단의 핵심이다. |
+| `LoadNewsForSelectedStockAsync` | `MainWindow.xaml.cs` | 선택 종목의 차트, 기준가, 호가, 뉴스, 공시, 상태 조회 시작 | 차트를 먼저 시작하고 기준가 -> 호가 -> 종목정보 순서로 간다. `_selectionVersion`과 `_selectedRequestCts`가 늦은 응답 차단의 핵심이다. |
 | `IsCurrentSelection` | `MainWindow.xaml.cs` | 늦게 돌아온 응답이 현재 선택인지 확인 | 모든 비동기 화면 반영 전에 확인해야 한다. |
 | `DisposeCanceledRequestLater` | `MainWindow.xaml.cs` | 취소된 CTS를 늦게 dispose | 빠른 선택 전환 중 `ObjectDisposedException` 방어. |
 | `ClearSelectedChartVisuals` | `MainWindow.xaml.cs` | 선택 변경 시 차트/드래그 상태 초기화 | 이전 종목의 시각 요소가 남지 않게 한다. |

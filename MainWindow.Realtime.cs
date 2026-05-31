@@ -642,8 +642,8 @@ namespace TradingDashboard
                 int selectionVersion = _selectionVersion;
                 if (!string.IsNullOrWhiteSpace(selectedCode))
                 {
-                    await LoadSelectedOrderBookSnapshotAsync(selectedCode, selectionVersion);
                     StartSelectedChartRender();
+                    await LoadSelectedOrderBookSnapshotAsync(selectedCode, selectionVersion);
                 }
             }
             catch (Exception ex)
