@@ -75,7 +75,7 @@ namespace TradingDashboard.Services.Backtests
         private static string BuildTradesCsv(IEnumerable<BacktestTradeRow> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("RunId,StrategyCode,ExitRuleCode,Code,Market,EntryTime,ExitTime,EntryPrice,ExitPrice,MaxHigh,MinLow,Quantity,ProfitRate,ProfitAmount,MAE,MFE,HoldingMinutes,EntryReason,ExitReason");
+            sb.AppendLine("RunId,StrategyCode,ExitRuleCode,Code,Market,EntryTime,ExitTime,EntryPrice,ExitPrice,MaxHigh,MinLow,StopPrice,Quantity,ProfitRate,ProfitAmount,MAE,MFE,RiskRate,MaxR,MinR,HoldingMinutes,EntryReason,ExitReason");
             foreach (BacktestTradeRow row in rows)
             {
                 AppendCsvLine(sb,
@@ -90,11 +90,15 @@ namespace TradingDashboard.Services.Backtests
                     row.ExitPrice.ToString(CultureInfo.InvariantCulture),
                     row.MaxHigh.ToString(CultureInfo.InvariantCulture),
                     row.MinLow.ToString(CultureInfo.InvariantCulture),
+                    row.StopPrice.ToString(CultureInfo.InvariantCulture),
                     row.Quantity.ToString(CultureInfo.InvariantCulture),
                     row.ProfitRate.ToString(CultureInfo.InvariantCulture),
                     row.ProfitAmount.ToString(CultureInfo.InvariantCulture),
                     row.Mae.ToString(CultureInfo.InvariantCulture),
                     row.Mfe.ToString(CultureInfo.InvariantCulture),
+                    row.RiskRate.ToString(CultureInfo.InvariantCulture),
+                    row.MaxR.ToString(CultureInfo.InvariantCulture),
+                    row.MinR.ToString(CultureInfo.InvariantCulture),
                     row.HoldingMinutes.ToString(CultureInfo.InvariantCulture),
                     row.EntryReason,
                     row.ExitReason);

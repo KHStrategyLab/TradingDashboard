@@ -281,3 +281,13 @@ dotnet run -- --backtest-ten-pullback-five-breakout-3h
 ```
 
 It measures signal quality by holding for a same-day observation window and recording high/low range. The 30-minute command uses six 5-minute bars, and the 3-hour command uses thirty-six 5-minute bars. It is not connected to live trading.
+
+The first-priority small-base test is `SMALL_BASE_MA60_CENTER_PULLBACK`.
+
+It is run with:
+
+```powershell
+dotnet run -- --backtest-small-base-center-10m-3m
+```
+
+This test uses a completed 10-minute MA60 recovery candle as the small base, then checks a completed 3-minute centerline pullback rebound. Results are evaluated by risk to the small-base low and R multiple, not by win rate alone.

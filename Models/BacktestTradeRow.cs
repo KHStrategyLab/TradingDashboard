@@ -13,11 +13,15 @@ namespace TradingDashboard.Models
         public long ExitPrice { get; set; }
         public long MaxHigh { get; set; }
         public long MinLow { get; set; }
+        public long StopPrice { get; set; }
         public int Quantity { get; set; }
         public decimal ProfitRate { get; set; }
         public long ProfitAmount { get; set; }
         public decimal Mae { get; set; }
         public decimal Mfe { get; set; }
+        public decimal RiskRate { get; set; }
+        public decimal MaxR { get; set; }
+        public decimal MinR { get; set; }
         public int HoldingMinutes { get; set; }
         public string EntryReason { get; set; } = string.Empty;
         public string ExitReason { get; set; } = string.Empty;

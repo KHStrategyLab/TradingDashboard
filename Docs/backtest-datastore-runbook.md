@@ -210,3 +210,46 @@ Record MaxHigh, MinLow, MFE, MAE, and the holding-window exit close.
 ```
 
 This is a signal-quality test, not a live strategy.
+
+## Small Base Center Pullback Test
+
+First-priority smoke test:
+
+```powershell
+dotnet run -- --backtest-small-base-center-10m-3m
+```
+
+Strategy:
+
+```text
+SMALL_BASE_MA60_CENTER_PULLBACK
+```
+
+Rules:
+
+```text
+Base candle: completed 10-minute bar
+Entry candle: completed 3-minute bar
+Observation window: same-day 180 minutes
+Stop reference: small base candle low
+
+Previous 10-minute close < MA60
+Small base low < MA60
+Small base close > MA60
+Small base close > open
+Small base rise >= 1.0%
+Small base trading value >= 1,000,000,000 KRW
+
+3-minute entry close between small base center and small base close
+3-minute entry close > open
+3-minute entry close > previous 3-minute high
+3-minute volume >= previous 20-bar average volume * 1.2
+```
+
+Quality metrics:
+
+```text
+RiskRate = (EntryPrice - SmallBaseLow) / EntryPrice
+MaxR = (MaxHigh - EntryPrice) / (EntryPrice - SmallBaseLow)
+MinR = (MinLow - EntryPrice) / (EntryPrice - SmallBaseLow)
+```
