@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -97,8 +98,7 @@ namespace TradingDashboard
 
             try
             {
-                KiwoomBalanceSnapshot snapshot = await _tradingClient
-                    .GetEvaluationBalanceAsync(KiwoomTradingConstants.MarketKrx, cancellationToken)
+                KiwoomBalanceSnapshot snapshot = await LoadMergedBalanceSnapshotAsync(cancellationToken)
                     .ConfigureAwait(true);
 
                 SyncManualPositionLedger(snapshot.Holdings);
@@ -128,6 +128,107 @@ namespace TradingDashboard
             {
                 BalanceRefreshButton.IsEnabled = true;
             }
+        }
+
+        private async Task<KiwoomBalanceSnapshot> LoadMergedBalanceSnapshotAsync(CancellationToken cancellationToken)
+        {
+            KiwoomBalanceSnapshot krx = await _tradingClient
+                .GetEvaluationBalanceAsync(KiwoomTradingConstants.MarketKrx, cancellationToken)
+                .ConfigureAwait(true);
+
+            List<KiwoomHolding> holdings = [.. krx.Holdings];
+            List<string> sources = [$"{krx.SourceApi}:{krx.QueryMarket}"];
+
+            try
+            {
+                KiwoomBalanceSnapshot nxt = await _tradingClient
+                    .GetEvaluationBalanceAsync(KiwoomTradingConstants.MarketNxt, cancellationToken)
+                    .ConfigureAwait(true);
+                holdings.AddRange(nxt.Holdings);
+                sources.Add($"{nxt.SourceApi}:{nxt.QueryMarket}");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"balance NXT supplement skipped: {ex.GetType().Name} / {ex.Message}");
+            }
+
+            try
+            {
+                KiwoomBalanceSnapshot executionKrx = await _tradingClient
+                    .GetExecutionBalanceAsync(KiwoomTradingConstants.MarketKrx, cancellationToken)
+                    .ConfigureAwait(true);
+                HashSet<string> knownCodes = [.. holdings.Select(item => item.StockCode).Where(code => !string.IsNullOrWhiteSpace(code))];
+                IReadOnlyList<KiwoomHolding> missingExecutionHoldings = [.. executionKrx.Holdings
+                    .Where(item => item.HoldingQuantity > 0 && !knownCodes.Contains(item.StockCode))];
+                if (missingExecutionHoldings.Count > 0)
+                {
+                    holdings.AddRange(missingExecutionHoldings);
+                    sources.Add($"{executionKrx.SourceApi}:{executionKrx.QueryMarket}-missing");
+                    AppendLog($"balance kt00005 supplemented missing holdings: {missingExecutionHoldings.Count}items");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"balance kt00005 supplement skipped: {ex.GetType().Name} / {ex.Message}");
+            }
+
+            IReadOnlyList<KiwoomHolding> mergedHoldings = MergeBalanceHoldings(holdings);
+            long totalPurchase = mergedHoldings.Sum(item => Math.Max(0, item.PurchaseAmount));
+            long totalEvaluation = mergedHoldings.Sum(item => Math.Max(0, item.EvaluationAmount));
+            long totalProfit = mergedHoldings.Sum(item => item.EvaluationProfit);
+            decimal totalProfitRate = totalPurchase > 0
+                ? totalProfit / (decimal)totalPurchase * 100m
+                : krx.TotalProfitRate;
+
+            return new KiwoomBalanceSnapshot(
+                string.Join("+", sources),
+                "KRX+NXT",
+                DateTime.Now,
+                totalPurchase,
+                totalEvaluation,
+                totalProfit,
+                totalProfitRate,
+                mergedHoldings,
+                krx.RawBody);
+        }
+
+        private static IReadOnlyList<KiwoomHolding> MergeBalanceHoldings(IEnumerable<KiwoomHolding> holdings)
+        {
+            return [.. (holdings ?? [])
+                .Where(item => item.HoldingQuantity > 0 && !string.IsNullOrWhiteSpace(item.StockCode))
+                .GroupBy(item => item.StockCode, StringComparer.Ordinal)
+                .Select(group =>
+                {
+                    long quantity = group.Sum(item => Math.Max(0, item.HoldingQuantity));
+                    long orderable = group.Sum(item => Math.Max(0, item.OrderableQuantity));
+                    long purchase = group.Sum(item => Math.Max(0, item.PurchaseAmount));
+                    long evaluation = group.Sum(item => Math.Max(0, item.EvaluationAmount));
+                    long profit = group.Sum(item => item.EvaluationProfit);
+                    long averagePrice = quantity > 0 && purchase > 0 ? purchase / quantity : group.First().AverageBuyPrice;
+                    long currentPrice = quantity > 0 && evaluation > 0 ? evaluation / quantity : group.First().CurrentPrice;
+                    decimal profitRate = purchase > 0 ? profit / (decimal)purchase * 100m : group.First().ProfitRate;
+
+                    return new KiwoomHolding(
+                        group.Key,
+                        group.FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.StockName))?.StockName ?? string.Empty,
+                        quantity,
+                        orderable,
+                        currentPrice,
+                        averagePrice,
+                        purchase,
+                        evaluation,
+                        profit,
+                        profitRate);
+                })
+                .OrderByDescending(item => Math.Abs(item.EvaluationAmount))];
         }
 
         private async Task RefreshRealizedProfitAsync(CancellationToken cancellationToken)

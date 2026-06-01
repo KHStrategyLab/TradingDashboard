@@ -186,6 +186,7 @@
 - 5분봉 MA5 붕괴 조건은 보조 손절 신호로 사용한다.
 - 수동 포지션은 `Storage/ManualPositions/{yyyyMMdd}.json`에 별도 장부로 둔다. Balance 새로고침 때 자동 전략 장부가 없는 보유 종목을 `OPEN`으로 맞추고, 선택 종목은 `Manual In`/`Manual Out` 버튼으로 자동손절 편입/제외한다.
 - `Manual Out` 상태는 `MANUAL OFF` 태그로 표시하고 자동손절기가 건드리지 않는다. 앵커가 아직 없으면 `MANUAL WAIT`, 앵커가 준비되면 `MANUAL STOP`으로 표시한다.
+- Balance 화면은 수동매수 누락을 막기 위해 `kt00018 KRX`와 `kt00018 NXT`를 합쳐 표시하고, 그래도 빠진 보유 종목은 `kt00005 KRX` 체결잔고에서 보조로 채운다.
 - `Live Orders OFF`에서는 알림/로그만 남기고, `Live Orders ON`에서만 실제 매도 handoff를 허용한다.
 
 Paper Trading:
