@@ -209,3 +209,10 @@ Docs/backtest-datastore-runbook.md
 ```
 
 These services are intentionally not wired to `Engine Start`, realtime strategy evaluation, or live order flow.
+
+Candidate source priority:
+
+```text
+1. Config/watchlist_stock_cache.json via LoadFromWatchlistCache(...)
+2. Excel/CSV/JSON import files via LoadCandidates(...)
+```

@@ -20,7 +20,18 @@ No minute download, no strategy execution, no live order.
 
 ## Candidate Sources
 
-Preferred candidate input is an Excel/CSV file exported from the user's PC search condition.
+Preferred candidate input is the existing TradingDashboard watchlist/search-condition cache.
+
+Use:
+
+```text
+Config/watchlist_stock_cache.json
+BacktestCandidateImportService.LoadFromWatchlistCache(...)
+```
+
+This avoids manually preparing stock lists.
+
+Excel/CSV import remains a fallback for one-off offline candidate files.
 
 Required columns for a real candidate file:
 
@@ -47,7 +58,7 @@ Source = EXCEL
 StrategyCode = BASE_CANDLE
 ```
 
-The sample file `120일내_20퍼_500억.xls` currently contains the search-condition description only, not stock rows.
+The sample file `120일내_20퍼_500억.xls` currently contains the search-condition description only, not stock rows. Use it as source-condition documentation, not as the primary candidate list.
 
 ## Source Condition
 
@@ -81,6 +92,7 @@ The trigger should call:
 
 ```text
 BacktestCandidateImportService.LoadCandidates(...)
+or BacktestCandidateImportService.LoadFromWatchlistCache(...)
 BacktestDataStore.SaveCandidates(...)
 BacktestDatasetBuilder.BuildDailyDataStoreAsync(...)
 ```

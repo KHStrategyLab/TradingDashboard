@@ -14,6 +14,45 @@ namespace TradingDashboard.Services.Backtests
     {
         private static readonly Regex CodeRegex = new(@"(?<!\d)A?\d{6}(?!\d)", RegexOptions.Compiled);
 
+        public IReadOnlyList<BacktestCandidate> LoadFromWatchlistCache(
+            WatchlistStockCacheStore? cacheStore = null,
+            string sourceName = "watchlist_stock_cache")
+        {
+            cacheStore ??= new WatchlistStockCacheStore();
+            List<WatchlistStockCacheEntry> entries = cacheStore.Load();
+            DateTime importedAt = DateTime.Now;
+
+            return [.. entries
+                .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Code))
+                .Select(entry =>
+                {
+                    string market = !string.IsNullOrWhiteSpace(entry.GateBaseCandleMarket)
+                        ? entry.GateBaseCandleMarket
+                        : entry.Market;
+                    string candidateDate = !string.IsNullOrWhiteSpace(entry.LastSeenConditionDate)
+                        ? entry.LastSeenConditionDate
+                        : !string.IsNullOrWhiteSpace(entry.SnapshotDate) ? entry.SnapshotDate : entry.GateBaseCandleCheckedDate;
+
+                    return new BacktestCandidate
+                    {
+                        Code = BacktestDataStore.NormalizeCode(entry.Code),
+                        Name = entry.Name,
+                        Market = BacktestDataStore.NormalizeMarket(market),
+                        CandidateDate = BacktestDataStore.NormalizeDate(candidateDate),
+                        NxtEnabled = entry.SupportsNxt,
+                        StrategyCode = "BASE_CANDLE",
+                        Source = "WATCHLIST_CACHE",
+                        SourceName = sourceName,
+                        Memo = BuildWatchlistMemo(entry),
+                        ImportedAt = importedAt
+                    };
+                })
+                .Where(item => !string.IsNullOrWhiteSpace(item.Code))
+                .GroupBy(item => $"{item.Code}|{item.Market}|{item.CandidateDate}", StringComparer.Ordinal)
+                .Select(group => group.First())
+                .OrderBy(item => item.Code)];
+        }
+
         public IReadOnlyList<BacktestCandidate> LoadCandidates(string path, string sourceName = "")
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -239,6 +278,18 @@ namespace TradingDashboard.Services.Backtests
             }
 
             return false;
+        }
+
+        private static string BuildWatchlistMemo(WatchlistStockCacheEntry entry)
+        {
+            List<string> parts = [];
+            if (entry.GateBaseCandleFound)
+                parts.Add($"gate {entry.GateBaseCandleDate} {entry.GateBaseCandleChangeRate:0.##}% {entry.GateBaseCandleTradeValue:N0}");
+            if (!string.IsNullOrWhiteSpace(entry.StockState))
+                parts.Add(entry.StockState);
+            if (!string.IsNullOrWhiteSpace(entry.AuditInfo))
+                parts.Add(entry.AuditInfo);
+            return string.Join(" / ", parts);
         }
     }
 }
