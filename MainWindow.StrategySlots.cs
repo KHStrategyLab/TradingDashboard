@@ -308,65 +308,72 @@ namespace TradingDashboard
             {
                 ChartCacheKey key = CreateChartCacheKey(stock.Code, useNxtMarket, item.Period);
                 int targetCount = CalculateStrategyMinuteTargetCount(stock, item.Minute);
+                DateTime expectedLatestBucket = ResolveExpectedLatestMinuteBucket(item.Minute, DateTime.Now);
+                var seedCandles = new List<DailyCandle>();
                 if (saveSeedFiles &&
                     _strategyMinuteSeedFileStore.TryLoadToday(stock.Code, market, item.Minute, targetCount, out List<DailyCandle> seedFileCandles))
                 {
-                    _strategyMinuteCacheService.Seed(stock.Code, market, item.Minute, seedFileCandles, targetCount);
-                    SetChartMemoryCache(key, [.. seedFileCandles.Select(ToChartCandle)], targetCount);
+                    seedCandles = MergeMinuteCandles(seedCandles, seedFileCandles, targetCount);
+                    _strategyMinuteCacheService.Seed(stock.Code, market, item.Minute, seedCandles, targetCount);
+                    SetChartMemoryCache(key, [.. seedCandles.Select(ToChartCandle)], targetCount);
                     AppendLog(seedFileCandles.Count >= targetCount
                         ? $"strategy minute seed file hit: {stock.Code} / {market} / {item.Minute}m / {seedFileCandles.Count:N0}bars"
                         : $"strategy minute seed file refill: {stock.Code} / {market} / {item.Minute}m / {seedFileCandles.Count:N0}->{targetCount:N0}bars");
 
-                    if (seedFileCandles.Count >= targetCount)
+                    if (IsMinuteSeedFreshEnough(seedCandles, item.Minute, targetCount, expectedLatestBucket, out DateTime seedLastBucket))
                     {
-                        totalLoaded += seedFileCandles.Count;
+                        totalLoaded += seedCandles.Count;
+                        AppendLog($"strategy minute seed fresh: {stock.Code} / {market} / {item.Minute}m / last {seedLastBucket:HH:mm} / expected {expectedLatestBucket:HH:mm}");
                         continue;
                     }
                 }
 
-                int cachedCount = _chartMemoryCache.TryGetValue(key, out ChartCacheEntry? entry)
-                    ? entry.Candles.Count
-                    : 0;
-
-                if (cachedCount >= targetCount)
+                List<DailyCandle> existingCandles = [.. seedCandles];
+                int cachedCount = 0;
+                if (_chartMemoryCache.TryGetValue(key, out ChartCacheEntry? entry))
                 {
-                    if (entry != null)
+                    cachedCount = entry.Candles.Count;
+                    existingCandles = MergeMinuteCandles(existingCandles, ConvertChartCandlesToDailyCandles(entry.Candles), targetCount);
+                }
+
+                if (IsMinuteSeedFreshEnough(existingCandles, item.Minute, targetCount, expectedLatestBucket, out DateTime cacheLastBucket))
+                {
+                    _strategyMinuteCacheService.Seed(
+                        stock.Code,
+                        market,
+                        item.Minute,
+                        existingCandles,
+                        targetCount);
+                    SetChartMemoryCache(key, [.. existingCandles.Select(ToChartCandle)], targetCount);
+                    if (saveSeedFiles)
                     {
-                        _strategyMinuteCacheService.Seed(
-                            stock.Code,
-                            market,
-                            item.Minute,
-                            ConvertChartCandlesToDailyCandles(entry.Candles),
-                            targetCount);
-                        if (saveSeedFiles)
-                        {
-                            List<DailyCandle> memoryCandles = ConvertChartCandlesToDailyCandles(entry.Candles);
-                            _strategyMinuteSeedFileStore.SaveToday(stock.Code, market, item.Minute, memoryCandles, targetCount);
-                            AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(memoryCandles.Count, targetCount):N0}bars");
-                        }
+                        _strategyMinuteSeedFileStore.SaveToday(stock.Code, market, item.Minute, existingCandles, targetCount);
+                        AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(existingCandles.Count, targetCount):N0}bars");
                     }
 
-                    AppendLog($"strategy minute data cache hit: {stock.Code} / {item.Minute}m / {cachedCount:N0}bars");
-                    totalLoaded += cachedCount;
+                    AppendLog($"strategy minute data cache fresh: {stock.Code} / {item.Minute}m / {existingCandles.Count:N0}bars / last {cacheLastBucket:HH:mm} / expected {expectedLatestBucket:HH:mm}");
+                    totalLoaded += existingCandles.Count;
                     continue;
                 }
 
-                StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} {item.Minute}분 로드 중... ({cachedCount:N0}/{targetCount:N0})";
+                int fetchCount = CalculateStrategyMinuteFetchCount(existingCandles, item.Minute, targetCount, expectedLatestBucket);
+                StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} {item.Minute}분 로드 중... ({existingCandles.Count:N0}/{targetCount:N0}, fetch {fetchCount:N0})";
                 IReadOnlyList<DailyCandle> candles = await _kiwoomConditionService
-                    .GetMinuteCandlesAsync(stock.Code, item.Minute, useNxtMarket, targetCount)
+                    .GetMinuteCandlesAsync(stock.Code, item.Minute, useNxtMarket, fetchCount)
                     .ConfigureAwait(true);
 
-                List<ChartCandle> chartCandles = [.. candles.Select(ToChartCandle)];
+                List<DailyCandle> mergedCandles = MergeMinuteCandles(existingCandles, candles, targetCount);
+                List<ChartCandle> chartCandles = [.. mergedCandles.Select(ToChartCandle)];
                 SetChartMemoryCache(key, chartCandles, targetCount);
-                _strategyMinuteCacheService.Seed(stock.Code, market, item.Minute, candles, targetCount);
+                _strategyMinuteCacheService.Seed(stock.Code, market, item.Minute, mergedCandles, targetCount);
                 if (saveSeedFiles)
                 {
-                    _strategyMinuteSeedFileStore.SaveToday(stock.Code, market, item.Minute, candles, targetCount);
-                    AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(candles.Count, targetCount):N0}bars");
+                    _strategyMinuteSeedFileStore.SaveToday(stock.Code, market, item.Minute, mergedCandles, targetCount);
+                    AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(mergedCandles.Count, targetCount):N0}bars");
                 }
 
                 totalLoaded += chartCandles.Count;
-                AppendLog($"strategy minute data cache fill: {stock.Code} / {item.Minute}m / {chartCandles.Count:N0}/{targetCount:N0}bars");
+                AppendLog($"strategy minute data cache fill: {stock.Code} / {item.Minute}m / fetched {candles.Count:N0} / merged {chartCandles.Count:N0}/{targetCount:N0}bars");
             }
 
             SaveStrategyAnchorForStock(stock, market);
@@ -437,6 +444,113 @@ namespace TradingDashboard
         private static int CalculateStrategyMinuteTargetCount(WatchStockItem stock, int minute)
         {
             return StrategyMinuteRequiredCandleCount;
+        }
+
+        private static int CalculateStrategyMinuteFetchCount(
+            IReadOnlyList<DailyCandle> existingCandles,
+            int minute,
+            int targetCount,
+            DateTime expectedLatestBucket)
+        {
+            if (!TryGetLastMinuteCandleTime(existingCandles, out DateTime lastBucket))
+                return targetCount;
+
+            int missingBars = CountMissingMinuteBars(lastBucket, expectedLatestBucket, minute);
+            int historyShortage = Math.Max(0, targetCount - (existingCandles?.Count ?? 0));
+            int requested = Math.Max(missingBars + 3, historyShortage + missingBars + 3);
+            return Math.Clamp(requested, 1, targetCount);
+        }
+
+        private static bool IsMinuteSeedFreshEnough(
+            IReadOnlyList<DailyCandle> candles,
+            int minute,
+            int targetCount,
+            DateTime expectedLatestBucket,
+            out DateTime lastBucket)
+        {
+            lastBucket = DateTime.MinValue;
+            if (candles == null || candles.Count < targetCount)
+                return false;
+
+            if (!TryGetLastMinuteCandleTime(candles, out lastBucket))
+                return false;
+
+            return CountMissingMinuteBars(lastBucket, expectedLatestBucket, minute) <= 0;
+        }
+
+        private static int CountMissingMinuteBars(DateTime lastBucket, DateTime expectedLatestBucket, int minute)
+        {
+            if (lastBucket == DateTime.MinValue || expectedLatestBucket == DateTime.MinValue || lastBucket >= expectedLatestBucket)
+                return 0;
+
+            double missing = (expectedLatestBucket - lastBucket).TotalMinutes / Math.Max(1, minute);
+            return Math.Max(0, (int)Math.Ceiling(missing));
+        }
+
+        private static DateTime ResolveExpectedLatestMinuteBucket(int minute, DateTime now)
+        {
+            int safeMinute = Math.Max(1, minute);
+            int flooredMinute = now.Minute / safeMinute * safeMinute;
+            return new DateTime(now.Year, now.Month, now.Day, now.Hour, flooredMinute, 0);
+        }
+
+        private static List<DailyCandle> MergeMinuteCandles(
+            IEnumerable<DailyCandle> existing,
+            IEnumerable<DailyCandle> incoming,
+            int retainCount)
+        {
+            return [.. (existing ?? [])
+                .Concat(incoming ?? [])
+                .Where(candle => candle != null &&
+                    !string.IsNullOrWhiteSpace(candle.Date) &&
+                    candle.Close > 0 &&
+                    TryParseMinuteCandleTime(candle.Date, out _))
+                .GroupBy(candle => NormalizeMinuteCandleTimeKey(candle.Date), StringComparer.Ordinal)
+                .Select(group => group.Last())
+                .OrderBy(candle => NormalizeMinuteCandleTimeKey(candle.Date), StringComparer.Ordinal)
+                .TakeLast(Math.Max(1, retainCount))];
+        }
+
+        private static bool TryGetLastMinuteCandleTime(IEnumerable<DailyCandle> candles, out DateTime lastTime)
+        {
+            lastTime = DateTime.MinValue;
+            foreach (DailyCandle candle in candles ?? [])
+            {
+                if (TryParseMinuteCandleTime(candle.Date, out DateTime time) && time > lastTime)
+                    lastTime = time;
+            }
+
+            return lastTime != DateTime.MinValue;
+        }
+
+        private static string NormalizeMinuteCandleTimeKey(string text)
+        {
+            return TryParseMinuteCandleTime(text, out DateTime time)
+                ? time.ToString("yyyyMMddHHmmss")
+                : text ?? string.Empty;
+        }
+
+        private static bool TryParseMinuteCandleTime(string text, out DateTime time)
+        {
+            string digits = new([.. (text ?? string.Empty).Where(char.IsDigit)]);
+            if (digits.Length >= 14)
+                digits = digits[..14];
+            else if (digits.Length >= 12)
+                digits = $"{digits[..12]}00";
+            else if (digits.Length >= 8)
+                digits = $"{digits[..8]}000000";
+            else
+            {
+                time = DateTime.MinValue;
+                return false;
+            }
+
+            return DateTime.TryParseExact(
+                digits,
+                "yyyyMMddHHmmss",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out time);
         }
 
         private StrategyMinuteDataStatus BuildStrategyMinuteDataStatus(WatchStockItem? stock)
@@ -759,23 +873,46 @@ namespace TradingDashboard
                 {
                     case StrategySlotId.BaseCandleChase:
                         hasMinuteStrategy = true;
-                        if (!snapshots.HasMa60AndBreakout20(10, 3))
+                        if (!HasFreshMa60AndBreakout20(snapshots, 10, 3))
                             return false;
                         break;
                     case StrategySlotId.ThreeMinutePullback:
                         hasMinuteStrategy = true;
-                        if (!snapshots.HasMa60AndBreakout20(15, 5))
+                        if (!HasFreshMa60AndBreakout20(snapshots, 15, 5))
                             return false;
                         break;
                     case StrategySlotId.SorTenMinuteFiveMinuteBreakout:
                         hasMinuteStrategy = true;
-                        if (!snapshots.HasMa60AndBreakout20(10, 5))
+                        if (!HasFreshMa60AndBreakout20(snapshots, 10, 5))
                             return false;
                         break;
                 }
             }
 
             return hasMinuteStrategy || enabledSettings.Count > 0;
+        }
+
+        private static bool HasFreshMa60AndBreakout20(
+            StrategyMinuteSnapshotSet snapshots,
+            int ma60Minute,
+            int breakoutMinute) =>
+            snapshots.HasMa60AndBreakout20(ma60Minute, breakoutMinute) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(ma60Minute)) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(breakoutMinute));
+
+        private static bool IsStrategyMinuteFrameFresh(StrategyMinuteFrameSnapshot? frame)
+        {
+            if (frame == null || !frame.IsReady)
+                return false;
+
+            DateTime latest = frame.CurrentBarTime > frame.LastCompletedBarTime
+                ? frame.CurrentBarTime
+                : frame.LastCompletedBarTime;
+            if (latest == DateTime.MinValue)
+                return false;
+
+            DateTime expectedLatestBucket = ResolveExpectedLatestMinuteBucket(frame.Minute, DateTime.Now);
+            return CountMissingMinuteBars(latest, expectedLatestBucket, frame.Minute) <= 0;
         }
 
         private string FormatStrategyMinuteReadiness(WatchStockItem stock)

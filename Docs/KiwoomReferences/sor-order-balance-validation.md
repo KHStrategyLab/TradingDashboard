@@ -281,13 +281,14 @@ Current scope:
 
 Safety state:
 
-- The trading client is not wired to strategy execution or UI order buttons yet.
-- No live order is sent unless future code explicitly calls `BuyAsync` or `SellAsync`.
+- The trading client is wired to the strategy order layer only through `ProcessStrategySignalAlerts` and `ProcessStrategyExitAlerts`.
+- No live order is sent unless `Engine Start` and `Live Orders` are both ON and the buy/sell RiskGuard passes.
+- SOR/NXT live orders must use current-price tick-offset limit requests. Market orders, `price=0`, and arbitrary SOR/NXT limit requests are blocked by `ValidateOrderRequest`.
 - Build verification passed with 0 warnings and 0 errors after adding the layer.
 
 ## Items Still Requiring Live Verification
 
-- A SOR market buy returns `dmst_stex_tp = "SOR"` in `kt10000`.
+- A SOR current-price tick-offset limit buy returns `dmst_stex_tp = "SOR"` in `kt10000`.
 - Realtime `00` emits `2136 = "Y"` for a SOR-routed order.
 - `ka10075` reports SOR open orders with `sor_yn = "Y"` when queried using `stex_tp = "0"`.
 - `ka10076` reports SOR fills with `stex_tp_txt = "SOR"` and `sor_yn = "Y"`.

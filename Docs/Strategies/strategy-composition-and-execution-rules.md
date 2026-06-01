@@ -110,9 +110,11 @@ Live Orders가 OFF라도 전략 평가는 가능하다. 이 경우 전략 검증
 
 전략별로 매수 기준점은 다를 수 있지만, 매수 이후 매도 추적 구간을 반드시 남긴다.
 
-현재 TradingDashboard에서는 매도 추적 로직이 아직 연결되지 않았으므로, 실제 보유 종목은 중복매수 정책을 먼저 탄다.
+현재 TradingDashboard에서는 `StrategyPositions` 장부 기반 매도 추적이 연결되어 있다.
+자동매수 후 체결 감사에서 전략별 포지션 장부가 만들어지면, 해당 Slot은 자기 `OpenQuantity`와 `AveragePrice`를 기준으로 STOP/TARGET을 추적한다.
+실제 보유 종목이 이미 있으면 매수 후보 단계에서는 중복매수 정책을 먼저 탄다.
 자동매수 편입 대상이 이미 보유 종목이면 중복매수 OFF에서는 제외하고, 중복매수 ON에서는 다음 전략 처리로 넘긴다.
-사용자가 임의로 보유 종목을 특정 전략 룰에 다시 태우는 것은 자동 처리하지 않고, 이후 수동 편입 기능으로 둔다.
+자동 전략 장부가 없는 수동 보유 종목은 자동매수 전략에 임의 편입하지 않고, `Manual Buy Stop Assist`가 켜진 경우에만 별도 수동손절 보조 흐름으로 관리한다.
 
 ## 주전략/보조전략/후보패턴 구분
 
@@ -162,7 +164,7 @@ KRX 일봉 기준봉
 - `_NX`, `_AL` 같은 시장 데이터 suffix를 주문 종목코드에 넣지 않는다.
 - SOR 주문은 주문 레이어에서 `dmst_stex_tp = SOR`로 처리한다.
 - NXT/SOR 주문은 시장가를 기본값으로 단정하지 않는다.
-- 주문은 항상 RiskGuard 통과 후 실행한다.
+- 주문은 항상 `ProcessStrategySignalAlerts` / `ProcessStrategyExitAlerts`의 Live Orders 확인과 RiskGuard 통과 후 실행한다.
 
 ## 문서/코드 반영 원칙
 

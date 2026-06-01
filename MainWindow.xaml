@@ -1457,6 +1457,7 @@
                             <Grid>
                             <ListBox x:Name="RecentWatchListBox"
                                      SelectionChanged="WatchListBox_SelectionChanged"
+                                     MouseDoubleClick="RecentWatchListBox_MouseDoubleClick"
                                      Background="{StaticResource BgPanelBrush}"
                                      BorderThickness="0"
                                      Foreground="{StaticResource WhiteValueBrush}"
@@ -2377,7 +2378,7 @@
                                                   Unchecked="StrategyControlBoard_Changed"
                                                   Margin="0,0,0,7">
                                         <StackPanel>
-                                            <TextBlock Text="겹침 매수"
+                                            <TextBlock Text="중복 매수"
                                                        Foreground="{StaticResource TextMainBrush}"
                                                        FontSize="15"
                                                        FontWeight="Bold"/>
@@ -2395,7 +2396,7 @@
                                                   Checked="StrategyControlBoard_Changed"
                                                   Unchecked="StrategyControlBoard_Changed">
                                         <StackPanel>
-                                            <TextBlock Text="겹침 알림"
+                                            <TextBlock Text="중복매수 알림"
                                                        Foreground="{StaticResource TextMainBrush}"
                                                        FontSize="15"
                                                        FontWeight="Bold"/>
@@ -2567,7 +2568,7 @@
                                                FontWeight="Bold"/>
                                     <TextBlock x:Name="StrategyControlBoardText"
                                                Grid.Row="1"
-                                               Text="AUTO OFF · 예산 5,000,000 · 슬롯 3 · 전략 2/4 · 키: 겹침매수 OFF / 겹침알림 ON"
+                                               Text="AUTO OFF · 예산 5,000,000 · 슬롯 3 · 전략 2/4 · 키: 중복매수 OFF / 중복매수 알림 ON"
                                                Foreground="{StaticResource PaletteLightGreen}"
                                                FontFamily="Consolas"
                                                FontSize="12"
@@ -3600,43 +3601,43 @@
                                 </Grid.ColumnDefinitions>
 
                                 <Border Grid.Row="0" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="2,841" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="2,841" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="317,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="4,118" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="4,118" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="317,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="2" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="7,304" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="7,304" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="316,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="3" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="3" Grid.Column="0" Text="5,991" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="5,991" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="316,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="4" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="4" Grid.Column="0" Text="9,420" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="9,420" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="4" Grid.Column="1" Text="315,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="5" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="5" Grid.Column="0" Text="12,540" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="12,540" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="315,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="6" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="6" Grid.Column="0" Text="8,911" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="8,911" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="6" Grid.Column="1" Text="314,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="7" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="7" Grid.Column="0" Text="15,203" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="7" Grid.Column="0" Text="15,203" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="7" Grid.Column="1" Text="314,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="8" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="8" Grid.Column="0" Text="6,784" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="8" Grid.Column="0" Text="6,784" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <TextBlock Grid.Row="8" Grid.Column="1" Text="313,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
 
                                 <Border Grid.Row="9" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
-                                <TextBlock Grid.Row="9" Grid.Column="0" Text="21,330" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Row="9" Grid.Column="0" Text="21,330" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                                 <Border Grid.Row="9"
                                         Grid.Column="1"
                                         Background="{StaticResource CurrentUpBackgroundBrush}"
@@ -3654,43 +3655,43 @@
 
                                 <Border Grid.Row="10" Grid.ColumnSpan="3" Background="#161616" BorderBrush="#303030" BorderThickness="0,1,0,1"/>
                                 <TextBlock Grid.Row="10" Grid.Column="1" Text="312,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="10" Grid.Column="2" Text="18,720" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="10" Grid.Column="2" Text="18,720" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="11" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="11" Grid.Column="1" Text="312,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="11" Grid.Column="2" Text="23,401" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="11" Grid.Column="2" Text="23,401" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="12" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="12" Grid.Column="1" Text="311,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="12" Grid.Column="2" Text="10,904" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="12" Grid.Column="2" Text="10,904" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="13" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="13" Grid.Column="1" Text="311,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="13" Grid.Column="2" Text="7,881" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="13" Grid.Column="2" Text="7,881" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="14" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="14" Grid.Column="1" Text="310,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="14" Grid.Column="2" Text="31,227" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="14" Grid.Column="2" Text="31,227" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="15" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="15" Grid.Column="1" Text="310,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="15" Grid.Column="2" Text="14,105" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="15" Grid.Column="2" Text="14,105" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="16" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="16" Grid.Column="1" Text="309,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="16" Grid.Column="2" Text="9,784" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="16" Grid.Column="2" Text="9,784" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="17" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="17" Grid.Column="1" Text="309,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="17" Grid.Column="2" Text="16,772" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="17" Grid.Column="2" Text="16,772" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="18" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="18" Grid.Column="1" Text="308,500" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="18" Grid.Column="2" Text="11,306" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="18" Grid.Column="2" Text="11,306" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
 
                                 <Border Grid.Row="19" Grid.ColumnSpan="3" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1"/>
                                 <TextBlock Grid.Row="19" Grid.Column="1" Text="308,000" Foreground="{StaticResource OrderBookPriceBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Grid.Row="19" Grid.Column="2" Text="27,991" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                <TextBlock Grid.Row="19" Grid.Column="2" Text="27,991" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/>
                             </Grid>
 
                             <Grid Grid.Row="1"
@@ -3712,7 +3713,7 @@
 
                                 <ItemsControl x:Name="SellQtyListBox" Grid.Row="0" Grid.Column="1" Background="{StaticResource BgMainBrush}" ClipToBounds="True">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><TextBlock Text="{Binding QtyText}" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" TextAlignment="Right" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,10,0"/></Border></DataTemplate></ItemsControl.ItemTemplate>
+                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><TextBlock Text="{Binding QtyText}" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" TextAlignment="Right" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,10,0"/></Border></DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <ItemsControl x:Name="SellPriceListBox" Grid.Row="0" Grid.Column="2" Background="{StaticResource BgMainBrush}" ClipToBounds="True">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -3724,7 +3725,7 @@
                                 </ItemsControl>
                                 <ItemsControl x:Name="BuyQtyListBox" Grid.Row="1" Grid.Column="3" Background="{StaticResource BgMainBrush}" ClipToBounds="True">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><TextBlock Text="{Binding QtyText}" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/></Border></DataTemplate></ItemsControl.ItemTemplate>
+                                    <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="0,0,0,1" Padding="0"><TextBlock Text="{Binding QtyText}" Foreground="{StaticResource OrderBookQtyBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0"/></Border></DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </Grid>
 

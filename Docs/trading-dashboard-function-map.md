@@ -1,6 +1,6 @@
 # TradingDashboard Function Map
 
-Date: 2026-05-31
+Date: 2026-06-01
 
 이 문서는 함수 전체 목록이 아니라 유지보수용 역할 사전이다.
 새 기능을 붙일 때 먼저 이 문서를 보고 함수의 소유 데이터, 호출 시점, 금지 기준을 확인한다.
@@ -8,7 +8,7 @@ Date: 2026-05-31
 ## 읽는 기준
 
 - 화면 표시용 값과 전략 판단용 값을 섞지 않는다.
-- KRX/NXT/SOR 기준은 `Docs/AGENTS.md`와 `Docs/trading-dashboard-development-manual.md`를 우선한다.
+- KRX/NXT/SOR 기준은 루트 `AGENTS.md`와 `Docs/trading-dashboard-development-manual.md`를 우선한다.
 - 키움 TR 필드가 애매하면 `Docs/KiwoomReferences/*`와 원본 `Docs/키움 REST API 문서.xlsx`를 확인한다.
 - 경량엔진 이식 전에는 KHStrategyLab의 `KHStrategyLab_Architecture_Guide.md`와 Archive의 경량엔진 문서를 같이 본다.
 
@@ -105,8 +105,13 @@ Date: 2026-05-31
 | `RefreshBalanceAsync` | `MainWindow.Balance.cs` | kt00018 기준 잔고 화면 갱신 | 현재는 KRX 조회가 기본. MTS/SOR 일치 검증 후 확장한다. |
 | `RefreshRealizedProfitAsync` | `MainWindow.Balance.cs` | ka10074 오늘 실현손익 갱신 | 수수료/세금과 함께 표시한다. |
 | `VerifyBalanceAgainstMtsAsync` | `MainWindow.Balance.cs` | 숨은 검증: kt00018 KRX/NXT + kt00005 KRX 비교 로그 | 운영 UI가 아니라 검증용. |
-| `KiwoomTradingClient.BuyAsync` | `KiwoomTradingClient.cs` | kt10000 매수 주문 전송 | 아직 전략 실행과 직접 연결하지 않는다. RiskGuard 이후에만 사용. |
-| `KiwoomTradingClient.SellAsync` | `KiwoomTradingClient.cs` | kt10001 매도 주문 전송 | 자동매도 연결 전 포지션/수량 검증 필요. |
+| `ProcessStrategySignalAlerts` | `MainWindow.StrategySignalAlert.cs` | 전략 `HasSignal`을 로그/텔레그램에 남기고 Live Orders ON일 때 라이브 매수 후보로 넘김 | 전략 클래스가 직접 주문하지 않는다. Engine Start, 분봉 READY, 중복 정책 이후에만 진입한다. |
+| `TrySubmitStrategyLiveBuyAsync` | `MainWindow.StrategySignalAlert.cs` | 라이브 매수 가드 통과 후 SOR 현재가 `+1틱 지정가` 매수 제출 | 시장시간, 보유/중복, 예산, 슬롯수, 분봉 READY, 주문 key 예약을 모두 통과해야 한다. |
+| `ProcessStrategyExitAlerts` | `MainWindow.StrategyExitAlert.cs` | 보유 종목의 전략/수동 포지션 매도 신호 감시 | `StrategyPositions`의 OPEN 포지션을 우선 보고, 없으면 수동 보유 보조 흐름을 탄다. |
+| `TrySubmitStrategyLiveSellAsync` | `MainWindow.StrategyExitAlert.cs` | 라이브 매도 가드 통과 후 SOR 현재가 `-1틱 지정가` 매도 제출 | STOP/TARGET1별 주문 key를 분리하고, 매도가능 수량과 포지션 소유권을 확인한다. |
+| `SaveStrategyOrderJournal` | `MainWindow.StrategySignalAlert.cs` | 라이브 주문 제출/감사 결과를 당일 journal에 저장 | 재시작 후 같은 종목/전략 중복 주문 방지를 위해 성공 key를 복원한다. |
+| `KiwoomTradingClient.BuyAsync` | `KiwoomTradingClient.cs` | kt10000 매수 주문 전송 | 현재 전략 주문 레이어에서 RiskGuard 통과 후 호출한다. SOR/NXT는 현재가 tick-offset 지정가만 허용한다. |
+| `KiwoomTradingClient.SellAsync` | `KiwoomTradingClient.cs` | kt10001 매도 주문 전송 | 전략/수동 포지션 매도 가드 통과 후 호출한다. SOR/NXT 시장가와 0원 주문은 차단한다. |
 | `GetOpenOrdersAsync` | `KiwoomTradingClient.cs` | ka10075 미체결 조회 | SOR 추적은 integrated exchange query mode를 사용한다. |
 | `GetFillsAsync` | `KiwoomTradingClient.cs` | ka10076 체결 조회 | `sor_yn`, `stex_tp_txt`는 SOR 확인 기준이다. |
 | `GetEvaluationBalanceAsync` | `KiwoomTradingClient.cs` | kt00018 계좌평가잔고 | 잔고 평가는 주문 경로 증명이 아니다. |
@@ -119,22 +124,22 @@ Date: 2026-05-31
 | `InitializeStrategySlots` | `MainWindow.StrategySlots.cs` | 전략 슬롯 UI/Progress rows 초기화 | Progress 표시 연결만 담당한다. |
 | `GetStrategySlotSettings` | `MainWindow.StrategySlots.cs` | UI 토글에서 ON/OFF 전략 목록 생성 | OFF 전략은 평가 전에 제외한다. |
 | `EvaluateEnabledStrategySlots` | `MainWindow.StrategySlots.cs` | 켜진 전략 슬롯만 평가 | 주문 여부 판단 금지. 전략 결과만 반환한다. |
-| `UpdateStrategyControlBoard` | `MainWindow.StrategySlots.cs` | Engine/Live Orders/예산/슬롯/중복 정책 표시 | 전광판은 실행 상태 표시다. 주문 실행 자체가 아니다. |
+| `UpdateStrategyControlBoard` | `MainWindow.StrategySlots.cs` | Engine/Live Orders/예산/슬롯/중복 정책 표시 | 전광판은 실행 상태 표시다. 주문 제출은 `StrategySignalAlert`/`StrategyExitAlert`의 가드 이후에만 일어난다. |
 | `TryRejectEngineLockedStrategyChange` | `MainWindow.StrategySlots.cs` | Engine Start 중 전략 설정 변경 차단 | 실행 중 전략 슬롯/중복 정책 변경을 되돌린다. |
 | `UpdateStrategyProgressRows` | `MainWindow.StrategySlots.cs` | 선택 종목의 전략 평가 결과를 Progress 탭에 표시 | `StrategyProgressSnapshot`의 0~70/70~100 표준 진행률을 UI에 표시한다. |
 | `StrategySlotRegistry.EvaluateEnabled` | `StrategySlotRegistry.cs` | registry 기준 전략 평가 호출 | 새 전략은 registry 등록과 descriptor 문서 경로가 같이 필요하다. |
-| `SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot.Evaluate` | `SorTenMinuteAggressive/SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot.cs` | Slot 1 공격형 전략 진행률 평가 | 현재는 알림/검증용 Progress만 반환한다. 실주문 연결 금지. |
-| `SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot.Evaluate` | `SorFifteenMinuteStable/SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot.cs` | Slot 2 안정형 주전략 진행률 평가 | 현재는 알림/검증용 Progress만 반환한다. 실주문 연결 금지. |
-| `SorTenMinuteMa60FiveMinuteBreakoutStrategySlot.Evaluate` | `SorTenMinuteMiddle/SorTenMinuteMa60FiveMinuteBreakoutStrategySlot.cs` | Slot 3 중간형 전략 진행률 평가 | 현재는 알림/검증용 Progress만 반환한다. 실주문 연결 금지. |
+| `SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot.Evaluate` | `SorTenMinuteAggressive/SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot.cs` | Slot 1 공격형 전략 진행률/신호 평가 | 전략은 `HasSignal`과 근거만 반환한다. 주문은 `ProcessStrategySignalAlerts`와 RiskGuard가 결정한다. |
+| `SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot.Evaluate` | `SorFifteenMinuteStable/SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot.cs` | Slot 2 안정형 주전략 진행률/신호 평가 | 전략은 `HasSignal`과 근거만 반환한다. 주문은 `ProcessStrategySignalAlerts`와 RiskGuard가 결정한다. |
+| `SorTenMinuteMa60FiveMinuteBreakoutStrategySlot.Evaluate` | `SorTenMinuteMiddle/SorTenMinuteMa60FiveMinuteBreakoutStrategySlot.cs` | Slot 3 중간형 전략 진행률/신호 평가 | 전략은 `HasSignal`과 근거만 반환한다. 주문은 `ProcessStrategySignalAlerts`와 RiskGuard가 결정한다. |
 | `StrategyEvaluationResult.Waiting` | `StrategyEvaluationResult.cs` | 전략 미구현/대기 상태 결과 생성 | 대기 상태를 매수 후보로 해석하면 안 된다. |
 | `StrategyProgressSnapshot.Empty` | `StrategyProgressSnapshot.cs` | Progress 기본값 | 0% WAIT. 실제 단계 계산 전 표시용. |
 | `StrategyProgressCalculator.Build` | `StrategyProgressCalculator.cs` | 전략별 단계 수를 공통 진행률로 변환 | 매수 전 단계는 0~70%, 보유 후 매도 단계는 70~100% 안에서 자동 분배한다. |
-| `StrategyMinuteCacheService` | `StrategyMinuteCacheService.cs` | 종목별/시장별/분봉별 전략분봉 장부 | 화면 차트가 아니라 전략실 데이터관리부다. `ApplyClosedBar`로 봉마감 확정봉을 받아쓰고 이평선을 고정한다. |
+| `StrategyMinuteCacheService` | `StrategyMinuteCacheService.cs` | 종목별/시장별/분봉별 전략분봉 장부 | 화면 차트가 아니라 전략실 데이터관리부다. seed/확정봉/0B 현재봉을 받아쓰고 이평선을 고정한다. |
 | `StrategyMinuteBar` | `StrategyMinuteBar.cs` | 확정 분봉 OHLCV/거래대금/이평선 저장 단위 | MA5/10/20/60/200/240/480은 봉마감 후 계산되어 해당 봉에 고정된다. |
 | `StrategyMinuteFrameSnapshot` | `StrategyMinuteFrameSnapshot.cs` | 전략에 전달하는 분봉별 숫자 묶음 | 현재봉/직전 확정봉 OHLCV, 이평선, 최근20봉 고/저/최고종가/최저종가/거래량/거래대금을 포함한다. |
 | `StrategyMinuteSnapshotSet` | `StrategyMinuteSnapshotSet.cs` | 종목별 분봉 Snapshot 묶음 | Slot 1=10/3분, Slot 2=15/5분, Slot 3=10/5분처럼 전략이 필요한 조합을 즉시 받을 수 있게 한다. |
-| `StrategyMinuteDataStatus` | `StrategyMinuteDataStatus.cs` | 전략 Progress용 분봉 장부 READY/개수 표시 | 차트 메모리 캐시가 아니라 `StrategyMinuteCacheService` 상태를 기준으로 표시한다. |
-| `LoadStrategyMinuteDataAsync` | `MainWindow.StrategySlots.cs` | 선택 종목의 1/3/5/10/15/30분봉 seed 로드 | 받은 분봉은 화면 차트 캐시와 별도로 전략분봉 장부에도 seed로 저장한다. 1분봉은 최소 300개를 받는다. |
+| `StrategyMinuteDataStatus` | `StrategyMinuteDataStatus.cs` | 전략 Progress용 분봉 장부 READY/개수 표시 | 차트 메모리 캐시가 아니라 `StrategyMinuteCacheService` 상태를 기준으로 표시한다. 실제 자동매매 READY 판정은 개수뿐 아니라 Snapshot 최신성도 함께 본다. |
+| `LoadStrategyMinuteDataAsync` | `MainWindow.StrategySlots.cs` | 선택 종목의 1/3/5/10/15/30분봉 seed 로드 | 받은 분봉은 화면 차트 캐시와 별도로 전략분봉 장부에도 seed로 저장한다. 기존 seed/메모리의 마지막 봉이 최신 예상 bucket보다 오래됐으면 누락 봉 수+여유 3봉만 REST로 보충해 시간 기준 병합한다. |
 | `StrategyMinuteSeedFileStore` | `StrategyMinuteSeedFileStore.cs` | 전략 분봉 seed 파일 읽기/저장 | `Storage/StrategyMinuteSeeds/{yyyyMMdd}/{code}_{market}_{minute}.json`을 사용한다. Git 백업 대상이 아니다. |
 | `TryStartStrategyMinutePreloadForSelectedStock` | `MainWindow.StrategySlots.cs` | 전략실 `분봉 프리로드` 스위치가 ON일 때 선택 종목 분봉 seed 자동 로드 시작 | 종목/시장 키 기준으로 중복 실행을 막고, 완료 후 Progress를 다시 갱신한다. |
 | `StartStrategyMinuteAutoPreload` | `MainWindow.StrategySlots.cs` | 조건식/캐시 감시목록의 전략 분봉 seed 자동 로드 예약 | 감시목록 적용 또는 신규 편입 후 `StrategyMinutePreload.IdleDelaySeconds` idle 뒤 실행한다. 시작 후에는 종목 사이 추가 대기 없이 연속 실행한다. |
@@ -154,9 +159,9 @@ Date: 2026-05-31
 | 후보별 캐시 키 | `StrategyMinuteCacheService` | `CandidateMinuteCache`, `BuildMinuteCacheKey` | `종목코드|시장|분봉` |
 | 실시간 현재봉 입력 | `ApplyRealtimeTickToStrategyMinuteLedger`, `StrategyMinuteCacheService.ApplyRealtimeTick` | `ApplyRealtimeTickToCandidateMinuteCache` | 0B 현재가와 거래량으로 현재봉을 갱신한다. 신호/주문은 만들지 않는다. |
 | 봉마감 확정봉 입력 | `StrategyMinuteCacheService.ApplyClosedBar` | `ApplyRealtimeTickToCandidateMinuteCache` | 명시적 확정봉 입력구. 향후 봉마감 이벤트나 seed 보강에서 사용한다. |
-| READY 판정 | `StrategyMinuteDataStatus`, `BuildStrategyMinuteDataStatus` | `TryGetReadyCandidateMinuteCache` | 요청 분봉 최소 개수 충족 전 매수 판단 차단 |
+| READY 판정 | `IsStrategyMinuteDataReady`, `StrategyMinuteDataStatus`, `BuildStrategyMinuteDataStatus` | `TryGetReadyCandidateMinuteCache` | 요청 분봉 최소 개수와 MA/20봉 준비, 최신 예상 분봉 bucket 추종 여부를 모두 만족해야 매수 판단 가능 |
 | 상태머신 | 전략 슬롯별 `Evaluate` 확장 | `MainWindow.Strategy.BuySignalCheck.cs` | WAIT -> pullback -> recovery -> signal 흐름 |
-| 주문 연결 | `KiwoomTradingClient` | `EvaluateLiveBuyRiskGuard` | 신호 -> RiskGuard -> 주문 순서. 신호가 주문을 직접 보내지 않는다. |
+| 주문 연결 | `ProcessStrategySignalAlerts`, `ProcessStrategyExitAlerts`, `KiwoomTradingClient` | `EvaluateLiveBuyRiskGuard` | 신호 -> RiskGuard -> 주문 순서. 전략 클래스와 0B 수신부가 주문을 직접 보내지 않는다. |
 
 ## 다음에 이 문서를 확장할 때
 

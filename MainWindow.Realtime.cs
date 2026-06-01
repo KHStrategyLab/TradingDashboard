@@ -143,7 +143,10 @@ namespace TradingDashboard
                 }
             }, ct);
 
-            if (!ShouldUseNxtMarketNow())
+            bool useNxtMarket = ShouldUseNxtMarketNow();
+            AppendLog($"0B KRX registered: {krxItems.Length}stocks / realtime market {(useNxtMarket ? "NXT" : "KRX")}");
+
+            if (!useNxtMarket)
                 return;
 
             string[] nxtItems = [.. _watchStockByCode
@@ -152,7 +155,10 @@ namespace TradingDashboard
                 .Distinct(StringComparer.OrdinalIgnoreCase)];
 
             if (nxtItems.Length == 0)
+            {
+                AppendLog("0B NXT after-market registered: 0stocks");
                 return;
+            }
 
             await SendWsJsonAsync(ws, new
             {
@@ -537,8 +543,7 @@ namespace TradingDashboard
                     return (false, (WatchStockItem?)null);
 
                 string today = DateTime.Now.ToString("yyyyMMdd");
-                if (!entry.GateBaseCandleFound ||
-                    !string.Equals(entry.GateBaseCandleCheckedDate, today, StringComparison.Ordinal))
+                if (!IsActiveGateBaseCandleCacheForCurrentMarket(entry, today))
                     return (false, (WatchStockItem?)null);
 
                 var stock = new WatchStockItem
@@ -584,6 +589,42 @@ namespace TradingDashboard
         {
             if (_realtimeWs != null && _realtimeWs.State == WebSocketState.Open && _realtimeCts != null)
                 await RegisterRealtime0BAsync(_realtimeWs, _realtimeCts.Token);
+        }
+
+        private async Task EnsureRealtime0BTrackingAsync(WatchStockItem stock, string source)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return;
+
+            string code = NormalizeStockCode(stock.Code);
+            if (string.IsNullOrWhiteSpace(code))
+                return;
+
+            stock.Code = code;
+            bool added = false;
+            if (_watchStockByCode.TryGetValue(code, out WatchStockItem? existing))
+            {
+                if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(stock.Name))
+                    existing.Name = stock.Name;
+                existing.SupportsNxt |= stock.SupportsNxt;
+                if (string.IsNullOrWhiteSpace(existing.MarketTypeCode))
+                    existing.MarketTypeCode = stock.MarketTypeCode;
+                if (string.IsNullOrWhiteSpace(existing.MarketName))
+                    existing.MarketName = stock.MarketName;
+                if (string.IsNullOrWhiteSpace(existing.ProgramMarketType))
+                    existing.ProgramMarketType = stock.ProgramMarketType;
+            }
+            else
+            {
+                _watchStockByCode[code] = stock;
+                added = true;
+            }
+
+            if (!added)
+                return;
+
+            AppendLog($"0B tracking added: {stock.Name} ({code}) / {source}");
+            await RegisterRealtime0BForCurrentWatchlistAsync();
         }
 
         private void ApplyConditionRealtimeRemove(string code)
@@ -899,6 +940,9 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(code))
                 return;
 
+            if (!_watchStockByCode.TryGetValue(code, out WatchStockItem? candidateStock))
+                return;
+
             JsonElement values = item;
             if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("values", out JsonElement nestedValues))
                 values = nestedValues;
@@ -920,7 +964,7 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(rate))
                 rate = "-";
 
-            ApplyRealtimeTickToStrategyMinuteLedger(code, price, volume, tradeQty, tradeTimeText);
+            ApplyRealtimeTickToStrategyMinuteLedger(candidateStock, rawCode, price, volume, tradeQty, tradeTimeText);
 
             Dispatcher.Invoke(() =>
             {
@@ -929,6 +973,7 @@ namespace TradingDashboard
 
                 stock.CurrentPrice = price > 0 ? price : stock.CurrentPrice;
                 UpdatePaperPositionsForPrice(code, stock.CurrentPrice);
+                ApplyRealtimePriceToBalanceHolding(code, stock.CurrentPrice, rawCode);
                 if (volume > 0)
                 {
                     stock.VolumeText = volume.ToString("N0");
@@ -1046,18 +1091,24 @@ namespace TradingDashboard
         }
 
         private void ApplyRealtimeTickToStrategyMinuteLedger(
-            string code,
+            WatchStockItem stock,
+            string rawCode,
             long price,
             long cumulativeVolume,
             long fallbackTradeVolume,
             string tradeTimeText)
         {
-            if (string.IsNullOrWhiteSpace(code) || price <= 0)
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code) || price <= 0)
                 return;
 
-            bool useNxtMarket = ShouldUseNxtDataForStock(code);
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+            bool isNxtTick = IsNxtRealtimeCode(rawCode);
+            if (useNxtMarket != isNxtTick)
+                return;
+
             string market = useNxtMarket ? "NXT" : "KRX";
-            string key = $"{NormalizeStockCode(code)}|{market}";
+            string code = NormalizeStockCode(stock.Code);
+            string key = $"{code}|{market}";
             long tradeVolume = 0;
 
             if (cumulativeVolume > 0)
@@ -1082,6 +1133,12 @@ namespace TradingDashboard
                 tradeVolume,
                 tradeValue,
                 ParseRealtimeTradeTime(tradeTimeText));
+        }
+
+        private static bool IsNxtRealtimeCode(string rawCode)
+        {
+            string value = rawCode?.Trim() ?? string.Empty;
+            return value.EndsWith("_NX", StringComparison.OrdinalIgnoreCase);
         }
 
         private static DateTime ParseRealtimeTradeTime(string tradeTimeText)

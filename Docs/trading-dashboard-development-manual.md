@@ -128,6 +128,8 @@
 
 - `LoadStrategyMinuteDataAsync(...)`는 1/3/5/10/15/30분봉을 받아 `StrategyMinuteCacheService`에 seed로 넣는 내부 로더다.
 - 엔진 필수 분봉 장부는 1/3/5/10/15/30분 각각 120봉을 목표로 하며, MA60 계산 가능 상태를 빠르게 만든다.
+- 분봉 로더는 저장된 마지막 봉 시간과 현재 예상 분봉 시간을 비교한다. 파일 seed나 메모리 캐시가 목표 개수를 채웠더라도 최신 예상 봉까지 따라오지 못했으면 READY로 보지 않는다.
+- 이미 가진 분봉이 있으면 고정 120봉 전체를 다시 받지 않고, `마지막 저장봉 이후 누락 봉 수 + 여유 3봉`만 REST로 당겨 기존 seed와 시간 기준으로 병합한다. 오래 비어 있거나 개수가 부족하면 최대 목표 개수까지만 다시 받는다.
 - 전략실의 `분봉 프리로드` 스위치가 ON이면 Engine Start 전에 조건식/캐시 감시목록 적용 후 idle 예약을 걸고, 사람이 종목을 하나씩 선택하지 않아도 감시목록 분봉 seed를 자동 로드한다.
 - `분봉 프리로드` 스위치가 OFF여도 `Engine Start`를 켜면 필수 분봉 장부는 즉시 강제 로드한다.
 - idle 대기 시간은 전략실의 `대기시간` 입력칸 또는 `Config/local.settings.json`의 `StrategyMinutePreload.IdleDelaySeconds`로 조절한다. 입력칸 변경값은 `local.settings.json`에 저장되며, 기본값은 180초다.
@@ -150,6 +152,7 @@
 - 0B 거래량은 누적거래량 `13`의 직전값 차분을 우선하고, 차분을 만들 수 없을 때 체결량 `15`를 보조로 사용한다.
 - 0B 연결은 숫자 장부 갱신까지만 담당하며, 매수신호나 주문을 직접 만들지 않는다.
 - 자동 분봉 프리로드는 `IsStrategyMinuteDataReady(stock)` 확인 후에만 completed/stock done으로 집계한다. 실패 종목은 failed 로그로 남기고 ALL READY 로그에 포함하지 않는다.
+- `IsStrategyMinuteDataReady(stock)`는 단순 개수/MA 준비만 보지 않는다. 전략이 요구하는 분봉 Snapshot의 현재봉/직전 확정봉 시간이 현재 예상 분봉 bucket까지 따라왔을 때만 READY로 본다.
 - 테스트 매매는 `Engine Start ON + Live Orders OFF + Paper Trading ON` 조합으로 사용한다. 분봉 장부 READY 전에는 Paper BUY 로그도 내지 않는다.
 - 봉마감 확정봉 입력구는 `ApplyClosedBar(...)`로 준비되어 있다.
 
@@ -187,6 +190,8 @@
 - 수동 포지션은 `Storage/ManualPositions/{yyyyMMdd}.json`에 별도 장부로 둔다. Balance 새로고침 때 자동 전략 장부가 없는 보유 종목을 `OPEN`으로 맞추고, 선택 종목은 `Manual In`/`Manual Out` 버튼으로 자동손절 편입/제외한다.
 - `Manual Out` 상태는 `MANUAL OFF` 태그로 표시하고 자동손절기가 건드리지 않는다. 앵커가 아직 없으면 `MANUAL WAIT`, 앵커가 준비되면 `MANUAL STOP`으로 표시한다.
 - Balance 화면은 수동매수 누락을 막기 위해 `kt00018 KRX`와 `kt00018 NXT`를 합쳐 표시하고, 그래도 빠진 보유 종목은 `kt00005 KRX` 체결잔고에서 보조로 채운다.
+- NXT 시간대 또는 NXT 고정 시간대에는 보유 NXT 가능 종목의 평가 현재가를 `_AL` 우선, `_NX` 보조로 조회해 `현재가`, `평가금액`, `평가손익`, `손익률`, 총잔고 요약만 오버레이 보정한다. 이 보정은 주문/체결 사실이나 평균단가를 바꾸지 않는다.
+- 보유 종목이 0B를 받으면 현재 활성 시장과 맞는 틱만 잔고 평가에 반영한다. NXT 시간대의 NXT 가능 종목은 `_NX` 틱만, KRX 기준 시간의 종목은 6자리 KRX 틱만 평가 보정에 사용한다.
 - `Live Orders OFF`에서는 알림/로그만 남기고, `Live Orders ON`에서만 실제 매도 handoff를 허용한다.
 
 Paper Trading:
@@ -1166,7 +1171,7 @@ NXT/KRX:
 - `Engine Start`가 ON이면 전략 신호 엔진과 알림/기록이 작동하며 예산/슬롯수 입력창은 잠긴다.
 - `Live Orders`가 ON이면 전략 신호를 기존 실전 주문 레이어로 넘긴다.
 - `Live Orders`가 OFF이면 `Engine Start`가 ON이어도 실주문은 내지 않고 알림/기록만 남긴다.
-- 현재 단계의 전략 슬롯/컨트롤 보드는 실주문 실행부 확정이 아니라 전략 진행 상태 표시판과 모의 실행 검증판으로 먼저 운용한다.
+- 전략 슬롯/컨트롤 보드는 진행 상태 표시판과 모의 실행 검증판을 겸한다. 단, `Live Orders`가 ON이면 신호 후보를 주문/리스크 레이어로 넘기며, 실제 주문은 RiskGuard와 주문 journal 중복 방지를 통과한 경우에만 실행한다.
 - `Paper Trading`은 빨간 실행 영역 밖의 노란 독립 셀로 둔다. `Live Orders`가 OFF일 때만 켤 수 있다.
 - `Paper Trading`은 `Engine Start ON + Live Orders OFF` 조합에서 테스트 매매 로그를 남기는 자리다. `Live Orders`가 ON이면 꺼지고 비활성화된다.
 - `Live Orders`를 끄면 알림만으로 신호 품질을 우선 판단한다.

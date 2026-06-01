@@ -97,6 +97,7 @@ namespace TradingDashboard
             {
                 ChartPeriod requestedPeriod = _currentChartPeriod;
                 bool useNxtMarket = ShouldUseNxtDataForStock(selectedStockCode);
+                string marketLabel = useNxtMarket ? "NXT" : "KRX";
                 ChartCacheKey cacheKey = CreateChartCacheKey(selectedStockCode, useNxtMarket, requestedPeriod);
                 bool showedCachedChart = false;
                 if (TryGetChartMemoryCache(cacheKey, count, out List<ChartCandle> cachedCandles))
@@ -104,7 +105,7 @@ namespace TradingDashboard
                     if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
                         return;
 
-                    ApplyChartCandles(cachedCandles, selectedStockCode, requestedPeriod, "cache");
+                    ApplyChartCandles(cachedCandles, selectedStockCode, requestedPeriod, $"{marketLabel} cache");
                     showedCachedChart = true;
                 }
                 else if (TryGetChartFileCache(cacheKey, count, out List<ChartCandle> fileCachedCandles))
@@ -113,7 +114,7 @@ namespace TradingDashboard
                         return;
 
                     SetChartMemoryCache(cacheKey, fileCachedCandles);
-                    ApplyChartCandles(fileCachedCandles, selectedStockCode, requestedPeriod, "file cache");
+                    ApplyChartCandles(fileCachedCandles, selectedStockCode, requestedPeriod, $"{marketLabel} file cache");
                     showedCachedChart = true;
                 }
 
@@ -145,7 +146,7 @@ namespace TradingDashboard
                     return;
 
                 SetChartMemoryCache(cacheKey, candles);
-                ApplyChartCandles(candles, selectedStockCode, requestedPeriod, showedCachedChart ? "refresh" : "initial");
+                ApplyChartCandles(candles, selectedStockCode, requestedPeriod, showedCachedChart ? $"{marketLabel} refresh" : $"{marketLabel} initial");
             }
             catch (OperationCanceledException)
             {
@@ -487,6 +488,7 @@ namespace TradingDashboard
 
             DateTime now = DateTime.Now;
             ChartCandle last = _currentChartCandles[^1];
+            bool shouldSnapViewportToLatest = IsChartViewportNearLatest();
             if (!IsSameCalendarChartBucket(last.Date, period, now))
             {
                 last = new ChartCandle
@@ -505,9 +507,13 @@ namespace TradingDashboard
                     _currentChartCandles.RemoveAt(0);
                     _chartViewStartIndex = Math.Max(0, _chartViewStartIndex - 1);
                 }
+
+                if (shouldSnapViewportToLatest)
+                    SnapChartViewportToLatestIfNear(force: true);
             }
             else
             {
+                SnapChartViewportToLatestIfNear();
                 if (last.Open <= 0)
                     last.Open = price;
                 last.Close = price;
@@ -565,6 +571,7 @@ namespace TradingDashboard
             string bucketTime = BuildMinuteBucketTime(tradeTimeText, minute);
             ChartCandle last = _currentChartCandles[^1];
             bool isNewCandle = false;
+            bool shouldSnapViewportToLatest = IsChartViewportNearLatest();
             if (!IsSameChartDate(last.Date, bucketTime))
             {
                 isNewCandle = true;
@@ -584,9 +591,13 @@ namespace TradingDashboard
                     _currentChartCandles.RemoveAt(0);
                     _chartViewStartIndex = Math.Max(0, _chartViewStartIndex - 1);
                 }
+
+                if (shouldSnapViewportToLatest)
+                    SnapChartViewportToLatestIfNear(force: true);
             }
             else
             {
+                SnapChartViewportToLatestIfNear();
                 if (last.Open <= 0)
                     last.Open = price;
                 last.Close = price;
@@ -629,6 +640,30 @@ namespace TradingDashboard
         {
             _chartViewStartIndex = 0;
             _chartViewCount = 0;
+        }
+
+        private bool IsChartViewportNearLatest()
+        {
+            if (_chartViewCount <= 0 || _currentChartCandles.Count == 0)
+                return false;
+
+            int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, _chartViewStartIndex + _chartViewCount - 1);
+            int distanceFromLatest = Math.Max(0, _currentChartCandles.Count - 1 - visibleEndIndex);
+            int snapDistance = IsMinuteChartPeriod(_currentChartDataPeriod)
+                ? MinuteChartRealtimeSnapToLatestDistance
+                : ChartRealtimeSnapToLatestDistance;
+            return distanceFromLatest <= snapDistance;
+        }
+
+        private void SnapChartViewportToLatestIfNear(bool force = false)
+        {
+            if (_chartViewCount <= 0 || _currentChartCandles.Count == 0)
+                return;
+
+            if (!force && !IsChartViewportNearLatest())
+                return;
+
+            _chartViewStartIndex = Math.Max(0, _currentChartCandles.Count - _chartViewCount);
         }
 
         private List<ChartCandle> GetVisibleChartCandles()

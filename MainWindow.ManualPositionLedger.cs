@@ -186,7 +186,7 @@ namespace TradingDashboard
             BalanceHoldingsScrollableDataGrid?.SelectedItem as KiwoomHolding ??
             BalanceHoldingsDataGrid?.SelectedItem as KiwoomHolding;
 
-        private void BalanceHoldingsDataGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        private async void BalanceHoldingsDataGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             if (_balanceGridSelectionSyncing)
                 return;
@@ -203,6 +203,56 @@ namespace TradingDashboard
             {
                 _balanceGridSelectionSyncing = false;
             }
+
+            if (GetSelectedBalanceHolding() is KiwoomHolding holding)
+                await OpenBalanceHoldingAsync(holding);
+        }
+
+        private async Task OpenBalanceHoldingAsync(KiwoomHolding holding)
+        {
+            if (holding == null || string.IsNullOrWhiteSpace(holding.StockCode))
+                return;
+
+            string code = NormalizeStockCode(holding.StockCode);
+            if (string.IsNullOrWhiteSpace(code))
+                return;
+
+            WatchStockItem? stock = _watchStocks
+                .Concat(_recentViewedStocks)
+                .FirstOrDefault(item => string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase));
+
+            if (stock == null && !_watchStockByCode.TryGetValue(code, out stock))
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    stock = await _kiwoomConditionService.SearchListedStockAsync(code, cts.Token);
+                }
+                catch (Exception ex)
+                {
+                    AppendLog($"balance stock open lookup error: {code} / {ex.GetType().Name} / {ex.Message}");
+                }
+            }
+
+            stock ??= new WatchStockItem
+            {
+                Code = code,
+                Name = string.IsNullOrWhiteSpace(holding.StockName) ? code : holding.StockName,
+                CurrentPrice = holding.CurrentPrice
+            };
+
+            if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
+                stock.Name = holding.StockName;
+            if (stock.CurrentPrice <= 0 && holding.CurrentPrice > 0)
+                stock.CurrentPrice = holding.CurrentPrice;
+
+            await EnsureRealtime0BTrackingAsync(stock, "balance");
+            AddRecentViewedStock(stock);
+            if (ReferenceEquals(RecentWatchListBox.SelectedItem, stock))
+                await LoadNewsForSelectedStockAsync(stock);
+            else
+                RecentWatchListBox.SelectedItem = stock;
+            FocusSelectedRecentStock();
         }
 
         private void RefreshDecoratedBalanceRows()
