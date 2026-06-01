@@ -68,5 +68,10 @@
       "CommissionRate": 0.00015,
       "SellTaxRate": 0.002
     }
+  },
+  "Backtest": {
+    "CandidateConditionIndex": 23,
+    "CandidateConditionName": "120일내_20퍼_500억",
+    "CandidateSourceName": "120일내_20퍼_500억"
   }
 }

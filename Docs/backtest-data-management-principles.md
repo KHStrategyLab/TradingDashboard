@@ -213,6 +213,14 @@ These services are intentionally not wired to `Engine Start`, realtime strategy 
 Candidate source priority:
 
 ```text
-1. Config/watchlist_stock_cache.json via LoadFromWatchlistCache(...)
-2. Excel/CSV/JSON import files via LoadCandidates(...)
+1. Kiwoom condition search 23, named 120일내_20퍼_500억
+2. Config/watchlist_stock_cache.json via LoadFromWatchlistCache(...)
+3. Excel/CSV/JSON import files via LoadCandidates(...)
+```
+
+The backtest candidate condition is stored separately from `Kiwoom.ConditionSeq01`:
+
+```text
+Backtest.CandidateConditionIndex = 23
+Backtest.CandidateConditionName = 120일내_20퍼_500억
 ```

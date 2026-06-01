@@ -20,7 +20,14 @@ No minute download, no strategy execution, no live order.
 
 ## Candidate Sources
 
-Preferred candidate input is the existing TradingDashboard watchlist/search-condition cache.
+Preferred candidate input is Kiwoom condition search number 23:
+
+```text
+Backtest.CandidateConditionIndex = 23
+Backtest.CandidateConditionName = 120일내_20퍼_500억
+```
+
+Until the operator-only condition loader is wired, use the existing TradingDashboard watchlist/search-condition cache.
 
 Use:
 
@@ -30,6 +37,8 @@ BacktestCandidateImportService.LoadFromWatchlistCache(...)
 ```
 
 This avoids manually preparing stock lists.
+
+Do not change `Kiwoom.ConditionSeq01` for this. That setting is still used by the live dashboard/watchlist flow.
 
 Excel/CSV import remains a fallback for one-off offline candidate files.
 

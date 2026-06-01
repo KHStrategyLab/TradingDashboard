@@ -12,6 +12,7 @@ namespace TradingDashboard.Models
         public StrategyMinutePreloadSettings StrategyMinutePreload { get; set; } = new StrategyMinutePreloadSettings();
         public LateNewsAlertSettings LateNewsAlert { get; set; } = new LateNewsAlertSettings();
         public TradingCostSettings TradingCosts { get; set; } = new TradingCostSettings();
+        public BacktestSettings Backtest { get; set; } = new BacktestSettings();
     }
 
     public class NaverNewsSettings
@@ -101,5 +102,12 @@ namespace TradingDashboard.Models
     {
         public decimal CommissionRate { get; set; } = 0.00015m;
         public decimal SellTaxRate { get; set; } = 0.0020m;
+    }
+
+    public class BacktestSettings
+    {
+        public int CandidateConditionIndex { get; set; } = 23;
+        public string CandidateConditionName { get; set; } = "120일내_20퍼_500억";
+        public string CandidateSourceName { get; set; } = "120일내_20퍼_500억";
     }
 }
