@@ -11,9 +11,6 @@ namespace TradingDashboard
 {
     public partial class MainWindow
     {
-        private const decimal StrategyStopLossRate = -1.5m;
-        private const decimal StrategyFirstTargetRate = 3.0m;
-
         private void ProcessStrategyExitAlerts(WatchStockItem? stock)
         {
             StrategyExecutionSettings execution = GetStrategyExecutionSettings();
@@ -284,13 +281,15 @@ namespace TradingDashboard
         private static StrategyExitCheck EvaluatePositionExitCheck(WatchStockItem stock, StrategyPositionLedgerEntry position)
         {
             long currentPrice = ResolveStrategySignalPrice(stock);
+            DateTime entryTime = ParseLedgerTime(position.FillTime);
             return EvaluateExitDecision(
                 currentPrice,
                 position.AveragePrice,
                 position.OpenQuantity,
                 position.Key,
                 position.SlotTag,
-                position.ExitStrategyCode);
+                position.ExitStrategyCode,
+                entryTime);
         }
 
         private static StrategyExitCheck EvaluateExitDecision(
@@ -299,15 +298,124 @@ namespace TradingDashboard
             long quantity,
             string positionKey,
             string slotTag,
-            string exitStrategyCode = "")
+            string exitStrategyCode = "",
+            DateTime entryTime = default)
         {
             if (currentPrice <= 0 || entryPrice <= 0)
                 return StrategyExitCheck.None(currentPrice, entryPrice);
 
             decimal profitRate = CalculateProfitRate(currentPrice, entryPrice);
-            if (profitRate <= StrategyStopLossRate)
+            string code = StrategyExitStrategyRegistry.Resolve(exitStrategyCode).Code;
+            return code switch
+            {
+                StrategyExitStrategyRegistry.SimplePlus6Minus2 => EvaluateThresholdExit(
+                    currentPrice,
+                    entryPrice,
+                    profitRate,
+                    positionKey,
+                    slotTag,
+                    quantity,
+                    code,
+                    stopRate: -2.0m,
+                    targetRate: 6.0m,
+                    stopReason: "STOP_MINUS2",
+                    targetReason: "TARGET_PLUS6"),
+                StrategyExitStrategyRegistry.QuickReactionReentry => EvaluateQuickReactionExit(
+                    currentPrice,
+                    entryPrice,
+                    profitRate,
+                    positionKey,
+                    slotTag,
+                    quantity,
+                    code,
+                    entryTime),
+                StrategyExitStrategyRegistry.ProfitScaleTrail => EvaluateScaleExit(
+                    currentPrice,
+                    entryPrice,
+                    profitRate,
+                    positionKey,
+                    slotTag,
+                    quantity,
+                    code,
+                    stopRate: -2.0m,
+                    firstTargetRate: 3.0m,
+                    finalTargetRate: 6.0m),
+                StrategyExitStrategyRegistry.SwingHold => EvaluateThresholdExit(
+                    currentPrice,
+                    entryPrice,
+                    profitRate,
+                    positionKey,
+                    slotTag,
+                    quantity,
+                    code,
+                    stopRate: -4.0m,
+                    targetRate: 10.0m,
+                    stopReason: "SWING_STOP",
+                    targetReason: "SWING_TARGET"),
+                _ => EvaluateScaleExit(
+                    currentPrice,
+                    entryPrice,
+                    profitRate,
+                    positionKey,
+                    slotTag,
+                    quantity,
+                    code,
+                    stopRate: -2.0m,
+                    firstTargetRate: 2.0m,
+                    finalTargetRate: 4.0m)
+            };
+        }
+
+        private static StrategyExitCheck EvaluateQuickReactionExit(
+            long currentPrice,
+            long entryPrice,
+            decimal profitRate,
+            string positionKey,
+            string slotTag,
+            long quantity,
+            string exitStrategyCode,
+            DateTime entryTime)
+        {
+            if (profitRate <= -2.0m)
+                return StrategyExitCheck.Signal("QUICK_STOP", currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
+
+            if (entryTime != default &&
+                DateTime.Now - entryTime >= TimeSpan.FromMinutes(5) &&
+                profitRate <= 0)
+            {
+                return StrategyExitCheck.Signal("QUICK_NO_GO", currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
+            }
+
+            return EvaluateScaleExit(
+                currentPrice,
+                entryPrice,
+                profitRate,
+                positionKey,
+                slotTag,
+                quantity,
+                exitStrategyCode,
+                stopRate: -2.0m,
+                firstTargetRate: 3.0m,
+                finalTargetRate: 6.0m);
+        }
+
+        private static StrategyExitCheck EvaluateScaleExit(
+            long currentPrice,
+            long entryPrice,
+            decimal profitRate,
+            string positionKey,
+            string slotTag,
+            long quantity,
+            string exitStrategyCode,
+            decimal stopRate,
+            decimal firstTargetRate,
+            decimal finalTargetRate)
+        {
+            if (profitRate <= stopRate)
                 return StrategyExitCheck.Signal("STOP", currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
-            if (profitRate >= StrategyFirstTargetRate)
+            if (profitRate >= finalTargetRate)
+                return StrategyExitCheck.Signal("TARGET_FINAL", currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
+            if (profitRate >= firstTargetRate)
             {
                 long targetQuantity = quantity > 1 ? Math.Max(1, quantity / 2) : quantity;
                 return StrategyExitCheck.Signal("TARGET1", currentPrice, entryPrice, profitRate, positionKey, slotTag, targetQuantity, exitStrategyCode);
@@ -316,6 +424,26 @@ namespace TradingDashboard
             return StrategyExitCheck.None(currentPrice, entryPrice, profitRate);
         }
 
+        private static StrategyExitCheck EvaluateThresholdExit(
+            long currentPrice,
+            long entryPrice,
+            decimal profitRate,
+            string positionKey,
+            string slotTag,
+            long quantity,
+            string exitStrategyCode,
+            decimal stopRate,
+            decimal targetRate,
+            string stopReason,
+            string targetReason)
+        {
+            if (profitRate <= stopRate)
+                return StrategyExitCheck.Signal(stopReason, currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
+            if (profitRate >= targetRate)
+                return StrategyExitCheck.Signal(targetReason, currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
+
+            return StrategyExitCheck.None(currentPrice, entryPrice, profitRate);
+        }
         private void ApplyStrategyPositionSellFill(StrategyExitCheck check, long filledQuantity)
         {
             if (filledQuantity <= 0 ||

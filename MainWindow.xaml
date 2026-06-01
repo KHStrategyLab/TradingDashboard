@@ -220,6 +220,117 @@
             </Setter>
         </Style>
 
+        <Style x:Key="StrategySlotExitComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="Background" Value="#141A20"/>
+            <Setter Property="Foreground" Value="#8FA8BA"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1F2A33"/>
+                                <Setter Property="Foreground" Value="#AFC5D6"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#223241"/>
+                                <Setter Property="Foreground" Value="#B8D0E0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StrategySlotExitComboBoxStyle" TargetType="{x:Type ComboBox}">
+            <Setter Property="Background" Value="#11171D"/>
+            <Setter Property="Foreground" Value="#8FA8BA"/>
+            <Setter Property="BorderBrush" Value="#23313D"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource StrategySlotExitComboBoxItemStyle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid>
+                            <Border x:Name="MainBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4">
+                                <Grid>
+                                    <ContentPresenter Margin="8,0,18,0"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Left"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"/>
+                                    <Path Width="8"
+                                          Height="4"
+                                          HorizontalAlignment="Right"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,7,0"
+                                          Data="M 0 0 L 4 4 L 8 0 Z"
+                                          Fill="#6E899C"/>
+                                </Grid>
+                            </Border>
+
+                            <ToggleButton Focusable="False"
+                                          ClickMode="Press"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Bottom"
+                                   PopupAnimation="None">
+                                <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border Background="#11171D"
+                                            BorderBrush="#23313D"
+                                            BorderThickness="1"
+                                            CornerRadius="4">
+                                        <ScrollViewer Margin="0"
+                                                      CanContentScroll="True">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MainBorder" Property="Background" Value="#151E26"/>
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#2C4050"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="MainBorder" Property="Background" Value="#11171D"/>
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#3C5365"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="WatchListBoxItemStyle" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="2,1"/>
@@ -445,6 +556,56 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="SlotBorder" Property="Background" Value="#1D2428"/>
                                 <Setter TargetName="SlotBorder" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StrategySlotSwitchOnlyStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Width" Value="64"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Grid Width="64" Height="28">
+                            <Border x:Name="SwitchTrack"
+                                    Background="{StaticResource OffToggleTrackBrush}"
+                                    CornerRadius="14"/>
+                            <TextBlock x:Name="SwitchText"
+                                       Text="OFF"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,10,0"/>
+                            <Border x:Name="SwitchThumb"
+                                    Width="22"
+                                    Height="22"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Margin="3,0,0,0"
+                                    Background="{StaticResource PaletteWhite}"
+                                    CornerRadius="11"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource SkyToggleTrackBrush}"/>
+                                <Setter TargetName="SwitchText" Property="Text" Value="ON"/>
+                                <Setter TargetName="SwitchText" Property="Foreground" Value="{StaticResource PaletteWhite}"/>
+                                <Setter TargetName="SwitchText" Property="HorizontalAlignment" Value="Left"/>
+                                <Setter TargetName="SwitchText" Property="Margin" Value="10,0,0,0"/>
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SwitchTrack" Property="Opacity" Value="0.88"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -2113,6 +2274,8 @@
                                           Grid.Row="1"
                                           IsChecked="False"
                                           Style="{StaticResource VirtualCardToggleStyle}"
+                                          Checked="StrategyControlBoard_Changed"
+                                          Unchecked="StrategyControlBoard_Changed"
                                           Margin="0,0,0,12">
                                 <StackPanel>
                                     <Border HorizontalAlignment="Left"
@@ -2161,85 +2324,31 @@
                                 </StackPanel>
                             </ToggleButton>
 
-                            <Border Grid.Row="2"
+                            <Border Grid.Row="3"
                                     BorderBrush="{StaticResource LineBrush}"
                                     BorderThickness="1"
                                     Background="{StaticResource BgInnerBrush}"
                                     CornerRadius="6"
-                                    Padding="14"
-                                    MinHeight="126"
-                                    Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="Strategy Slots"
-                                                   Foreground="{StaticResource TextMainBrush}"
-                                                   FontSize="15"
-                                                   FontWeight="Bold"/>
-                                        <TextBlock Text="Disabled slots are ignored by signal evaluation."
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="11"
-                                                   Margin="0,4,0,0"/>
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="1"
-                                               Text="UI only"
-                                               Foreground="{StaticResource PaletteSkyBlue}"
-                                               FontSize="11"
-                                               FontWeight="SemiBold"
-                                               VerticalAlignment="Top"/>
-                                </Grid>
-                            </Border>
-
-                            <StackPanel Grid.Row="3"
-                                        Margin="0,10,0,0">
+                                    Padding="10"
+                                    Margin="0,2,0,10">
                                 <StackPanel>
-                                    <Border BorderBrush="{StaticResource LineBrush}"
+                                    <TextBlock Text="전략 슬롯"
+                                               Foreground="{StaticResource TextMainBrush}"
+                                               FontSize="13"
+                                               FontWeight="Bold"/>
+                                    <TextBlock Text="스위치는 실행 여부만, 매도 선택기는 각 슬롯이 사용할 공용 매도부장을 정한다."
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               Margin="0,3,0,8"
+                                               TextWrapping="Wrap"/>
+
+                                    <Border BorderBrush="{StaticResource LineSoftBrush}"
                                             BorderThickness="1"
                                             Background="{StaticResource BgInnerBrush}"
                                             CornerRadius="6"
                                             Padding="10"
-                                            Margin="0,0,0,10">
-                                        <StackPanel>
-                                            <TextBlock Text="전략 번호표 · 타이틀 / 주요 이평선"
-                                                       Foreground="{StaticResource TextMainBrush}"
-                                                       FontSize="13"
-                                                       FontWeight="Bold"/>
-                                            <TextBlock Text="1. SOR 10분 기준 + 3분 공격형 · 10분 MA60 / 3분 20봉 신고가"
-                                                       Foreground="{StaticResource TextMainBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,7,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="2. SOR 15분 눌림 + 5분 돌파(주전략 원형) · 일봉 MA60 근처 / 15분 MA60 / 5분 20봉 신고가"
-                                                       Foreground="{StaticResource TextMainBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,4,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="후보. SOR 10분 눌림 + 5분 돌파(중간형) · KRX 일봉 기준봉 / 10분 MA60 / 5분 20봉 신고가"
-                                                       Foreground="{StaticResource TextMainBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,4,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="보관. 당일 1분 장대양봉 눌림(10순위 후보) · 1분 MA60 / 기준봉 중심값 / 1분 거래대금"
-                                                       Foreground="{StaticResource TextMutedBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,4,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="보조. 테마·공시·뉴스 · 이평선 없음 / 재료 확인 전용 / 단독매수 없음"
-                                                       Foreground="{StaticResource TextMutedBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,4,0,0"
-                                                       TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <ToggleButton x:Name="StrategySlotBaseCandleChaseToggle"
-                                                  Style="{StaticResource StrategySlotToggleStyle}"
-                                                  Checked="StrategySlotToggle_Changed"
-                                                  Unchecked="StrategySlotToggle_Changed"
-                                                  IsChecked="True">
+                                            Margin="0,0,0,8"
+                                            ToolTip="SOR / KRX 기준가 고정&#x0a;10min MA60 pullback/recovery, then 3min 20-bar breakout&#x0a;Stop: -1.5%, 10min MA60 loss, or pullback low loss · Target: +3%, +5~6% trail">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -2248,60 +2357,46 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Slot 1 · SOR 10min MA60 + 3min Breakout"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="15"
+                                                           FontSize="14"
                                                            FontWeight="Bold"
-                                                           VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1"
-                                                        Content="설명"
-                                                        Tag="BaseCandleChase"
-                                                        Style="{StaticResource StrategyDetailButtonStyle}"
-                                                        Click="StrategyDetailButton_Click"/>
+                                                           TextWrapping="Wrap"
+                                                           MaxHeight="38"/>
+                                                <ToggleButton x:Name="StrategySlotBaseCandleChaseToggle"
+                                                              Grid.Column="1"
+                                                              Style="{StaticResource StrategySlotSwitchOnlyStyle}"
+                                                              Checked="StrategySlotToggle_Changed"
+                                                              Unchecked="StrategySlotToggle_Changed"
+                                                              IsChecked="True"/>
                                             </Grid>
-                                            <Border HorizontalAlignment="Left"
-                                                    Background="#17243A"
-                                                    BorderBrush="{StaticResource PaletteSkyBlue}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4"
-                                                    Padding="6,1"
-                                                    Margin="0,5,0,0">
-                                                <TextBlock Text="SOR · KRX 기준가 고정"
-                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                            <Grid Margin="0,5,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="매도"
+                                                           Foreground="{StaticResource TextMutedBrush}"
                                                            FontSize="10"
-                                                           FontWeight="SemiBold"/>
-                                            </Border>
-                                            <TextBlock Text="10min MA60 pullback/recovery, then 3min 20-bar breakout"
-                                                       Style="{StaticResource CardMutedTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="Stop: -1.5%, 10min MA60 loss, or pullback low loss · Target: +3%, +5~6% trail"
-                                                       Style="{StaticResource CardSubTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
+                                                           VerticalAlignment="Center"/>
+                                                <ComboBox x:Name="StrategySlotBaseCandleChaseExitComboBox"
+                                                          Grid.Column="1"
+                                                          Width="150"
+                                                          MinHeight="22"
+                                                          FontSize="10"
+                                                          HorizontalAlignment="Left"
+                                                          Margin="8,0,0,0"
+                                                          Style="{StaticResource StrategySlotExitComboBoxStyle}"
+                                                          SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                            </Grid>
                                         </StackPanel>
-                                    </ToggleButton>
-                                    <Grid Margin="8,-4,8,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="72"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="매도전략"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="11"
-                                                   VerticalAlignment="Center"/>
-                                        <ComboBox x:Name="StrategySlotBaseCandleChaseExitComboBox"
-                                                  Grid.Column="1"
-                                                  MinHeight="25"
-                                                  FontSize="11"
-                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
-                                    </Grid>
+                                    </Border>
 
-                                    <ToggleButton x:Name="StrategySlotPullbackToggle"
-                                                  Style="{StaticResource StrategySlotToggleStyle}"
-                                                  Checked="StrategySlotToggle_Changed"
-                                                  Unchecked="StrategySlotToggle_Changed"
-                                                  IsChecked="True">
+                                    <Border BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            Background="{StaticResource BgInnerBrush}"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,8"
+                                            ToolTip="SOR / KRX 기준가 고정&#x0a;Daily MA60 open zone, 15min MA60 pullback, then 5min 20-bar breakout&#x0a;Stop: 15min MA60 loss or pullback low · Target: +3%, then trail">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -2310,60 +2405,46 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Slot 2 · SOR 15min MA60 + 5min Breakout"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="15"
+                                                           FontSize="14"
                                                            FontWeight="Bold"
-                                                           VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1"
-                                                        Content="설명"
-                                                        Tag="ThreeMinutePullback"
-                                                        Style="{StaticResource StrategyDetailButtonStyle}"
-                                                        Click="StrategyDetailButton_Click"/>
+                                                           TextWrapping="Wrap"
+                                                           MaxHeight="38"/>
+                                                <ToggleButton x:Name="StrategySlotPullbackToggle"
+                                                              Grid.Column="1"
+                                                              Style="{StaticResource StrategySlotSwitchOnlyStyle}"
+                                                              Checked="StrategySlotToggle_Changed"
+                                                              Unchecked="StrategySlotToggle_Changed"
+                                                              IsChecked="True"/>
                                             </Grid>
-                                            <Border HorizontalAlignment="Left"
-                                                    Background="#17243A"
-                                                    BorderBrush="{StaticResource PaletteSkyBlue}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4"
-                                                    Padding="6,1"
-                                                    Margin="0,5,0,0">
-                                                <TextBlock Text="SOR · KRX 기준가 고정"
-                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                            <Grid Margin="0,5,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="매도"
+                                                           Foreground="{StaticResource TextMutedBrush}"
                                                            FontSize="10"
-                                                           FontWeight="SemiBold"/>
-                                            </Border>
-                                            <TextBlock Text="Daily MA60 open zone, 15min MA60 pullback, then 5min 20-bar breakout"
-                                                       Style="{StaticResource CardMutedTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="Stop: 15min MA60 loss or pullback low · Target: +3%, then trail"
-                                                       Style="{StaticResource CardSubTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
+                                                           VerticalAlignment="Center"/>
+                                                <ComboBox x:Name="StrategySlotPullbackExitComboBox"
+                                                          Grid.Column="1"
+                                                          Width="150"
+                                                          MinHeight="22"
+                                                          FontSize="10"
+                                                          HorizontalAlignment="Left"
+                                                          Margin="8,0,0,0"
+                                                          Style="{StaticResource StrategySlotExitComboBoxStyle}"
+                                                          SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                            </Grid>
                                         </StackPanel>
-                                    </ToggleButton>
-                                    <Grid Margin="8,-4,8,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="72"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="매도전략"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="11"
-                                                   VerticalAlignment="Center"/>
-                                        <ComboBox x:Name="StrategySlotPullbackExitComboBox"
-                                                  Grid.Column="1"
-                                                  MinHeight="25"
-                                                  FontSize="11"
-                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
-                                    </Grid>
+                                    </Border>
 
-                                    <ToggleButton x:Name="StrategySlotMiddleToggle"
-                                                  Style="{StaticResource StrategySlotToggleStyle}"
-                                                  Checked="StrategySlotToggle_Changed"
-                                                  Unchecked="StrategySlotToggle_Changed"
-                                                  IsChecked="True">
+                                    <Border BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            Background="{StaticResource BgInnerBrush}"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,8"
+                                            ToolTip="SOR / KRX 기준가 고정&#x0a;10min MA60 pullback/recovery, then 5min 20-bar breakout&#x0a;Stop: 10min MA60 loss or pullback low · Target: +3%, then trail">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -2372,60 +2453,46 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Slot 3 · SOR 10min MA60 + 5min Breakout"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="15"
+                                                           FontSize="14"
                                                            FontWeight="Bold"
-                                                           VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1"
-                                                        Content="설명"
-                                                        Tag="SorTenMinuteFiveMinuteBreakout"
-                                                        Style="{StaticResource StrategyDetailButtonStyle}"
-                                                        Click="StrategyDetailButton_Click"/>
+                                                           TextWrapping="Wrap"
+                                                           MaxHeight="38"/>
+                                                <ToggleButton x:Name="StrategySlotMiddleToggle"
+                                                              Grid.Column="1"
+                                                              Style="{StaticResource StrategySlotSwitchOnlyStyle}"
+                                                              Checked="StrategySlotToggle_Changed"
+                                                              Unchecked="StrategySlotToggle_Changed"
+                                                              IsChecked="True"/>
                                             </Grid>
-                                            <Border HorizontalAlignment="Left"
-                                                    Background="#17243A"
-                                                    BorderBrush="{StaticResource PaletteSkyBlue}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4"
-                                                    Padding="6,1"
-                                                    Margin="0,5,0,0">
-                                                <TextBlock Text="SOR · KRX 기준가 고정"
-                                                           Foreground="{StaticResource PaletteSkyBlue}"
+                                            <Grid Margin="0,5,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="매도"
+                                                           Foreground="{StaticResource TextMutedBrush}"
                                                            FontSize="10"
-                                                           FontWeight="SemiBold"/>
-                                            </Border>
-                                            <TextBlock Text="10min MA60 pullback/recovery, then 5min 20-bar breakout"
-                                                       Style="{StaticResource CardMutedTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="Stop: 10min MA60 loss or pullback low · Target: +3%, then trail"
-                                                       Style="{StaticResource CardSubTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
+                                                           VerticalAlignment="Center"/>
+                                                <ComboBox x:Name="StrategySlotMiddleExitComboBox"
+                                                          Grid.Column="1"
+                                                          Width="150"
+                                                          MinHeight="22"
+                                                          FontSize="10"
+                                                          HorizontalAlignment="Left"
+                                                          Margin="8,0,0,0"
+                                                          Style="{StaticResource StrategySlotExitComboBoxStyle}"
+                                                          SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                            </Grid>
                                         </StackPanel>
-                                    </ToggleButton>
-                                    <Grid Margin="8,-4,8,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="72"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="매도전략"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="11"
-                                                   VerticalAlignment="Center"/>
-                                        <ComboBox x:Name="StrategySlotMiddleExitComboBox"
-                                                  Grid.Column="1"
-                                                  MinHeight="25"
-                                                  FontSize="11"
-                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
-                                    </Grid>
+                                    </Border>
 
-                                    <ToggleButton x:Name="StrategySlotThemeAssistToggle"
-                                                  Style="{StaticResource StrategySlotToggleStyle}"
-                                                  Checked="StrategySlotToggle_Changed"
-                                                  Unchecked="StrategySlotToggle_Changed"
-                                                  IsChecked="False">
+                                    <Border BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            Background="{StaticResource BgInnerBrush}"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,8"
+                                            ToolTip="보조 / 단독매수 없음&#x0a;Manual holdings only; no buy signal&#x0a;Stop: entry 5m low or 5m MA5 breakdown">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -2434,56 +2501,40 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="Assist · Manual Buy Stop"
                                                            Foreground="{StaticResource TextMainBrush}"
-                                                           FontSize="15"
+                                                           FontSize="14"
                                                            FontWeight="Bold"
-                                                           VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1"
-                                                        Content="설명"
-                                                        Tag="ThemeDisclosureAssist"
-                                                        Style="{StaticResource StrategyDetailButtonStyle}"
-                                                        Click="StrategyDetailButton_Click"/>
+                                                           TextWrapping="Wrap"
+                                                           MaxHeight="38"/>
+                                                <ToggleButton x:Name="StrategySlotThemeAssistToggle"
+                                                              Grid.Column="1"
+                                                              Style="{StaticResource StrategySlotSwitchOnlyStyle}"
+                                                              Checked="StrategySlotToggle_Changed"
+                                                              Unchecked="StrategySlotToggle_Changed"
+                                                              IsChecked="False"/>
                                             </Grid>
-                                            <Border HorizontalAlignment="Left"
-                                                    Background="#26210F"
-                                                    BorderBrush="{StaticResource PaletteLightYellow}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4"
-                                                    Padding="6,1"
-                                                    Margin="0,5,0,0">
-                                                <TextBlock Text="보조 · 단독매수 없음"
-                                                           Foreground="{StaticResource PaletteLightYellow}"
+                                            <Grid Margin="0,5,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="매도"
+                                                           Foreground="{StaticResource TextMutedBrush}"
                                                            FontSize="10"
-                                                           FontWeight="SemiBold"/>
-                                            </Border>
-                                            <TextBlock Text="Manual holdings only; no buy signal"
-                                                       Style="{StaticResource CardMutedTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
-                                            <TextBlock Text="Stop: entry 5m low or 5m MA5 breakdown"
-                                                       Style="{StaticResource CardSubTextStyle}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextWrapping="Wrap"/>
+                                                           VerticalAlignment="Center"/>
+                                                <ComboBox x:Name="StrategySlotThemeAssistExitComboBox"
+                                                          Grid.Column="1"
+                                                          Width="150"
+                                                          MinHeight="22"
+                                                          FontSize="10"
+                                                          HorizontalAlignment="Left"
+                                                          Margin="8,0,0,0"
+                                                          Style="{StaticResource StrategySlotExitComboBoxStyle}"
+                                                          SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                            </Grid>
                                         </StackPanel>
-                                    </ToggleButton>
-                                    <Grid Margin="8,-4,8,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="72"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="매도전략"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="11"
-                                                   VerticalAlignment="Center"/>
-                                        <ComboBox x:Name="StrategySlotThemeAssistExitComboBox"
-                                                  Grid.Column="1"
-                                                  MinHeight="25"
-                                                  FontSize="11"
-                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
-                                    </Grid>
+                                    </Border>
                                 </StackPanel>
-                            </StackPanel>
+                            </Border>
 
                             <Border Grid.Row="4"
                                     BorderBrush="{StaticResource LineBrush}"

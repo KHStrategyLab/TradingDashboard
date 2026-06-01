@@ -75,6 +75,7 @@ namespace TradingDashboard.Services
                     bySlot[key] = new StrategySlotConfigEntry
                     {
                         SlotId = key,
+                        IsEnabled = GetDefaultEnabledForSlot(slotId),
                         ExitStrategyCode = StrategyExitStrategyRegistry.GetDefaultForSlot(slotId),
                         UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
                     };
@@ -83,10 +84,14 @@ namespace TradingDashboard.Services
 
                 if (string.IsNullOrWhiteSpace(entry.ExitStrategyCode))
                     entry.ExitStrategyCode = StrategyExitStrategyRegistry.GetDefaultForSlot(slotId);
+                entry.IsEnabled ??= GetDefaultEnabledForSlot(slotId);
             }
 
             return [.. bySlot.Values.OrderBy(x => x.SlotId, StringComparer.Ordinal)];
         }
+
+        private static bool GetDefaultEnabledForSlot(StrategySlotId slotId) =>
+            slotId != StrategySlotId.ThemeDisclosureAssist;
 
         private static List<StrategySlotConfigEntry> CreateDefaults() =>
             MergeDefaults([]);

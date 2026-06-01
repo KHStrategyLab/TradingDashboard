@@ -117,7 +117,8 @@ namespace TradingDashboard
                 entry.Quantity,
                 entry.Key,
                 entry.SlotTag,
-                entry.ExitStrategyCode);
+                entry.ExitStrategyCode,
+                ParseLedgerTime(entry.EntryTime));
             if (!decision.HasExitSignal)
                 return;
 

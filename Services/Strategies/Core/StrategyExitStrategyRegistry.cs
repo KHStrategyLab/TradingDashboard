@@ -6,6 +6,7 @@ namespace TradingDashboard.Services.Strategies
     public static class StrategyExitStrategyRegistry
     {
         public const string BaseCandleLowProfitScale = "BASE_LOW_PROFIT_SCALE";
+        public const string SimplePlus6Minus2 = "SIMPLE_PLUS6_MINUS2";
         public const string QuickReactionReentry = "QUICK_REACTION_REENTRY";
         public const string ProfitScaleTrail = "PROFIT_SCALE_TRAIL";
         public const string SwingHold = "SWING_HOLD";
@@ -15,24 +16,28 @@ namespace TradingDashboard.Services.Strategies
         [
             new(
                 BaseCandleLowProfitScale,
-                "기준봉 저가 + 2/4% 분할",
-                "기준봉 저가 이탈 또는 -2% 손절, +2% 1차, +4% 전량 기준"),
+                "Base Scale",
+                "Shared exit profile: early scale and final target"),
+            new(
+                SimplePlus6Minus2,
+                "+6 / -2",
+                "Shared exit profile: full target at +6%, stop at -2%"),
             new(
                 QuickReactionReentry,
                 "Quick Reaction Re-entry",
-                "5분 안에 안 가면 정리하고 재진입 후보로 다시 기다리는 빠른 대응"),
+                "Shared exit profile: quick no-go cut and re-entry wait"),
             new(
                 ProfitScaleTrail,
-                "2/4% 익절 + 추적",
-                "초기 익절 후 남은 수량은 추세 유지 여부로 추적"),
+                "Scale + Trail",
+                "Shared exit profile: scale out, then trail the rest"),
             new(
                 SwingHold,
                 "Swing Hold",
-                "당일 초단타가 아니라 며칠 보유 가능한 실험용 청산 틀"),
+                "Shared exit profile: wider stop for longer hold"),
             new(
                 ManualBuyStopAssist,
-                "수동매수 자동손절기",
-                "수동 또는 꼬리표 없는 보유분만 5분봉 저가/MA5 이탈로 관리",
+                "Manual Stop Assist",
+                "Manual or untagged holdings only",
                 IsManualOnly: true)
         ];
 

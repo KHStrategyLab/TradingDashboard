@@ -23,6 +23,9 @@ namespace TradingDashboard
         {
             _isInitializingStrategyControls = true;
             LoadStrategySlotConfig();
+            LoadStrategySwitchState();
+            ApplyStrategySlotEnabledStateFromConfig();
+            ApplyStrategySwitchState();
             InitializeStrategyExitStrategySelectors();
             StrategyProgressItemsControl.ItemsSource = _strategyProgressRows;
             if (StrategyMinutePreloadIdleSecondsTextBox != null)
@@ -38,9 +41,13 @@ namespace TradingDashboard
 
         private void StrategySlotToggle_Changed(object sender, RoutedEventArgs e)
         {
+            if (_isInitializingStrategyControls)
+                return;
+
             if (TryRejectEngineLockedStrategyChange(sender))
                 return;
 
+            SaveStrategySlotEnabledState(sender);
             LogStrategyToggleState(sender);
             UpdateStrategyExitStrategySelectorLocks();
             UpdateStrategySlotSummary();
@@ -69,6 +76,9 @@ namespace TradingDashboard
 
         private void StrategyControlBoard_Changed(object sender, RoutedEventArgs e)
         {
+            if (_isInitializingStrategyControls)
+                return;
+
             if (TryRejectEngineLockedStrategyChange(sender))
             {
                 SyncPaperTradingPreviewState();
@@ -77,6 +87,7 @@ namespace TradingDashboard
             }
 
             SyncPaperTradingPreviewState();
+            SaveStrategySwitchState(sender);
             LogStrategyToggleState(sender);
             UpdateStrategyControlBoard();
             UpdateStrategyExitStrategySelectorLocks();
@@ -124,7 +135,11 @@ namespace TradingDashboard
 
         private void StrategyProgressFilter_Changed(object sender, RoutedEventArgs e)
         {
+            if (_isInitializingStrategyControls)
+                return;
+
             LogStrategyToggleState(sender);
+            SaveStrategySwitchState(sender);
             UpdateStrategyProgressRows();
         }
 
@@ -237,6 +252,7 @@ namespace TradingDashboard
         private void LogStrategyToggleState(object sender)
         {
             if (sender is not ToggleButton toggle ||
+                _isInitializingStrategyControls ||
                 _isRevertingLockedStrategyToggle)
                 return;
 
@@ -351,10 +367,194 @@ namespace TradingDashboard
                 _strategySlotConfigById[slotId] = new StrategySlotConfigEntry
                 {
                     SlotId = slotId.ToString(),
+                    IsEnabled = GetDefaultStrategySlotEnabled(slotId),
                     ExitStrategyCode = StrategyExitStrategyRegistry.GetDefaultForSlot(slotId),
                     UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
                 };
             }
+        }
+
+        private void LoadStrategySwitchState()
+        {
+            _strategySwitchStateByKey.Clear();
+            foreach (StrategySwitchStateEntry entry in _strategySwitchStateStore.Load())
+            {
+                if (!string.IsNullOrWhiteSpace(entry.Key))
+                    _strategySwitchStateByKey[entry.Key] = entry;
+            }
+        }
+
+        private void ApplyStrategySwitchState()
+        {
+            // Safety-critical switches intentionally reset to OFF on every launch.
+            if (AutoTradingEnabledToggle != null)
+                AutoTradingEnabledToggle.IsChecked = false;
+            if (LiveBuyEnabledToggle != null)
+                LiveBuyEnabledToggle.IsChecked = false;
+
+            SetSwitchStateFromStore(VirtualTradingPreviewToggle, "VirtualTradingPreview", defaultValue: false);
+            SetSwitchStateFromStore(DuplicateBuyPolicyToggle, "DuplicateBuyPolicy", defaultValue: false);
+            SetSwitchStateFromStore(DuplicateAlertPolicyToggle, "DuplicateAlertPolicy", defaultValue: true);
+            SetSwitchStateFromStore(StrategyMinutePreloadToggle, "StrategyMinutePreload", defaultValue: true);
+            SetSwitchStateFromStore(StrategyMinuteSeedFileSaveToggle, "StrategyMinuteSeedFileSave", defaultValue: false);
+            SetSwitchStateFromStore(ProgressFilterBaseCandleChaseToggle, "ProgressFilterBaseCandleChase", defaultValue: true);
+            SetSwitchStateFromStore(ProgressFilterPullbackToggle, "ProgressFilterPullback", defaultValue: true);
+            SetSwitchStateFromStore(ProgressFilterMiddleToggle, "ProgressFilterMiddle", defaultValue: true);
+            SetSwitchStateFromStore(ProgressFilterThemeAssistToggle, "ProgressFilterThemeAssist", defaultValue: false);
+            SetSwitchStateFromStore(ProgressFilterUnownedToggle, "ProgressFilterUnowned", defaultValue: true);
+            SetSwitchStateFromStore(ProgressFilterOwnedToggle, "ProgressFilterOwned", defaultValue: false);
+        }
+
+        private void SetSwitchStateFromStore(ToggleButton? toggle, string key, bool defaultValue)
+        {
+            if (toggle == null)
+                return;
+
+            toggle.IsChecked = _strategySwitchStateByKey.TryGetValue(key, out StrategySwitchStateEntry? entry)
+                ? entry.IsChecked
+                : defaultValue;
+        }
+
+        private void SaveStrategySwitchState(object sender)
+        {
+            if (_isInitializingStrategyControls ||
+                sender is not ToggleButton toggle ||
+                !TryResolvePersistedStrategySwitchKey(toggle, out string key))
+                return;
+
+            _strategySwitchStateByKey[key] = new StrategySwitchStateEntry
+            {
+                Key = key,
+                IsChecked = toggle.IsChecked == true,
+                UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
+            };
+            _strategySwitchStateStore.Save(_strategySwitchStateByKey.Values);
+        }
+
+        private bool TryResolvePersistedStrategySwitchKey(ToggleButton toggle, out string key)
+        {
+            // Engine Start and Live Orders are safety switches and are never restored as ON.
+            if (ReferenceEquals(toggle, VirtualTradingPreviewToggle))
+                key = "VirtualTradingPreview";
+            else if (ReferenceEquals(toggle, DuplicateBuyPolicyToggle))
+                key = "DuplicateBuyPolicy";
+            else if (ReferenceEquals(toggle, DuplicateAlertPolicyToggle))
+                key = "DuplicateAlertPolicy";
+            else if (ReferenceEquals(toggle, StrategyMinutePreloadToggle))
+                key = "StrategyMinutePreload";
+            else if (ReferenceEquals(toggle, StrategyMinuteSeedFileSaveToggle))
+                key = "StrategyMinuteSeedFileSave";
+            else if (ReferenceEquals(toggle, ProgressFilterBaseCandleChaseToggle))
+                key = "ProgressFilterBaseCandleChase";
+            else if (ReferenceEquals(toggle, ProgressFilterPullbackToggle))
+                key = "ProgressFilterPullback";
+            else if (ReferenceEquals(toggle, ProgressFilterMiddleToggle))
+                key = "ProgressFilterMiddle";
+            else if (ReferenceEquals(toggle, ProgressFilterThemeAssistToggle))
+                key = "ProgressFilterThemeAssist";
+            else if (ReferenceEquals(toggle, ProgressFilterUnownedToggle))
+                key = "ProgressFilterUnowned";
+            else if (ReferenceEquals(toggle, ProgressFilterOwnedToggle))
+                key = "ProgressFilterOwned";
+            else
+            {
+                key = string.Empty;
+                return false;
+            }
+
+            return true;
+        }
+
+        private void ApplyStrategySlotEnabledStateFromConfig()
+        {
+            SetStrategySlotToggleFromConfig(StrategySlotBaseCandleChaseToggle, StrategySlotId.BaseCandleChase);
+            SetStrategySlotToggleFromConfig(StrategySlotPullbackToggle, StrategySlotId.ThreeMinutePullback);
+            SetStrategySlotToggleFromConfig(StrategySlotMiddleToggle, StrategySlotId.SorTenMinuteFiveMinuteBreakout);
+            SetStrategySlotToggleFromConfig(StrategySlotThemeAssistToggle, StrategySlotId.ThemeDisclosureAssist);
+        }
+
+        private void SetStrategySlotToggleFromConfig(ToggleButton? toggle, StrategySlotId slotId)
+        {
+            if (toggle == null)
+                return;
+
+            toggle.IsChecked = ResolveStrategySlotEnabled(slotId);
+        }
+
+        private void SaveStrategySlotEnabledState(object sender)
+        {
+            if (_isInitializingStrategyControls ||
+                sender is not ToggleButton toggle ||
+                !TryResolveStrategySlotId(toggle, out StrategySlotId slotId))
+                return;
+
+            SetStrategySlotEnabled(slotId, toggle.IsChecked == true, save: true);
+        }
+
+        private void SetStrategySlotEnabled(StrategySlotId slotId, bool isEnabled, bool save)
+        {
+            StrategySlotConfigEntry entry = ResolveStrategySlotConfigEntry(slotId);
+            entry.IsEnabled = isEnabled;
+            entry.UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss");
+            _strategySlotConfigById[slotId] = entry;
+
+            if (save)
+                _strategySlotConfigStore.Save(_strategySlotConfigById.Values);
+        }
+
+        private bool ResolveStrategySlotEnabled(StrategySlotId slotId)
+        {
+            StrategySlotConfigEntry entry = ResolveStrategySlotConfigEntry(slotId);
+            return entry.IsEnabled ?? GetDefaultStrategySlotEnabled(slotId);
+        }
+
+        private StrategySlotConfigEntry ResolveStrategySlotConfigEntry(StrategySlotId slotId)
+        {
+            if (_strategySlotConfigById.TryGetValue(slotId, out StrategySlotConfigEntry? entry))
+                return entry;
+
+            entry = new StrategySlotConfigEntry
+            {
+                SlotId = slotId.ToString(),
+                IsEnabled = GetDefaultStrategySlotEnabled(slotId),
+                ExitStrategyCode = StrategyExitStrategyRegistry.GetDefaultForSlot(slotId),
+                UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
+            };
+            _strategySlotConfigById[slotId] = entry;
+            return entry;
+        }
+
+        private static bool GetDefaultStrategySlotEnabled(StrategySlotId slotId) =>
+            slotId != StrategySlotId.ThemeDisclosureAssist;
+
+        private bool TryResolveStrategySlotId(ToggleButton toggle, out StrategySlotId slotId)
+        {
+            if (ReferenceEquals(toggle, StrategySlotBaseCandleChaseToggle))
+            {
+                slotId = StrategySlotId.BaseCandleChase;
+                return true;
+            }
+
+            if (ReferenceEquals(toggle, StrategySlotPullbackToggle))
+            {
+                slotId = StrategySlotId.ThreeMinutePullback;
+                return true;
+            }
+
+            if (ReferenceEquals(toggle, StrategySlotMiddleToggle))
+            {
+                slotId = StrategySlotId.SorTenMinuteFiveMinuteBreakout;
+                return true;
+            }
+
+            if (ReferenceEquals(toggle, StrategySlotThemeAssistToggle))
+            {
+                slotId = StrategySlotId.ThemeDisclosureAssist;
+                return true;
+            }
+
+            slotId = default;
+            return false;
         }
 
         private void InitializeStrategyExitStrategySelectors()
@@ -416,12 +616,10 @@ namespace TradingDashboard
         private void SetStrategySlotExitStrategy(StrategySlotId slotId, string exitStrategyCode, bool save)
         {
             StrategyExitStrategyDescriptor descriptor = StrategyExitStrategyRegistry.Resolve(exitStrategyCode);
-            _strategySlotConfigById[slotId] = new StrategySlotConfigEntry
-            {
-                SlotId = slotId.ToString(),
-                ExitStrategyCode = descriptor.Code,
-                UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
-            };
+            StrategySlotConfigEntry entry = ResolveStrategySlotConfigEntry(slotId);
+            entry.ExitStrategyCode = descriptor.Code;
+            entry.UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss");
+            _strategySlotConfigById[slotId] = entry;
 
             if (save)
                 _strategySlotConfigStore.Save(_strategySlotConfigById.Values);
