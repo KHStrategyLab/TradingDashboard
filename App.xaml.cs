@@ -51,7 +51,7 @@ namespace TradingDashboard
 
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-center-10m-3m", StringComparison.OrdinalIgnoreCase)))
             {
-                int exitCode = RunSmallBaseCenterPullbackBacktest(useOneMinuteTrigger: false);
+                int exitCode = RunSmallBaseCenterPullbackBacktest(baseMinute: 10, entryMinute: 3, useOneMinuteTrigger: false);
                 Shutdown(exitCode);
                 Environment.Exit(exitCode);
                 return;
@@ -59,7 +59,15 @@ namespace TradingDashboard
 
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-center-10m-3m-1m", StringComparison.OrdinalIgnoreCase)))
             {
-                int exitCode = RunSmallBaseCenterPullbackBacktest(useOneMinuteTrigger: true);
+                int exitCode = RunSmallBaseCenterPullbackBacktest(baseMinute: 10, entryMinute: 3, useOneMinuteTrigger: true);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-center-15m-5m-1m", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunSmallBaseCenterPullbackBacktest(baseMinute: 15, entryMinute: 5, useOneMinuteTrigger: true);
                 Shutdown(exitCode);
                 Environment.Exit(exitCode);
                 return;
@@ -139,14 +147,14 @@ namespace TradingDashboard
             }
         }
 
-        private static int RunSmallBaseCenterPullbackBacktest(bool useOneMinuteTrigger)
+        private static int RunSmallBaseCenterPullbackBacktest(int baseMinute, int entryMinute, bool useOneMinuteTrigger)
         {
             try
             {
                 var backtest = new SmallBaseCenterPullbackBacktest();
                 BacktestRunResult result = backtest.Run(
-                    baseMinute: 10,
-                    entryMinute: 3,
+                    baseMinute: baseMinute,
+                    entryMinute: entryMinute,
                     triggerMinute: useOneMinuteTrigger ? 1 : 0,
                     observationMinutes: 180);
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");

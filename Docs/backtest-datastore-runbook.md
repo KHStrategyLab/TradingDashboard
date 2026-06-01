@@ -218,6 +218,7 @@ First-priority smoke test:
 ```powershell
 dotnet run -- --backtest-small-base-center-10m-3m
 dotnet run -- --backtest-small-base-center-10m-3m-1m
+dotnet run -- --backtest-small-base-center-15m-5m-1m
 ```
 
 Strategy:
@@ -249,6 +250,13 @@ Small base trading value >= 1,000,000,000 KRW
 1-minute trigger close > open
 1-minute trigger close > previous 1-minute high
 1-minute trigger volume >= previous 20-bar average volume * 1.2
+```
+
+Version roles:
+
+```text
+10m / 3m / 1m = aggressive
+15m / 5m / 1m = stable
 ```
 
 Quality metrics:

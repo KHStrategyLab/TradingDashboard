@@ -289,8 +289,25 @@ It is run with:
 ```powershell
 dotnet run -- --backtest-small-base-center-10m-3m
 dotnet run -- --backtest-small-base-center-10m-3m-1m
+dotnet run -- --backtest-small-base-center-15m-5m-1m
 ```
 
 This test uses a completed 10-minute MA60 recovery candle as the small base, then checks a completed 3-minute centerline pullback rebound. Results are evaluated by risk to the small-base low and R multiple, not by win rate alone.
 
 The 1-minute trigger variant keeps the 10-minute place and 3-minute support check, then uses a completed 1-minute bullish high-break candle as the final timing trigger.
+
+Role split:
+
+```text
+Large bar = place and direction.
+Middle bar = pullback and support.
+One-minute bar = trigger.
+Execution strength/speed = live confirmation.
+```
+
+Current variants:
+
+```text
+10m / 3m / 1m = aggressive
+15m / 5m / 1m = stable
+```
