@@ -21,6 +21,7 @@ Storage/StrategyAnchors/
 Storage/StrategyOrderJournal/
 Storage/StrategyPositions/
 Storage/StrategySlots/
+Storage/Alerts/
 Storage/ManualPositions/
 Storage/PaperPositions/
 Storage/PaperTradeMarks/

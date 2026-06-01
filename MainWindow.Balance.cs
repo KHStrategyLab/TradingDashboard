@@ -412,6 +412,7 @@ namespace TradingDashboard
             int restored = EnsureBalanceHoldingsTrackedInRealtimeMap();
             await RegisterRealtime0BForCurrentWatchlistAsync();
             AppendLog($"balance holdings tracking ready: {prepared}stocks / {newlyTracked + restored}new / 0B batch");
+            StartBalancePriorityChartDataPreload(BuildBalanceFirstStrategyPreloadList([]));
 
             if (_watchStocks.Count > 0)
                 StartStrategyMinuteAutoPreload(BuildBalanceFirstStrategyPreloadList(_watchStocks), immediate: true);

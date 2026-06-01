@@ -39,6 +39,7 @@ namespace TradingDashboard
         private readonly DartDisclosureService _disclosureService;
         private readonly DartDisclosureAlertService _disclosureAlertService;
         private readonly TelegramNotifier _telegramNotifier;
+        private readonly DailyStockAlertStore _dailyStockAlertStore = new();
         private readonly KiwoomRestConditionService _kiwoomConditionService;
         private readonly KiwoomTradingClient _tradingClient;
         private readonly TradingCostCalculator _tradingCostCalculator;
@@ -289,6 +290,7 @@ namespace TradingDashboard
 
             if (WatchListBox.SelectedItem is not ListBoxItem)
             {
+                ResetStartupChartPeriodToDaily();
                 WatchListBox.SelectedIndex = 0;
             }
         }

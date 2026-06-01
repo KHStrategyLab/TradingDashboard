@@ -45,7 +45,17 @@ namespace TradingDashboard
                     _conditionEnterAlertSentDate = now.Date;
                 }
 
-                return _conditionEnterAlertSentStockCodes.Add(stock.Code);
+                string code = NormalizeStockCode(stock.Code);
+                if (!_conditionEnterAlertSentStockCodes.Add(code))
+                    return false;
+
+                if (!_dailyStockAlertStore.TryReserveToday("condition_enter", code))
+                {
+                    _conditionEnterAlertSentStockCodes.Remove(code);
+                    return false;
+                }
+
+                return true;
             }
         }
 
@@ -55,7 +65,11 @@ namespace TradingDashboard
                 return;
 
             lock (_conditionEnterAlertLock)
-                _conditionEnterAlertSentStockCodes.Remove(code);
+            {
+                string normalizedCode = NormalizeStockCode(code);
+                _conditionEnterAlertSentStockCodes.Remove(normalizedCode);
+                _dailyStockAlertStore.ReleaseToday("condition_enter", normalizedCode);
+            }
         }
 
         private static string BuildConditionEnterAlertMessage(WatchStockItem stock, string source)

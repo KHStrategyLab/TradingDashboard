@@ -53,6 +53,14 @@ namespace TradingDashboard
                 MinuteChartComboBox.SelectedIndex = 0;
         }
 
+        private void ResetStartupChartPeriodToDaily()
+        {
+            _currentChartPeriod = ChartPeriod.Daily;
+            _currentChartDataPeriod = ChartPeriod.Daily;
+            ResetChartLoadMoreCount();
+            ResetMinuteChartComboSelection();
+        }
+
         private void WeekChartButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChartPeriod = ChartPeriod.Weekly;
@@ -372,6 +380,96 @@ namespace TradingDashboard
             {
                 Dispatcher.Invoke(() => AppendLog($"chart file cache preload skipped: {ex.Message}"));
             }
+        }
+
+        private void StartBalancePriorityChartDataPreload(IEnumerable<WatchStockItem> stocks)
+        {
+            List<ChartPreloadStock> snapshot = [.. (stocks ?? [])
+                .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
+                .GroupBy(stock => NormalizeStockCode(stock.Code), StringComparer.Ordinal)
+                .Select(group =>
+                {
+                    WatchStockItem stock = group.First();
+                    bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+                    return new ChartPreloadStock(stock.Code, useNxtMarket);
+                })];
+
+            if (snapshot.Count == 0)
+                return;
+
+            _ = PreloadBalancePriorityChartDataAsync(snapshot);
+        }
+
+        private async Task PreloadBalancePriorityChartDataAsync(IReadOnlyList<ChartPreloadStock> stocks)
+        {
+            var sw = Stopwatch.StartNew();
+            int loadedSets = 0;
+            Dispatcher.Invoke(() => AppendLog($"balance priority chart preload started: {stocks.Count}stocks / Day+1m+3m+5m"));
+
+            foreach (ChartPreloadStock stock in stocks)
+            {
+                try
+                {
+                    loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Daily, 0).ConfigureAwait(false);
+                    loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute1, 1).ConfigureAwait(false);
+                    loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute3, 3).ConfigureAwait(false);
+                    loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute5, 5).ConfigureAwait(false);
+                    Dispatcher.Invoke(() => AppendLog($"balance priority chart preload stock done: {stock.Code} / Day+1m+3m+5m"));
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.Invoke(() => AppendLog($"balance priority chart preload error: {stock.Code} / {ex.GetType().Name}: {ex.Message}"));
+                }
+            }
+
+            Dispatcher.Invoke(() => AppendReadyLog($"balance priority chart preload READY: {stocks.Count}stocks / {loadedSets}sets / {sw.ElapsedMilliseconds:N0}ms"));
+        }
+
+        private async Task<int> PreloadBalancePriorityChartPeriodAsync(ChartPreloadStock stock, ChartPeriod period, int minute)
+        {
+            int count = ResolveChartCandleCount(period);
+            ChartCacheKey key = CreateChartCacheKey(stock.Code, stock.UseNxtMarket, period);
+            if (TryGetChartMemoryCache(key, count, out _))
+                return 0;
+
+            if (period == ChartPeriod.Daily &&
+                TryGetChartFileCache(key, count, out List<ChartCandle> fileCachedCandles))
+            {
+                SetChartMemoryCache(key, fileCachedCandles, count);
+                return 1;
+            }
+
+            if (period == ChartPeriod.Daily)
+            {
+                List<DailyCandle> daily = await _kiwoomConditionService
+                    .GetDailyCandlesAsync(stock.Code, stock.UseNxtMarket, count, CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (daily.Count <= 0)
+                    return 0;
+
+                SetChartMemoryCache(key, daily.Select(ToChartCandle), count);
+                _chartCandleFileCacheStore.Upsert(
+                    stock.Code,
+                    stock.UseNxtMarket,
+                    ChartPeriod.Daily.ToString(),
+                    daily,
+                    ResolveChartFileCacheRetainCount(ChartPeriod.Daily));
+                _chartCandleFileCacheStore.Save();
+                return 1;
+            }
+
+            List<DailyCandle> minuteCandles = await _kiwoomConditionService
+                .GetMinuteCandlesAsync(stock.Code, minute, stock.UseNxtMarket, count)
+                .ConfigureAwait(false);
+            if (minuteCandles.Count <= 0)
+                return 0;
+
+            List<ChartCandle> chartCandles = [.. minuteCandles.TakeLast(count).Select(ToChartCandle)];
+            SetChartMemoryCache(key, chartCandles, count);
+
+            string market = stock.UseNxtMarket ? "NXT" : "KRX";
+            _strategyMinuteCacheService.Seed(stock.Code, market, minute, minuteCandles, Math.Min(count, Math.Max(1, minuteCandles.Count)));
+            return 1;
         }
 
         private static ChartCandle CloneChartCandle(ChartCandle c)

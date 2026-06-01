@@ -80,7 +80,17 @@ namespace TradingDashboard
                     _lateNewsSentDate = now.Date;
                 }
 
-                return _lateNewsSentStockCodes.Add(stock.Code);
+                string code = NormalizeStockCode(stock.Code);
+                if (!_lateNewsSentStockCodes.Add(code))
+                    return false;
+
+                if (!_dailyStockAlertStore.TryReserveToday("late_news", code))
+                {
+                    _lateNewsSentStockCodes.Remove(code);
+                    return false;
+                }
+
+                return true;
             }
         }
 
@@ -91,7 +101,9 @@ namespace TradingDashboard
 
             lock (_lateNewsLock)
             {
-                _lateNewsSentStockCodes.Remove(code);
+                string normalizedCode = NormalizeStockCode(code);
+                _lateNewsSentStockCodes.Remove(normalizedCode);
+                _dailyStockAlertStore.ReleaseToday("late_news", normalizedCode);
             }
         }
 
