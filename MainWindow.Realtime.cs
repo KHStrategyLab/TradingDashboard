@@ -19,7 +19,7 @@ namespace TradingDashboard
         {
             try
             {
-                if (_watchStocks.Count == 0 || !_config.Kiwoom.UseRestApi)
+                if (_watchStockByCode.Count == 0 || !_config.Kiwoom.UseRestApi)
                     return;
 
                 _realtimeCts?.Cancel();
@@ -593,14 +593,14 @@ namespace TradingDashboard
                 await RegisterRealtime0BAsync(_realtimeWs, _realtimeCts.Token);
         }
 
-        private async Task EnsureRealtime0BTrackingAsync(WatchStockItem stock, string source)
+        private async Task<bool> EnsureRealtime0BTrackingAsync(WatchStockItem stock, string source, bool registerImmediately = true)
         {
             if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
-                return;
+                return false;
 
             string code = NormalizeStockCode(stock.Code);
             if (string.IsNullOrWhiteSpace(code))
-                return;
+                return false;
 
             stock.Code = code;
             bool added = false;
@@ -623,10 +623,12 @@ namespace TradingDashboard
             }
 
             if (!added)
-                return;
+                return false;
 
             AppendLog($"0B tracking added: {stock.Name} ({code}) / {source}");
-            await RegisterRealtime0BForCurrentWatchlistAsync();
+            if (registerImmediately)
+                await RegisterRealtime0BForCurrentWatchlistAsync();
+            return true;
         }
 
         private void ApplyConditionRealtimeRemove(string code)
@@ -994,8 +996,8 @@ namespace TradingDashboard
                     : change > 0 ? _upColorBrush : change < 0 ? _downColorBrush : _whiteBrush;
                 stock.ApplyMiniDailyRealtimePrice(stock.CurrentPrice, ResolveMiniDailyBrush(stock.MiniDailyOpen, stock.CurrentPrice));
 
-                ProcessStrategySignalAlerts(stock, EvaluateEnabledStrategySlots(stock));
                 ProcessStrategyExitAlerts(stock);
+                ProcessStrategySignalAlerts(stock, EvaluateEnabledStrategySlots(stock));
 
                 if (code == _selectedStockCode)
                 {

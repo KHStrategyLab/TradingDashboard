@@ -363,6 +363,8 @@ namespace TradingDashboard
             List<KiwoomHolding> orderedHoldings = [.. (holdings ?? [])
                 .Where(item => item.HoldingQuantity > 0 && !string.IsNullOrWhiteSpace(item.StockCode))
                 .OrderByDescending(item => Math.Abs(item.EvaluationAmount))];
+            int newlyTracked = 0;
+            int prepared = 0;
 
             for (int i = orderedHoldings.Count - 1; i >= 0; i--)
             {
@@ -398,9 +400,58 @@ namespace TradingDashboard
                 if (stock.CurrentPrice <= 0 && holding.CurrentPrice > 0)
                     stock.CurrentPrice = holding.CurrentPrice;
 
-                await EnsureRealtime0BTrackingAsync(stock, "balance");
+                if (await EnsureRealtime0BTrackingAsync(stock, "balance", registerImmediately: false))
+                    newlyTracked++;
+                prepared++;
                 AddRecentViewedStock(stock);
             }
+
+            if (prepared == 0)
+                return;
+
+            int restored = EnsureBalanceHoldingsTrackedInRealtimeMap();
+            await RegisterRealtime0BForCurrentWatchlistAsync();
+            AppendLog($"balance holdings tracking ready: {prepared}stocks / {newlyTracked + restored}new / 0B batch");
+
+            if (_watchStocks.Count > 0)
+                StartStrategyMinuteAutoPreload(BuildBalanceFirstStrategyPreloadList(_watchStocks), immediate: true);
+        }
+
+        private int EnsureBalanceHoldingsTrackedInRealtimeMap()
+        {
+            int added = 0;
+            foreach (KiwoomHolding holding in _balanceHoldings
+                .Where(item => item.HoldingQuantity > 0 && !string.IsNullOrWhiteSpace(item.StockCode)))
+            {
+                string code = NormalizeStockCode(holding.StockCode);
+                if (string.IsNullOrWhiteSpace(code))
+                    continue;
+
+                WatchStockItem? recent = _recentViewedStocks
+                    .FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
+
+                if (_watchStockByCode.TryGetValue(code, out WatchStockItem? existing))
+                {
+                    if (recent != null)
+                        MergeBalanceStockMetadata(existing, recent);
+                    if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
+                        existing.Name = holding.StockName;
+                    if (existing.CurrentPrice <= 0 && holding.CurrentPrice > 0)
+                        existing.CurrentPrice = holding.CurrentPrice;
+                    continue;
+                }
+
+                WatchStockItem stock = recent ?? new WatchStockItem { Code = code };
+                if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
+                    stock.Name = holding.StockName;
+                if (stock.CurrentPrice <= 0 && holding.CurrentPrice > 0)
+                    stock.CurrentPrice = holding.CurrentPrice;
+
+                _watchStockByCode[code] = stock;
+                added++;
+            }
+
+            return added;
         }
 
         private static void MergeBalanceStockMetadata(WatchStockItem target, WatchStockItem source)

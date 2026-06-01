@@ -1674,6 +1674,14 @@
                                     <ComboBoxItem Content="60min" Tag="Minute60"/>
                                     <ComboBoxItem Content="120min" Tag="Minute120"/>
                                 </ComboBox>
+                                <Button x:Name="ChartLoadMoreButton"
+                                        Content="+100"
+                                        Width="50"
+                                        Height="24"
+                                        Margin="4,0,0,0"
+                                        ToolTip="현재 분봉 차트 데이터를 100봉 더 가져오기"
+                                        Style="{StaticResource ToolbarButtonStyle}"
+                                        Click="ChartLoadMoreButton_Click"/>
                             </StackPanel>
                         </Grid>
                     </Border>

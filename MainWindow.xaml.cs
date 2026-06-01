@@ -105,8 +105,8 @@ namespace TradingDashboard
         private readonly HashSet<string> _conditionEnterAlertSentStockCodes = new(StringComparer.Ordinal);
         private readonly object _conditionEnterAlertLock = new();
         private DateTime _conditionEnterAlertSentDate = DateTime.Today;
-        private const int OneMinuteChartCandleCount = 240;
-        private const int MinuteChartCandleCount = 700;
+        private const int MinuteChartCandleCount = 240;
+        private const int ChartLoadMoreCandleStep = 100;
         private const int DailyChartRealtimeDrawIntervalMs = 350;
         private const int MinuteChartRealtimeDrawIntervalMs = 1500;
         private const int MaxChartMemoryCacheEntries = 200;
@@ -142,6 +142,7 @@ namespace TradingDashboard
         private Point _chartDragStartPoint;
         private int _chartViewStartIndex;
         private int _chartViewCount;
+        private int _chartAdditionalCandleCount;
         private string _selectedStockCode = string.Empty;
         private long _buyTradeVolume;
         private long _sellTradeVolume;
@@ -256,6 +257,13 @@ namespace TradingDashboard
                     "Choosing KRX/NXT mode before loading watchlist");
                 await PrimeMarketStatusBeforeWatchlistAsync();
 
+                SetStartupLoading(
+                    true,
+                    "Loading holdings first...",
+                    "Open positions are checked before new candidates",
+                    "Balance and risk view have priority over watchlist");
+                await RefreshBalanceAsync("startup priority");
+
                 string conditionLabel = GetConfiguredConditionLabel();
                 SetStartupLoading(
                     true,
@@ -269,7 +277,6 @@ namespace TradingDashboard
                     $"{_watchStocks.Count} watchlist stocks ready",
                     "News and filings will continue in the background");
                 _ = LoadMarketNewsAfterStartupDelayAsync();
-                _ = RefreshBalanceAsync("startup");
             }
             finally
             {
@@ -403,7 +410,7 @@ namespace TradingDashboard
                 AppendLog($"condition result {stocks.Count}items / gate pass {gatedStocks.Count}items applied");
                 ScheduleWatchlistBasePriceRefresh(gatedStocks, TimeSpan.FromSeconds(30));
                 StartInitialChartFileCachePreload(gatedStocks);
-                StartStrategyMinuteAutoPreload(gatedStocks);
+                StartStrategyMinuteAutoPreload(BuildBalanceFirstStrategyPreloadList(gatedStocks));
                 _ = StartRealtimeTradeAsync();
             }
             catch (Exception ex)
@@ -632,7 +639,7 @@ namespace TradingDashboard
             AppendLog($"{reason}, watchlist cache {cachedStocks.Count}items applied");
             ScheduleWatchlistBasePriceRefresh(cachedStocks, TimeSpan.FromSeconds(30));
             StartInitialChartFileCachePreload(cachedStocks);
-            StartStrategyMinuteAutoPreload(cachedStocks);
+            StartStrategyMinuteAutoPreload(BuildBalanceFirstStrategyPreloadList(cachedStocks));
             _ = StartRealtimeTradeAsync();
             return true;
         }
@@ -694,6 +701,9 @@ namespace TradingDashboard
             _watchStockByCode.Clear();
             if (cleanStocks.Count == 0)
             {
+                int emptyListBalanceTracked = EnsureBalanceHoldingsTrackedInRealtimeMap();
+                if (emptyListBalanceTracked > 0)
+                    AppendLog($"balance holdings kept in 0B tracking map: {emptyListBalanceTracked}stocks");
                 AppendLog("left list refreshed: 0items");
                 return;
             }
@@ -715,7 +725,46 @@ namespace TradingDashboard
                     _watchStockByCode[stock.Code] = stock;
             }
 
+            int balanceTracked = EnsureBalanceHoldingsTrackedInRealtimeMap();
+            if (balanceTracked > 0)
+                AppendLog($"balance holdings kept in 0B tracking map: {balanceTracked}stocks");
+
             AppendLog("left list refreshed");
+        }
+
+        private List<WatchStockItem> BuildBalanceFirstStrategyPreloadList(IEnumerable<WatchStockItem> candidateStocks)
+        {
+            var result = new List<WatchStockItem>();
+            var seenCodes = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (KiwoomHolding holding in _balanceHoldings
+                .Where(item => item.HoldingQuantity > 0 && !string.IsNullOrWhiteSpace(item.StockCode))
+                .OrderByDescending(item => Math.Abs(item.EvaluationAmount)))
+            {
+                string code = NormalizeStockCode(holding.StockCode);
+                if (string.IsNullOrWhiteSpace(code) || !seenCodes.Add(code))
+                    continue;
+
+                WatchStockItem? stock = _watchStockByCode.TryGetValue(code, out WatchStockItem? tracked)
+                    ? tracked
+                    : _recentViewedStocks.FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
+
+                if (stock == null)
+                    continue;
+
+                result.Add(stock);
+            }
+
+            foreach (WatchStockItem stock in candidateStocks ?? [])
+            {
+                string code = NormalizeStockCode(stock.Code);
+                if (string.IsNullOrWhiteSpace(code) || !seenCodes.Add(code))
+                    continue;
+
+                result.Add(stock);
+            }
+
+            return result;
         }
 
         private void LoadWatchlistCache()
@@ -1357,6 +1406,7 @@ namespace TradingDashboard
             _currentChartCandles.Clear();
             _currentChartCode = string.Empty;
             _lastRealtimeChartDrawAt = DateTime.MinValue;
+            ResetChartLoadMoreCount();
             ClearSelectedChartVisuals();
             HogaStatusText.Text = "Price - / Rate - / 0D -";
             UpdateHogaSummary(0, 0);

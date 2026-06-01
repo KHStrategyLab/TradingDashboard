@@ -19,6 +19,7 @@ namespace TradingDashboard
         private void DayChartButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChartPeriod = ChartPeriod.Daily;
+            ResetChartLoadMoreCount();
             ResetMinuteChartComboSelection();
             StartSelectedChartRender();
         }
@@ -31,6 +32,7 @@ namespace TradingDashboard
             if (Enum.TryParse(selected, out ChartPeriod period) && IsMinuteChartPeriod(period))
             {
                 _currentChartPeriod = period;
+                ResetChartLoadMoreCount();
                 StartSelectedChartRender();
             }
         }
@@ -54,6 +56,7 @@ namespace TradingDashboard
         private void WeekChartButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChartPeriod = ChartPeriod.Weekly;
+            ResetChartLoadMoreCount();
             ResetMinuteChartComboSelection();
             StartSelectedChartRender();
         }
@@ -61,8 +64,23 @@ namespace TradingDashboard
         private void MonthChartButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChartPeriod = ChartPeriod.Monthly;
+            ResetChartLoadMoreCount();
             ResetMinuteChartComboSelection();
             StartSelectedChartRender();
+        }
+
+        private void ChartLoadMoreButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!IsMinuteChartPeriod(_currentChartPeriod))
+                return;
+
+            _chartAdditionalCandleCount += ChartLoadMoreCandleStep;
+            StartSelectedChartRender();
+        }
+
+        private void ResetChartLoadMoreCount()
+        {
+            _chartAdditionalCandleCount = 0;
         }
 
         private void StartSelectedChartRender()
@@ -88,7 +106,7 @@ namespace TradingDashboard
             if (MainChartHost == null || VolumeChartHost == null)
                 return;
 
-            int count = ResolveChartCandleCount(_currentChartPeriod);
+            int count = ResolveCurrentChartCandleCount(_currentChartPeriod);
 
             if (string.IsNullOrWhiteSpace(selectedStockCode))
                 return;
@@ -145,7 +163,7 @@ namespace TradingDashboard
                 if (candles.Count == 0)
                     return;
 
-                SetChartMemoryCache(cacheKey, candles);
+                SetChartMemoryCache(cacheKey, candles, count);
                 ApplyChartCandles(candles, selectedStockCode, requestedPeriod, showedCachedChart ? $"{marketLabel} refresh" : $"{marketLabel} initial");
             }
             catch (OperationCanceledException)
@@ -518,7 +536,7 @@ namespace TradingDashboard
                 };
 
                 _currentChartCandles.Add(last);
-                if (_currentChartCandles.Count > ResolveChartCandleCount(period))
+                if (_currentChartCandles.Count > ResolveCurrentChartCandleCount(period))
                 {
                     _currentChartCandles.RemoveAt(0);
                     _chartViewStartIndex = Math.Max(0, _chartViewStartIndex - 1);
@@ -610,7 +628,7 @@ namespace TradingDashboard
                 };
 
                 _currentChartCandles.Add(last);
-                if (_currentChartCandles.Count > ResolveChartCandleCount(_currentChartDataPeriod))
+                if (_currentChartCandles.Count > ResolveCurrentChartCandleCount(_currentChartDataPeriod))
                 {
                     _currentChartCandles.RemoveAt(0);
                     _chartViewStartIndex = Math.Max(0, _chartViewStartIndex - 1);
@@ -966,6 +984,15 @@ namespace TradingDashboard
             };
         }
 
+        private int ResolveCurrentChartCandleCount(ChartPeriod period)
+        {
+            int baseCount = ResolveChartCandleCount(period);
+            if (!IsMinuteChartPeriod(period))
+                return baseCount;
+
+            return Math.Max(1, baseCount + Math.Max(0, _chartAdditionalCandleCount));
+        }
+
         private static int ResolveChartCandleCount(ChartPeriod period)
         {
             return period switch
@@ -973,7 +1000,6 @@ namespace TradingDashboard
                 ChartPeriod.Daily => 120,
                 ChartPeriod.Weekly => 100,
                 ChartPeriod.Monthly => 60,
-                ChartPeriod.Minute1 => OneMinuteChartCandleCount,
                 _ when IsMinuteChartPeriod(period) => MinuteChartCandleCount,
                 _ => 120
             };
