@@ -109,5 +109,7 @@ namespace TradingDashboard.Models
         public int CandidateConditionIndex { get; set; } = 23;
         public string CandidateConditionName { get; set; } = "120일내_20퍼_500억";
         public string CandidateSourceName { get; set; } = "120일내_20퍼_500억";
+        public int[] MinuteIntervals { get; set; } = [1, 3, 5, 10, 15, 30];
+        public int MinuteFetchCount { get; set; } = 1200;
     }
 }

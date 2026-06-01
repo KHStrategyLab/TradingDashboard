@@ -116,12 +116,58 @@ These files are local runtime data and are ignored by Git.
 
 ## Next Step
 
-Wire a small operator-only trigger after the candidate import format is confirmed.
+The daily operator trigger is:
 
-The trigger should call:
+```powershell
+dotnet run -- --backtest-daily-datastore
+```
+
+The minute operator trigger is:
+
+```powershell
+dotnet run -- --backtest-minute-datastore
+```
+
+The minute trigger reads:
 
 ```text
-BacktestDailyDataStoreJob.RunAsync(...)
+Storage/Backtests/DataStore/base_candles/verified_base_candles.json
+```
+
+Then it downloads only configured intervals for stock/market pairs that have verified base candles:
+
+```text
+Backtest.MinuteIntervals = 1, 3, 5, 10, 15, 30
+Backtest.MinuteFetchCount = 1200
+```
+
+Minute bars are upserted into:
+
+```text
+Storage/Backtests/DataStore/minute/{minute}m/{Code}_{Market}_{minute}m.json
+Storage/Backtests/DataStore/metadata/last_minute_update_summary.json
+Storage/Backtests/DataStore/metadata/minute_update_summary_{RunId}.json
 ```
 
 Keep it off the live Engine Start path.
+
+## Run Results
+
+Strategy execution results must be stored separately from DataStore source data.
+
+Use:
+
+```text
+BacktestRunStore.SaveRun(...)
+```
+
+Output:
+
+```text
+Storage/Backtests/Runs/{RunId}/signals.csv
+Storage/Backtests/Runs/{RunId}/trades.csv
+Storage/Backtests/Runs/{RunId}/summaries.json
+Storage/Backtests/Runs/{RunId}/strategy_comparison.csv
+```
+
+Do not write strategy outputs back into `DataStore`.

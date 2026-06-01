@@ -201,12 +201,19 @@ Models/BacktestCandidate.cs
 Models/BacktestDailyBar.cs
 Models/BacktestBaseCandle.cs
 Models/BacktestDatasetUpdateSummary.cs
+Models/BacktestMinuteBar.cs
+Models/BacktestMinuteDataStoreSummary.cs
+Models/BacktestSignalRow.cs
+Models/BacktestTradeRow.cs
+Models/BacktestRunSummary.cs
 Services/Backtests/BacktestCandidateImportService.cs
 Services/Backtests/BacktestConditionCandidateLoader.cs
 Services/Backtests/BacktestDataStore.cs
 Services/Backtests/DailyBaseCandleVerifier.cs
 Services/Backtests/BacktestDatasetBuilder.cs
 Services/Backtests/BacktestDailyDataStoreJob.cs
+Services/Backtests/BacktestMinuteDataStoreJob.cs
+Services/Backtests/BacktestRunStore.cs
 Docs/backtest-datastore-runbook.md
 ```
 
@@ -239,4 +246,27 @@ Operator command:
 
 ```powershell
 dotnet run -- --backtest-daily-datastore
+```
+
+The minute DataStore operator command is:
+
+```powershell
+dotnet run -- --backtest-minute-datastore
+```
+
+It uses verified base-candle rows only, keeps minute data under `Storage/Backtests/DataStore/minute/`, and upserts by code, market, minute interval, and candle time.
+
+Run result storage is prepared under:
+
+```text
+Storage/Backtests/Runs/{RunId}/
+```
+
+The run store writes:
+
+```text
+signals.csv
+trades.csv
+summaries.json
+strategy_comparison.csv
 ```

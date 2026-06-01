@@ -30,6 +30,12 @@ namespace TradingDashboard.Services.Backtests
                 return LoadList<BacktestDailyBar>(BuildDailyPath(code, market));
         }
 
+        public IReadOnlyList<BacktestMinuteBar> LoadMinuteBars(string code, string market, int minute)
+        {
+            lock (_sync)
+                return LoadList<BacktestMinuteBar>(BuildMinutePath(code, market, minute));
+        }
+
         public int UpsertDailyBars(string code, string market, IEnumerable<BacktestDailyBar> bars)
         {
             List<BacktestDailyBar> incoming = [.. (bars ?? [])
@@ -62,6 +68,35 @@ namespace TradingDashboard.Services.Backtests
         {
             lock (_sync)
                 return LoadList<BacktestBaseCandle>(BuildBaseCandlePath());
+        }
+
+        public int UpsertMinuteBars(string code, string market, int minute, IEnumerable<BacktestMinuteBar> bars)
+        {
+            List<BacktestMinuteBar> incoming = [.. (bars ?? [])
+                .Where(bar => bar != null && !string.IsNullOrWhiteSpace(bar.DateTime))];
+            if (incoming.Count == 0 || minute <= 0)
+                return 0;
+
+            lock (_sync)
+            {
+                string path = BuildMinutePath(code, market, minute);
+                Dictionary<string, BacktestMinuteBar> merged = LoadList<BacktestMinuteBar>(path)
+                    .Where(bar => !string.IsNullOrWhiteSpace(bar.DateTime))
+                    .ToDictionary(bar => bar.DateTime, StringComparer.Ordinal);
+
+                string now = DateTime.Now.ToString("yyyyMMddHHmmss");
+                foreach (BacktestMinuteBar bar in incoming)
+                {
+                    bar.Code = NormalizeCode(string.IsNullOrWhiteSpace(bar.Code) ? code : bar.Code);
+                    bar.Market = NormalizeMarket(string.IsNullOrWhiteSpace(bar.Market) ? market : bar.Market);
+                    bar.Minute = minute;
+                    bar.UpdatedAt = now;
+                    merged[bar.DateTime] = bar;
+                }
+
+                SaveList(path, merged.Values.OrderBy(bar => bar.DateTime).ToList());
+                return incoming.Count;
+            }
         }
 
         public int UpsertBaseCandles(IEnumerable<BacktestBaseCandle> events)
@@ -104,6 +139,9 @@ namespace TradingDashboard.Services.Backtests
 
         public string BuildDailyPath(string code, string market) =>
             Path.Combine(_rootPath, "daily", $"{NormalizeCode(code)}_{NormalizeMarket(market)}_daily.json");
+
+        public string BuildMinutePath(string code, string market, int minute) =>
+            Path.Combine(_rootPath, "minute", $"{Math.Max(1, minute)}m", $"{NormalizeCode(code)}_{NormalizeMarket(market)}_{Math.Max(1, minute)}m.json");
 
         private string BuildBaseCandlePath() =>
             Path.Combine(_rootPath, "base_candles", "verified_base_candles.json");
