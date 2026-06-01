@@ -275,6 +275,16 @@ Paper Trading:
 - `겹침 매수 ON`에서는 같은 종목의 다른 Slot 신호를 막지 않는다. 같은 종목+같은 Slot의 당일 재진입만 막는다.
 - 런타임 장부 `Storage/StrategyMinuteSeeds`, `Storage/StrategyAnchors`, `Storage/StrategyOrderJournal`, `Storage/StrategyPositions`, `Storage/ManualPositions`, `Storage/PaperPositions`, `Storage/PaperTradeMarks`는 GitHub 백업 대상이 아니다.
 
+백테스트 데이터 누적 관리:
+
+- 상세 기준은 `Docs/backtest-data-management-principles.md`를 따른다.
+- 백테스트 일봉/분봉 데이터는 `Storage/Backtests/DataStore/`에 누적 보관하고, 전략 실행 결과는 `Storage/Backtests/Runs/{RunId}/`에 분리 저장한다.
+- 기존에 받은 일봉/분봉은 삭제하거나 초기화하지 않는다. 오늘 새 봉은 같은 키가 있으면 upsert로 갱신한다.
+- 장중 오늘 봉은 `Provisional`, 장마감 후 확정 봉은 `Confirmed`로 저장한다. 확정 리포트는 기본적으로 `Confirmed` 데이터만 사용한다.
+- 전략을 바꾸거나 청산 조건을 바꿔도 기존 데이터는 다시 다운로드하지 않는다. 부족한 종목, 누락 날짜, 필요한 분봉 구간만 추가 다운로드한다.
+- 기준봉 검증 전에 전체 분봉을 무차별 다운로드하지 않는다. 기준봉이 확인된 종목만 기준봉 이후 필요한 분봉 구간을 부분 다운로드한다.
+- 백테스트 머신은 실시간 자동매수 로직과 연결하지 않는다. 실주문 발생은 금지다.
+
 전략별 기억값은 공통 장부에 넣지 않는다.
 
 예:

@@ -23,6 +23,7 @@ Storage/StrategyPositions/
 Storage/ManualPositions/
 Storage/PaperPositions/
 Storage/PaperTradeMarks/
+Storage/Backtests/
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
