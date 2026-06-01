@@ -35,7 +35,15 @@ namespace TradingDashboard
 
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-ten-pullback-five-breakout", StringComparison.OrdinalIgnoreCase)))
             {
-                int exitCode = RunTenPullbackFiveBreakoutBacktest();
+                int exitCode = RunTenPullbackFiveBreakoutBacktest(6);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-ten-pullback-five-breakout-3h", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunTenPullbackFiveBreakoutBacktest(36);
                 Shutdown(exitCode);
                 Environment.Exit(exitCode);
                 return;
@@ -94,12 +102,12 @@ namespace TradingDashboard
             WriteBacktestJobSummary(summary, "last_daily_update_summary.json", $"daily_update_summary_{summary.RunId}.json");
         }
 
-        private static int RunTenPullbackFiveBreakoutBacktest()
+        private static int RunTenPullbackFiveBreakoutBacktest(int holdingBars)
         {
             try
             {
                 var backtest = new TenMinutePullbackFiveMinuteBreakoutBacktest();
-                BacktestRunResult result = backtest.Run();
+                BacktestRunResult result = backtest.Run(holdingBars);
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 0;
             }

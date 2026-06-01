@@ -178,6 +178,7 @@ Operator command:
 
 ```powershell
 dotnet run -- --backtest-ten-pullback-five-breakout
+dotnet run -- --backtest-ten-pullback-five-breakout-3h
 ```
 
 Strategy:
@@ -194,16 +195,18 @@ Rules:
 3. 10-minute bars must have crossed down from MA60 and still be below MA60.
 4. Current 5-minute bar must be bullish.
 5. Current 5-minute close must break the previous 20 completed 5-minute bars' highest close.
-6. Current 5-minute open must still be at or below that previous high-close price.
+6. Current 5-minute open must be inside the previous high-close candle's range.
 7. Current 5-minute volume must exceed the volume of the previous high-close bar.
-8. If six same-day 5-minute bars are not available after entry, skip the signal.
+8. If the requested same-day holding window is not available after entry, skip the signal.
 ```
 
 Observation exit:
 
 ```text
-Hold for the next six same-day 5-minute bars.
-Record MaxHigh, MinLow, MFE, MAE, and the 30-minute exit close.
+Hold for the requested same-day 5-minute bar count.
+30-minute smoke test: 6 bars.
+3-hour smoke test: 36 bars.
+Record MaxHigh, MinLow, MFE, MAE, and the holding-window exit close.
 ```
 
 This is a signal-quality test, not a live strategy.

@@ -277,6 +277,7 @@ It is run with:
 
 ```powershell
 dotnet run -- --backtest-ten-pullback-five-breakout
+dotnet run -- --backtest-ten-pullback-five-breakout-3h
 ```
 
-It measures signal quality by holding for six same-day 5-minute bars and recording the 30-minute high/low range. It is not connected to live trading.
+It measures signal quality by holding for a same-day observation window and recording high/low range. The 30-minute command uses six 5-minute bars, and the 3-hour command uses thirty-six 5-minute bars. It is not connected to live trading.

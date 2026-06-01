@@ -8,7 +8,6 @@ namespace TradingDashboard.Services.Backtests
     public sealed class TenMinutePullbackFiveMinuteBreakoutBacktest
     {
         public const string StrategyCode = "TEN_MA60_PULLBACK_FIVE_HIGH20_BREAK";
-        private const string ExitRuleCode = "HOLD_30M_HIGH_LOW";
         private readonly BacktestDataStore _dataStore;
         private readonly BacktestRunStore _runStore;
 
@@ -20,9 +19,12 @@ namespace TradingDashboard.Services.Backtests
             _runStore = runStore ?? new BacktestRunStore();
         }
 
-        public BacktestRunResult Run()
+        public BacktestRunResult Run(int holdingBars = 6)
         {
-            string runId = _runStore.CreateRunId("ten_ma60_pullback_five_high20_hold30");
+            int resolvedHoldingBars = Math.Max(1, holdingBars);
+            int holdingMinutes = resolvedHoldingBars * 5;
+            string exitRuleCode = $"HOLD_{holdingMinutes}M_HIGH_LOW";
+            string runId = _runStore.CreateRunId($"ten_ma60_pullback_five_high20_hold{holdingMinutes}");
             List<BacktestSignalRow> signals = [];
             List<BacktestTradeRow> trades = [];
 
@@ -45,13 +47,13 @@ namespace TradingDashboard.Services.Backtests
                     .Where(bar => IsAfterBase(bar.DateTime, group.BaseDate))
                     .OrderBy(bar => bar.DateTime)];
 
-                if (tenBars.Count < 61 || fiveBars.Count < 27)
+                if (tenBars.Count < 61 || fiveBars.Count < 21 + resolvedHoldingBars)
                     continue;
 
                 Dictionary<string, TenState> tenStateByTime = BuildTenStateMap(tenBars);
                 int skipUntilIndex = -1;
 
-                for (int i = 20; i < fiveBars.Count - 6; i++)
+                for (int i = 20; i < fiveBars.Count - resolvedHoldingBars; i++)
                 {
                     if (i <= skipUntilIndex)
                         continue;
@@ -73,19 +75,19 @@ namespace TradingDashboard.Services.Backtests
                     if (!IsBreakoutSignal(current, highCloseBar))
                         continue;
 
-                    List<BacktestMinuteBar> holdingBars = ResolveHoldingBars(fiveBars, i, 6);
-                    if (holdingBars.Count < 6)
+                    List<BacktestMinuteBar> holdingWindow = ResolveHoldingBars(fiveBars, i, resolvedHoldingBars);
+                    if (holdingWindow.Count < resolvedHoldingBars)
                         continue;
 
-                    long maxHigh = holdingBars.Max(bar => bar.High);
-                    long minLow = holdingBars.Min(bar => bar.Low);
-                    BacktestMinuteBar exitBar = holdingBars.Last();
+                    long maxHigh = holdingWindow.Max(bar => bar.High);
+                    long minLow = holdingWindow.Min(bar => bar.Low);
+                    BacktestMinuteBar exitBar = holdingWindow.Last();
                     long entryPrice = current.Close;
                     decimal mfe = entryPrice > 0 ? (maxHigh - entryPrice) / (decimal)entryPrice * 100m : 0m;
                     decimal mae = entryPrice > 0 ? (minLow - entryPrice) / (decimal)entryPrice * 100m : 0m;
                     decimal exitRate = entryPrice > 0 ? (exitBar.Close - entryPrice) / (decimal)entryPrice * 100m : 0m;
 
-                    string reason = $"10m MA60 below after down-cross; 5m close>{highCloseBar.Close} high20 close; vol {current.Volume}>{highCloseBar.Volume}; gap<{1m:0.##}%";
+                    string reason = $"10m MA60 below after down-cross; 5m open inside high20 candle {highCloseBar.Low}-{highCloseBar.High}; close>{highCloseBar.Close}; vol {current.Volume}>{highCloseBar.Volume}; gap<1%";
                     signals.Add(new BacktestSignalRow
                     {
                         RunId = runId,
@@ -102,7 +104,7 @@ namespace TradingDashboard.Services.Backtests
                     {
                         RunId = runId,
                         StrategyCode = StrategyCode,
-                        ExitRuleCode = ExitRuleCode,
+                        ExitRuleCode = exitRuleCode,
                         Code = group.Code,
                         Market = group.Market,
                         EntryTime = current.DateTime,
@@ -116,16 +118,16 @@ namespace TradingDashboard.Services.Backtests
                         ProfitAmount = exitBar.Close - entryPrice,
                         Mae = mae,
                         Mfe = mfe,
-                        HoldingMinutes = 30,
+                        HoldingMinutes = holdingMinutes,
                         EntryReason = reason,
-                        ExitReason = "30-minute observation window"
+                        ExitReason = $"{holdingMinutes}-minute observation window"
                     });
 
-                    skipUntilIndex = i + 6;
+                    skipUntilIndex = i + resolvedHoldingBars;
                 }
             }
 
-            BacktestRunSummary summary = BuildSummary(runId, signals, trades);
+            BacktestRunSummary summary = BuildSummary(runId, exitRuleCode, signals, trades);
             string outputDirectory = _runStore.SaveRun(runId, signals, trades, [summary]);
             return new BacktestRunResult(runId, outputDirectory, signals.Count, trades.Count, summary);
         }
@@ -136,7 +138,7 @@ namespace TradingDashboard.Services.Backtests
                 return false;
             if (current.Close <= highCloseBar.Close)
                 return false;
-            if (current.Open > highCloseBar.Close)
+            if (current.Open < highCloseBar.Low || current.Open > highCloseBar.High)
                 return false;
             if (current.Open >= highCloseBar.Close * 1.01m)
                 return false;
@@ -201,7 +203,7 @@ namespace TradingDashboard.Services.Backtests
             return true;
         }
 
-        private static BacktestRunSummary BuildSummary(string runId, IReadOnlyList<BacktestSignalRow> signals, IReadOnlyList<BacktestTradeRow> trades)
+        private static BacktestRunSummary BuildSummary(string runId, string exitRuleCode, IReadOnlyList<BacktestSignalRow> signals, IReadOnlyList<BacktestTradeRow> trades)
         {
             int wins = trades.Count(trade => trade.ProfitRate > 0);
             List<decimal> profits = [.. trades.Where(trade => trade.ProfitRate > 0).Select(trade => trade.ProfitRate)];
@@ -211,7 +213,7 @@ namespace TradingDashboard.Services.Backtests
             {
                 RunId = runId,
                 StrategyCode = StrategyCode,
-                ExitRuleCode = ExitRuleCode,
+                ExitRuleCode = exitRuleCode,
                 SignalCount = signals.Count,
                 TradeCount = trades.Count,
                 WinRate = trades.Count > 0 ? wins / (decimal)trades.Count * 100m : 0m,
