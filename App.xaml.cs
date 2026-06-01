@@ -51,7 +51,15 @@ namespace TradingDashboard
 
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-center-10m-3m", StringComparison.OrdinalIgnoreCase)))
             {
-                int exitCode = RunSmallBaseCenterPullbackBacktest();
+                int exitCode = RunSmallBaseCenterPullbackBacktest(useOneMinuteTrigger: false);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-center-10m-3m-1m", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunSmallBaseCenterPullbackBacktest(useOneMinuteTrigger: true);
                 Shutdown(exitCode);
                 Environment.Exit(exitCode);
                 return;
@@ -131,12 +139,16 @@ namespace TradingDashboard
             }
         }
 
-        private static int RunSmallBaseCenterPullbackBacktest()
+        private static int RunSmallBaseCenterPullbackBacktest(bool useOneMinuteTrigger)
         {
             try
             {
                 var backtest = new SmallBaseCenterPullbackBacktest();
-                BacktestRunResult result = backtest.Run(baseMinute: 10, entryMinute: 3, observationMinutes: 180);
+                BacktestRunResult result = backtest.Run(
+                    baseMinute: 10,
+                    entryMinute: 3,
+                    triggerMinute: useOneMinuteTrigger ? 1 : 0,
+                    observationMinutes: 180);
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 0;
             }

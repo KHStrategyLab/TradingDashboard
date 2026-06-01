@@ -217,6 +217,7 @@ First-priority smoke test:
 
 ```powershell
 dotnet run -- --backtest-small-base-center-10m-3m
+dotnet run -- --backtest-small-base-center-10m-3m-1m
 ```
 
 Strategy:
@@ -229,7 +230,8 @@ Rules:
 
 ```text
 Base candle: completed 10-minute bar
-Entry candle: completed 3-minute bar
+Support candle: completed 3-minute bar
+Optional trigger candle: completed 1-minute bar
 Observation window: same-day 180 minutes
 Stop reference: small base candle low
 
@@ -241,9 +243,12 @@ Small base rise >= 1.0%
 Small base trading value >= 1,000,000,000 KRW
 
 3-minute entry close between small base center and small base close
-3-minute entry close > open
-3-minute entry close > previous 3-minute high
 3-minute volume >= previous 20-bar average volume * 1.2
+
+1-minute trigger variant:
+1-minute trigger close > open
+1-minute trigger close > previous 1-minute high
+1-minute trigger volume >= previous 20-bar average volume * 1.2
 ```
 
 Quality metrics:

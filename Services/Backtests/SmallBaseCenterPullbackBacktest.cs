@@ -22,14 +22,17 @@ namespace TradingDashboard.Services.Backtests
         public BacktestRunResult Run(
             int baseMinute = 10,
             int entryMinute = 3,
+            int triggerMinute = 0,
             int observationMinutes = 180,
             decimal baseRisePercent = 1.0m,
             long baseTradingValueWon = 1_000_000_000,
-            decimal entryVolumeMultiplier = 1.2m)
+            decimal entryVolumeMultiplier = 1.2m,
+            decimal triggerVolumeMultiplier = 1.2m)
         {
-            int holdingBars = Math.Max(1, observationMinutes / Math.Max(1, entryMinute));
+            int resolvedTriggerMinute = triggerMinute > 0 ? triggerMinute : entryMinute;
+            int holdingBars = Math.Max(1, observationMinutes / Math.Max(1, resolvedTriggerMinute));
             string exitRuleCode = $"OBSERVE_{observationMinutes}M_R";
-            string runId = _runStore.CreateRunId($"small_base_center_{baseMinute}m_{entryMinute}m_hold{observationMinutes}");
+            string runId = _runStore.CreateRunId($"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_hold{observationMinutes}");
             List<BacktestSignalRow> signals = [];
             List<BacktestTradeRow> trades = [];
 
@@ -51,34 +54,42 @@ namespace TradingDashboard.Services.Backtests
                 List<BacktestMinuteBar> entryBars = [.. _dataStore.LoadMinuteBars(group.Code, group.Market, entryMinute)
                     .Where(bar => IsAfterBase(bar.DateTime, group.BaseDate))
                     .OrderBy(bar => bar.DateTime)];
+                List<BacktestMinuteBar> triggerBars = resolvedTriggerMinute == entryMinute
+                    ? entryBars
+                    : [.. _dataStore.LoadMinuteBars(group.Code, group.Market, resolvedTriggerMinute)
+                        .Where(bar => IsAfterBase(bar.DateTime, group.BaseDate))
+                        .OrderBy(bar => bar.DateTime)];
 
-                if (baseBars.Count < 61 || entryBars.Count < 22 + holdingBars)
+                if (baseBars.Count < 61 || entryBars.Count < 22 || triggerBars.Count < 22 + holdingBars)
                     continue;
 
                 Dictionary<string, BaseState> baseStates = BuildBaseStateMap(baseBars, baseRisePercent, baseTradingValueWon);
                 var usedBaseTimes = new HashSet<string>(StringComparer.Ordinal);
 
-                for (int i = 21; i < entryBars.Count - holdingBars; i++)
+                for (int i = 21; i < triggerBars.Count - holdingBars; i++)
                 {
-                    BacktestMinuteBar entryBar = entryBars[i];
-                    if (!TryGetLatestBaseState(baseStates, entryBar.DateTime, out BaseState baseState) ||
+                    BacktestMinuteBar triggerBar = triggerBars[i];
+                    if (!TryGetLatestBaseState(baseStates, triggerBar.DateTime, out BaseState baseState) ||
                         !baseState.IsSmallBase ||
                         usedBaseTimes.Contains(baseState.Time))
                     {
                         continue;
                     }
 
-                    BacktestMinuteBar previousEntry = entryBars[i - 1];
-                    List<BacktestMinuteBar> previous20 = entryBars.GetRange(i - 20, 20);
-                    decimal avgVolume20 = previous20.Average(bar => (decimal)Math.Max(0, bar.Volume));
-                    if (!IsCenterPullbackEntry(entryBar, previousEntry, baseState, avgVolume20, entryVolumeMultiplier))
+                    if (!TryGetLatestEntrySupport(entryBars, triggerBar.DateTime, baseState, entryVolumeMultiplier, out BacktestMinuteBar supportBar))
                         continue;
 
-                    List<BacktestMinuteBar> holdingWindow = ResolveHoldingBars(entryBars, i, holdingBars);
+                    BacktestMinuteBar previousTrigger = triggerBars[i - 1];
+                    List<BacktestMinuteBar> previousTrigger20 = triggerBars.GetRange(i - 20, 20);
+                    decimal avgTriggerVolume20 = previousTrigger20.Average(bar => (decimal)Math.Max(0, bar.Volume));
+                    if (!IsTriggerEntry(triggerBar, previousTrigger, avgTriggerVolume20, triggerVolumeMultiplier))
+                        continue;
+
+                    List<BacktestMinuteBar> holdingWindow = ResolveHoldingBars(triggerBars, i, holdingBars);
                     if (holdingWindow.Count < holdingBars)
                         continue;
 
-                    long entryPrice = entryBar.Close;
+                    long entryPrice = triggerBar.Close;
                     long stopPrice = baseState.Low;
                     long riskWon = entryPrice - stopPrice;
                     if (entryPrice <= 0 || riskWon <= 0)
@@ -94,14 +105,14 @@ namespace TradingDashboard.Services.Backtests
                     decimal maxR = (maxHigh - entryPrice) / (decimal)riskWon;
                     decimal minR = (minLow - entryPrice) / (decimal)riskWon;
 
-                    string reason = $"{baseMinute}m small-base MA60 recover {baseState.Time}; center={baseState.Center:0}; {entryMinute}m bullish rebound above prev high; vol>{entryVolumeMultiplier:0.##}x avg20";
+                    string reason = $"{baseMinute}m small-base MA60 recover {baseState.Time}; {entryMinute}m center support {supportBar.DateTime}; {resolvedTriggerMinute}m trigger bullish above prev high; vol>{triggerVolumeMultiplier:0.##}x avg20";
                     signals.Add(new BacktestSignalRow
                     {
                         RunId = runId,
                         StrategyCode = StrategyCode,
                         Code = group.Code,
                         Market = group.Market,
-                        SignalTime = entryBar.DateTime,
+                        SignalTime = triggerBar.DateTime,
                         SignalType = "BUY",
                         Price = entryPrice,
                         Reason = reason
@@ -114,7 +125,7 @@ namespace TradingDashboard.Services.Backtests
                         ExitRuleCode = exitRuleCode,
                         Code = group.Code,
                         Market = group.Market,
-                        EntryTime = entryBar.DateTime,
+                        EntryTime = triggerBar.DateTime,
                         ExitTime = exitBar.DateTime,
                         EntryPrice = entryPrice,
                         ExitPrice = exitBar.Close,
@@ -180,17 +191,49 @@ namespace TradingDashboard.Services.Backtests
             return result;
         }
 
-        private static bool IsCenterPullbackEntry(
-            BacktestMinuteBar entryBar,
-            BacktestMinuteBar previousEntry,
+        private static bool TryGetLatestEntrySupport(
+            IReadOnlyList<BacktestMinuteBar> entryBars,
+            string triggerTime,
             BaseState baseState,
-            decimal avgVolume20,
-            decimal entryVolumeMultiplier)
+            decimal entryVolumeMultiplier,
+            out BacktestMinuteBar supportBar)
         {
-            bool centerSupport = entryBar.Close >= baseState.Center && entryBar.Close <= baseState.Close;
-            bool rebound = entryBar.Close > entryBar.Open && entryBar.Close > previousEntry.High;
-            bool volumeOk = avgVolume20 <= 0 || entryBar.Volume >= avgVolume20 * entryVolumeMultiplier;
-            return centerSupport && rebound && volumeOk;
+            supportBar = default!;
+            int index = -1;
+            for (int i = entryBars.Count - 1; i >= 0; i--)
+            {
+                if (string.CompareOrdinal(entryBars[i].DateTime, triggerTime) < 0)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (index < 20)
+                return false;
+
+            BacktestMinuteBar candidate = entryBars[index];
+            List<BacktestMinuteBar> previous20 = [.. entryBars.Skip(index - 20).Take(20)];
+            decimal avgVolume20 = previous20.Average(bar => (decimal)Math.Max(0, bar.Volume));
+            bool centerSupport = candidate.Close >= baseState.Center && candidate.Close <= baseState.Close;
+            bool volumeOk = avgVolume20 <= 0 || candidate.Volume >= avgVolume20 * entryVolumeMultiplier;
+            if (!centerSupport || !volumeOk)
+                return false;
+
+            supportBar = candidate;
+            return true;
+        }
+
+        private static bool IsTriggerEntry(
+            BacktestMinuteBar triggerBar,
+            BacktestMinuteBar previousTrigger,
+            decimal avgVolume20,
+            decimal triggerVolumeMultiplier)
+        {
+            bool bullishTurn = triggerBar.Close > triggerBar.Open;
+            bool highBreak = triggerBar.Close > previousTrigger.High;
+            bool volumeOk = avgVolume20 <= 0 || triggerBar.Volume >= avgVolume20 * triggerVolumeMultiplier;
+            return bullishTurn && highBreak && volumeOk;
         }
 
         private static bool TryGetLatestBaseState(Dictionary<string, BaseState> states, string entryTime, out BaseState state)
