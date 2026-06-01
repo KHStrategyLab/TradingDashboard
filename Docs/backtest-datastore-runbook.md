@@ -32,11 +32,32 @@ Until the operator-only condition loader is wired, use the existing TradingDashb
 Use:
 
 ```text
+BacktestDailyDataStoreJob.RunAsync(...)
+```
+
+This loads condition 23 candidates, saves the candidate snapshot, downloads or reuses daily bars, and re-verifies base candles.
+
+Operator command:
+
+```powershell
+dotnet run -- --backtest-daily-datastore
+```
+
+The command does not open the dashboard window. It writes a summary to:
+
+```text
+Storage/Backtests/DataStore/metadata/last_daily_update_summary.json
+Storage/Backtests/DataStore/metadata/daily_update_summary_{RunId}.json
+```
+
+Fallback:
+
+```text
 Config/watchlist_stock_cache.json
 BacktestCandidateImportService.LoadFromWatchlistCache(...)
 ```
 
-This avoids manually preparing stock lists.
+This avoids manually preparing stock lists if the condition loader is unavailable.
 
 Do not change `Kiwoom.ConditionSeq01` for this. That setting is still used by the live dashboard/watchlist flow.
 
@@ -100,10 +121,7 @@ Wire a small operator-only trigger after the candidate import format is confirme
 The trigger should call:
 
 ```text
-BacktestCandidateImportService.LoadCandidates(...)
-or BacktestCandidateImportService.LoadFromWatchlistCache(...)
-BacktestDataStore.SaveCandidates(...)
-BacktestDatasetBuilder.BuildDailyDataStoreAsync(...)
+BacktestDailyDataStoreJob.RunAsync(...)
 ```
 
 Keep it off the live Engine Start path.

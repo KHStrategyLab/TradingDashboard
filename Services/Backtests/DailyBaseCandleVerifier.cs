@@ -65,11 +65,22 @@ namespace TradingDashboard.Services.Backtests
 
         private static long ResolveTradingValue(BacktestDailyBar bar)
         {
-            if (bar.TradingValue > 0)
-                return bar.TradingValue;
-            if (bar.Close > 0 && bar.Volume > 0)
-                return (long)Math.Min(long.MaxValue, bar.Close * (double)bar.Volume);
-            return 0;
+            long estimated = bar.Close > 0 && bar.Volume > 0
+                ? (long)Math.Min(long.MaxValue, bar.Close * (double)bar.Volume)
+                : 0;
+            if (bar.TradingValue <= 0)
+                return estimated;
+
+            long storedAsMillionWon = bar.TradingValue > long.MaxValue / 1_000_000
+                ? long.MaxValue
+                : bar.TradingValue * 1_000_000;
+
+            if (estimated <= 0)
+                return Math.Max(bar.TradingValue, storedAsMillionWon);
+
+            long rawDistance = Math.Abs(bar.TradingValue - estimated);
+            long millionWonDistance = Math.Abs(storedAsMillionWon - estimated);
+            return millionWonDistance <= rawDistance ? storedAsMillionWon : Math.Max(bar.TradingValue, estimated);
         }
 
         private static decimal ResolveCloseLocationPercent(BacktestDailyBar bar)

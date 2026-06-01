@@ -99,11 +99,37 @@ namespace TradingDashboard.Services
             return result;
         }
 
+        public async Task<List<WatchStockItem>> GetConditionStocksAsync(string conditionSeq, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+
+            List<(string Code, string Name)> baseItems = await GetConditionBaseItemsAsync(token, conditionSeq, cancellationToken).ConfigureAwait(false);
+            Dictionary<string, StockMarketInfo> marketInfoByCode = await GetStockMarketInfoMapAsync(token, cancellationToken).ConfigureAwait(false);
+            var result = new List<WatchStockItem>();
+
+            foreach ((string code, string name) in baseItems)
+            {
+                marketInfoByCode.TryGetValue(code, out StockMarketInfo? marketInfo);
+                WatchStockItem item = await GetStockInfoAsync(token, code, name, marketInfo, cancellationToken).ConfigureAwait(false);
+                result.Add(item);
+            }
+
+            return result;
+        }
+
         public async Task<List<(string Code, string Name)>> GetConditionBaseStocksAsync(CancellationToken cancellationToken = default)
         {
             ValidateSettings();
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             return await GetConditionBaseItemsAsync(token, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<List<(string Code, string Name)>> GetConditionBaseStocksAsync(string conditionSeq, CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            return await GetConditionBaseItemsAsync(token, conditionSeq, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<WatchStockItem> GetConditionStockAsync(string code, string name, CancellationToken cancellationToken = default)
@@ -1531,6 +1557,11 @@ namespace TradingDashboard.Services
 
         private async Task<List<(string Code, string Name)>> GetConditionBaseItemsAsync(string token, CancellationToken cancellationToken)
         {
+            return await GetConditionBaseItemsAsync(token, _settings.ConditionSeq01, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<List<(string Code, string Name)>> GetConditionBaseItemsAsync(string token, string conditionSeq, CancellationToken cancellationToken)
+        {
             using var ws = new ClientWebSocket();
             await ws.ConnectAsync(new Uri("wss://api.kiwoom.com:10000/api/dostk/websocket"), cancellationToken).ConfigureAwait(false);
 
@@ -1542,9 +1573,10 @@ namespace TradingDashboard.Services
 
             await SendJsonAsync(ws, new { trnm = "CNSRLST" }, cancellationToken).ConfigureAwait(false);
             using JsonDocument listRes = await ReceiveByTrNameAsync(ws, "CNSRLST", TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
-            string seq = ResolveConditionSeq(listRes.RootElement, _settings.ConditionSeq01);
+            string targetSeq = string.IsNullOrWhiteSpace(conditionSeq) ? _settings.ConditionSeq01 : conditionSeq;
+            string seq = ResolveConditionSeq(listRes.RootElement, targetSeq);
             if (string.IsNullOrWhiteSpace(seq))
-                throw new InvalidOperationException($"condition {(_settings.ConditionSeq01 ?? "1")} not found.");
+                throw new InvalidOperationException($"condition {(targetSeq ?? "1")} not found.");
 
             await SendJsonAsync(ws, new { trnm = "CNSRREQ", seq, search_type = "1", stex_tp = "K", cont_yn = "N", next_key = "" }, cancellationToken).ConfigureAwait(false);
             using JsonDocument condRes = await ReceiveByTrNameAsync(ws, "CNSRREQ", TimeSpan.FromSeconds(20), cancellationToken).ConfigureAwait(false);

@@ -202,9 +202,11 @@ Models/BacktestDailyBar.cs
 Models/BacktestBaseCandle.cs
 Models/BacktestDatasetUpdateSummary.cs
 Services/Backtests/BacktestCandidateImportService.cs
+Services/Backtests/BacktestConditionCandidateLoader.cs
 Services/Backtests/BacktestDataStore.cs
 Services/Backtests/DailyBaseCandleVerifier.cs
 Services/Backtests/BacktestDatasetBuilder.cs
+Services/Backtests/BacktestDailyDataStoreJob.cs
 Docs/backtest-datastore-runbook.md
 ```
 
@@ -223,4 +225,18 @@ The backtest candidate condition is stored separately from `Kiwoom.ConditionSeq0
 ```text
 Backtest.CandidateConditionIndex = 23
 Backtest.CandidateConditionName = 120일내_20퍼_500억
+```
+
+The current operator job is:
+
+```text
+BacktestDailyDataStoreJob.RunAsync(...)
+```
+
+It loads condition 23 candidates, writes the candidate metadata snapshot, updates/reuses daily bars, and verifies base-candle events. It remains disconnected from `Engine Start` and live order flow.
+
+Operator command:
+
+```powershell
+dotnet run -- --backtest-daily-datastore
 ```

@@ -111,9 +111,7 @@ namespace TradingDashboard.Services.Backtests
                 long low = (long)Math.Round(candle.Low);
                 long close = (long)Math.Round(candle.Close);
                 long previousClose = i > 0 ? (long)Math.Round(ordered[i - 1].Close) : 0;
-                long tradingValue = candle.TradingValue > 0
-                    ? candle.TradingValue
-                    : close > 0 && candle.Volume > 0 ? (long)Math.Min(long.MaxValue, close * (double)candle.Volume) : 0;
+                long tradingValue = ResolveTradingValueWon(candle, close);
 
                 bars.Add(new BacktestDailyBar
                 {
@@ -136,6 +134,24 @@ namespace TradingDashboard.Services.Backtests
             }
 
             return bars;
+        }
+
+        private static long ResolveTradingValueWon(DailyCandle candle, long close)
+        {
+            long estimated = close > 0 && candle.Volume > 0
+                ? (long)Math.Min(long.MaxValue, close * (double)candle.Volume)
+                : 0;
+            long raw = candle.TradingValue;
+            if (raw <= 0)
+                return estimated;
+
+            long rawAsMillionWon = raw > long.MaxValue / 1_000_000 ? long.MaxValue : raw * 1_000_000;
+            if (estimated <= 0)
+                return rawAsMillionWon;
+
+            long rawDistance = Math.Abs(raw - estimated);
+            long millionWonDistance = Math.Abs(rawAsMillionWon - estimated);
+            return millionWonDistance <= rawDistance ? rawAsMillionWon : Math.Max(raw, estimated);
         }
     }
 }
