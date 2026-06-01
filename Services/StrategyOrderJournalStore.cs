@@ -85,6 +85,8 @@ namespace TradingDashboard.Services
                         entry.ReturnMessage = existing.ReturnMessage;
                     if (string.IsNullOrWhiteSpace(entry.SlotId))
                         entry.SlotId = existing.SlotId;
+                    if (string.IsNullOrWhiteSpace(entry.ExitStrategyCode))
+                        entry.ExitStrategyCode = existing.ExitStrategyCode;
 
                     entries[index] = entry;
                 }

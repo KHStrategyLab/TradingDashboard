@@ -22,11 +22,14 @@ namespace TradingDashboard
         private void InitializeStrategySlots()
         {
             _isInitializingStrategyControls = true;
+            LoadStrategySlotConfig();
+            InitializeStrategyExitStrategySelectors();
             StrategyProgressItemsControl.ItemsSource = _strategyProgressRows;
             if (StrategyMinutePreloadIdleSecondsTextBox != null)
                 StrategyMinutePreloadIdleSecondsTextBox.Text = ResolveConfiguredStrategyMinuteAutoPreloadIdleSeconds().ToString();
             _isInitializingStrategyControls = false;
 
+            UpdateStrategyExitStrategySelectorLocks();
             UpdateStrategyMinutePreloadControlLock();
             UpdateStrategySlotSummary();
             UpdateStrategyControlBoard();
@@ -39,9 +42,29 @@ namespace TradingDashboard
                 return;
 
             LogStrategyToggleState(sender);
+            UpdateStrategyExitStrategySelectorLocks();
             UpdateStrategySlotSummary();
             UpdateStrategyControlBoard();
             UpdateStrategyProgressRows();
+        }
+
+        private void StrategySlotExitStrategyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializingStrategyControls)
+                return;
+
+            if (TryRejectEngineLockedStrategyChange(sender))
+                return;
+
+            if (sender is not ComboBox comboBox ||
+                comboBox.Tag is not string tag ||
+                !Enum.TryParse(tag, out StrategySlotId slotId))
+                return;
+
+            string exitStrategyCode = ResolveComboBoxExitStrategyCode(comboBox);
+            SetStrategySlotExitStrategy(slotId, exitStrategyCode, save: true);
+            StrategyExitStrategyDescriptor descriptor = StrategyExitStrategyRegistry.Resolve(exitStrategyCode);
+            AppendLog($"strategy exit selector saved: {FormatStrategySlotNumber(slotId)} / {descriptor.Name}");
         }
 
         private void StrategyControlBoard_Changed(object sender, RoutedEventArgs e)
@@ -56,6 +79,7 @@ namespace TradingDashboard
             SyncPaperTradingPreviewState();
             LogStrategyToggleState(sender);
             UpdateStrategyControlBoard();
+            UpdateStrategyExitStrategySelectorLocks();
             UpdateStrategyMinutePreloadControlLock();
             if (ShouldStartRequiredStrategyMinutePreload(sender))
                 StartStrategyMinuteAutoPreload(_watchStocks, force: true, immediate: true);
@@ -140,6 +164,33 @@ namespace TradingDashboard
             if (!IsEngineConfigurationLocked())
                 return false;
 
+            if (sender is ComboBox comboBox && IsLockedStrategyExitStrategyComboBox(comboBox))
+            {
+                StrategySlotId slotId = ResolveStrategySlotId(comboBox);
+                string configured = ResolveStrategySlotExitStrategyCode(slotId);
+                _isInitializingStrategyControls = true;
+                try
+                {
+                    comboBox.SelectedValue = configured;
+                }
+                finally
+                {
+                    _isInitializingStrategyControls = false;
+                }
+
+                AppendLog($"strategy exit selector blocked while engine is running: {FormatStrategySlotNumber(slotId)} remains {StrategyExitStrategyRegistry.Resolve(configured).Name}");
+                try
+                {
+                    global::System.Media.SystemSounds.Exclamation.Play();
+                }
+                catch
+                {
+                    // Some Windows sound schemes may not provide a playable alert.
+                }
+
+                return true;
+            }
+
             if (sender is not ToggleButton toggle || !IsLockedStrategyConfigurationToggle(toggle))
                 return false;
 
@@ -176,6 +227,12 @@ namespace TradingDashboard
             ReferenceEquals(toggle, StrategySlotThemeAssistToggle) ||
             ReferenceEquals(toggle, DuplicateBuyPolicyToggle) ||
             ReferenceEquals(toggle, DuplicateAlertPolicyToggle);
+
+        private bool IsLockedStrategyExitStrategyComboBox(ComboBox comboBox) =>
+            ReferenceEquals(comboBox, StrategySlotBaseCandleChaseExitComboBox) ||
+            ReferenceEquals(comboBox, StrategySlotPullbackExitComboBox) ||
+            ReferenceEquals(comboBox, StrategySlotMiddleExitComboBox) ||
+            ReferenceEquals(comboBox, StrategySlotThemeAssistExitComboBox);
 
         private void LogStrategyToggleState(object sender)
         {
@@ -258,20 +315,145 @@ namespace TradingDashboard
             new(
                 StrategySlotId.BaseCandleChase,
                 "SOR 10min MA60 + 3min Breakout",
-                IsStrategyToggleOn(StrategySlotBaseCandleChaseToggle)),
+                IsStrategyToggleOn(StrategySlotBaseCandleChaseToggle),
+                ResolveStrategySlotExitStrategyCode(StrategySlotId.BaseCandleChase)),
             new(
                 StrategySlotId.ThreeMinutePullback,
                 "SOR 15min MA60 + 5min Breakout",
-                IsStrategyToggleOn(StrategySlotPullbackToggle)),
+                IsStrategyToggleOn(StrategySlotPullbackToggle),
+                ResolveStrategySlotExitStrategyCode(StrategySlotId.ThreeMinutePullback)),
             new(
                 StrategySlotId.SorTenMinuteFiveMinuteBreakout,
                 "SOR 10min MA60 + 5min Breakout",
-                IsStrategyToggleOn(StrategySlotMiddleToggle)),
+                IsStrategyToggleOn(StrategySlotMiddleToggle),
+                ResolveStrategySlotExitStrategyCode(StrategySlotId.SorTenMinuteFiveMinuteBreakout)),
             new(
                 StrategySlotId.ThemeDisclosureAssist,
                 "Theme / Disclosure Assist",
-                IsStrategyToggleOn(StrategySlotThemeAssistToggle))
+                IsStrategyToggleOn(StrategySlotThemeAssistToggle),
+                ResolveStrategySlotExitStrategyCode(StrategySlotId.ThemeDisclosureAssist))
         ];
+
+        private void LoadStrategySlotConfig()
+        {
+            _strategySlotConfigById.Clear();
+            foreach (StrategySlotConfigEntry entry in _strategySlotConfigStore.Load())
+            {
+                if (Enum.TryParse(entry.SlotId, out StrategySlotId slotId))
+                    _strategySlotConfigById[slotId] = entry;
+            }
+
+            foreach (StrategySlotId slotId in Enum.GetValues<StrategySlotId>())
+            {
+                if (_strategySlotConfigById.ContainsKey(slotId))
+                    continue;
+
+                _strategySlotConfigById[slotId] = new StrategySlotConfigEntry
+                {
+                    SlotId = slotId.ToString(),
+                    ExitStrategyCode = StrategyExitStrategyRegistry.GetDefaultForSlot(slotId),
+                    UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
+                };
+            }
+        }
+
+        private void InitializeStrategyExitStrategySelectors()
+        {
+            IReadOnlyList<StrategyExitStrategyDescriptor> normalExitStrategies = StrategyExitStrategyRegistry.GetDescriptors();
+            IReadOnlyList<StrategyExitStrategyDescriptor> assistExitStrategies = StrategyExitStrategyRegistry.GetDescriptors(includeManualOnly: true)
+                .Where(x => x.IsManualOnly)
+                .ToList();
+
+            SetExitStrategyComboBox(
+                StrategySlotBaseCandleChaseExitComboBox,
+                StrategySlotId.BaseCandleChase,
+                normalExitStrategies);
+            SetExitStrategyComboBox(
+                StrategySlotPullbackExitComboBox,
+                StrategySlotId.ThreeMinutePullback,
+                normalExitStrategies);
+            SetExitStrategyComboBox(
+                StrategySlotMiddleExitComboBox,
+                StrategySlotId.SorTenMinuteFiveMinuteBreakout,
+                normalExitStrategies);
+            SetExitStrategyComboBox(
+                StrategySlotThemeAssistExitComboBox,
+                StrategySlotId.ThemeDisclosureAssist,
+                assistExitStrategies.Count > 0 ? assistExitStrategies : StrategyExitStrategyRegistry.GetDescriptors(includeManualOnly: true));
+        }
+
+        private void SetExitStrategyComboBox(
+            ComboBox? comboBox,
+            StrategySlotId slotId,
+            IReadOnlyList<StrategyExitStrategyDescriptor> descriptors)
+        {
+            if (comboBox == null)
+                return;
+
+            comboBox.Tag = slotId.ToString();
+            comboBox.ItemsSource = descriptors;
+            comboBox.DisplayMemberPath = nameof(StrategyExitStrategyDescriptor.Name);
+            comboBox.SelectedValuePath = nameof(StrategyExitStrategyDescriptor.Code);
+            comboBox.SelectedValue = ResolveStrategySlotExitStrategyCode(slotId);
+        }
+
+        private void UpdateStrategyExitStrategySelectorLocks()
+        {
+            SetStrategyExitStrategySelectorLock(StrategySlotBaseCandleChaseExitComboBox, StrategySlotBaseCandleChaseToggle);
+            SetStrategyExitStrategySelectorLock(StrategySlotPullbackExitComboBox, StrategySlotPullbackToggle);
+            SetStrategyExitStrategySelectorLock(StrategySlotMiddleExitComboBox, StrategySlotMiddleToggle);
+            SetStrategyExitStrategySelectorLock(StrategySlotThemeAssistExitComboBox, StrategySlotThemeAssistToggle);
+        }
+
+        private void SetStrategyExitStrategySelectorLock(ComboBox? comboBox, ToggleButton? toggle)
+        {
+            if (comboBox == null)
+                return;
+
+            comboBox.IsEnabled = toggle?.IsChecked != true && !IsEngineConfigurationLocked();
+        }
+
+        private void SetStrategySlotExitStrategy(StrategySlotId slotId, string exitStrategyCode, bool save)
+        {
+            StrategyExitStrategyDescriptor descriptor = StrategyExitStrategyRegistry.Resolve(exitStrategyCode);
+            _strategySlotConfigById[slotId] = new StrategySlotConfigEntry
+            {
+                SlotId = slotId.ToString(),
+                ExitStrategyCode = descriptor.Code,
+                UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
+            };
+
+            if (save)
+                _strategySlotConfigStore.Save(_strategySlotConfigById.Values);
+        }
+
+        private string ResolveStrategySlotExitStrategyCode(StrategySlotId slotId)
+        {
+            if (_strategySlotConfigById.TryGetValue(slotId, out StrategySlotConfigEntry? entry) &&
+                !string.IsNullOrWhiteSpace(entry.ExitStrategyCode))
+                return StrategyExitStrategyRegistry.Resolve(entry.ExitStrategyCode).Code;
+
+            return StrategyExitStrategyRegistry.GetDefaultForSlot(slotId);
+        }
+
+        private static string ResolveComboBoxExitStrategyCode(ComboBox comboBox)
+        {
+            if (comboBox.SelectedValue is string selectedValue && !string.IsNullOrWhiteSpace(selectedValue))
+                return selectedValue;
+
+            if (comboBox.SelectedItem is StrategyExitStrategyDescriptor descriptor)
+                return descriptor.Code;
+
+            return StrategyExitStrategyRegistry.BaseCandleLowProfitScale;
+        }
+
+        private static StrategySlotId ResolveStrategySlotId(ComboBox comboBox)
+        {
+            if (comboBox.Tag is string tag && Enum.TryParse(tag, out StrategySlotId slotId))
+                return slotId;
+
+            return StrategySlotId.BaseCandleChase;
+        }
 
         private IReadOnlyList<StrategyEvaluationResult> EvaluateEnabledStrategySlots(WatchStockItem? stock)
         {

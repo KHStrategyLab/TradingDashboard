@@ -2281,6 +2281,21 @@
                                                        TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </ToggleButton>
+                                    <Grid Margin="8,-4,8,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="72"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="매도전략"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"/>
+                                        <ComboBox x:Name="StrategySlotBaseCandleChaseExitComboBox"
+                                                  Grid.Column="1"
+                                                  MinHeight="25"
+                                                  FontSize="11"
+                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                    </Grid>
 
                                     <ToggleButton x:Name="StrategySlotPullbackToggle"
                                                   Style="{StaticResource StrategySlotToggleStyle}"
@@ -2328,6 +2343,21 @@
                                                        TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </ToggleButton>
+                                    <Grid Margin="8,-4,8,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="72"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="매도전략"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"/>
+                                        <ComboBox x:Name="StrategySlotPullbackExitComboBox"
+                                                  Grid.Column="1"
+                                                  MinHeight="25"
+                                                  FontSize="11"
+                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                    </Grid>
 
                                     <ToggleButton x:Name="StrategySlotMiddleToggle"
                                                   Style="{StaticResource StrategySlotToggleStyle}"
@@ -2375,6 +2405,21 @@
                                                        TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </ToggleButton>
+                                    <Grid Margin="8,-4,8,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="72"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="매도전략"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"/>
+                                        <ComboBox x:Name="StrategySlotMiddleExitComboBox"
+                                                  Grid.Column="1"
+                                                  MinHeight="25"
+                                                  FontSize="11"
+                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                    </Grid>
 
                                     <ToggleButton x:Name="StrategySlotThemeAssistToggle"
                                                   Style="{StaticResource StrategySlotToggleStyle}"
@@ -2422,6 +2467,21 @@
                                                        TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </ToggleButton>
+                                    <Grid Margin="8,-4,8,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="72"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="매도전략"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"/>
+                                        <ComboBox x:Name="StrategySlotThemeAssistExitComboBox"
+                                                  Grid.Column="1"
+                                                  MinHeight="25"
+                                                  FontSize="11"
+                                                  SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                    </Grid>
                                 </StackPanel>
                             </StackPanel>
 

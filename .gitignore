@@ -20,10 +20,12 @@ Storage/StrategyMinuteSeeds/
 Storage/StrategyAnchors/
 Storage/StrategyOrderJournal/
 Storage/StrategyPositions/
+Storage/StrategySlots/
 Storage/ManualPositions/
 Storage/PaperPositions/
 Storage/PaperTradeMarks/
 Storage/Backtests/
+Storage/LeaderHistory/
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)

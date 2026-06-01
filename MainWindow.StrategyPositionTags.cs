@@ -51,6 +51,7 @@ namespace TradingDashboard
             }
 
             string slotTag = FormatStrategySlotNumber(result.SlotId);
+            string exitStrategyCode = ResolveStrategySlotExitStrategyCode(result.SlotId);
             var entry = new StrategyPositionLedgerEntry
             {
                 Key = BuildStrategyPositionKey(stock.Code, result.SlotId, orderResult.OrderNo),
@@ -58,6 +59,8 @@ namespace TradingDashboard
                 Name = stock.Name,
                 SlotId = result.SlotId.ToString(),
                 SlotTag = slotTag,
+                EntryStrategyCode = result.SlotId.ToString(),
+                ExitStrategyCode = exitStrategyCode,
                 Source = "AUTO",
                 BuyOrderNo = orderResult.OrderNo,
                 Quantity = quantity,

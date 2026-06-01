@@ -8,6 +8,7 @@ namespace TradingDashboard.Models
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string SlotId { get; set; } = string.Empty;
+        public string ExitStrategyCode { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
         public long Quantity { get; set; }
         public long ReferencePrice { get; set; }

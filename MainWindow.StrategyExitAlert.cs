@@ -146,7 +146,8 @@ namespace TradingDashboard
                     guard.ReferencePrice,
                     request.OrderPrice,
                     orderResult,
-                    "SUBMITTED");
+                    "SUBMITTED",
+                    exitStrategyCode: check.ExitStrategyCode);
 
                 Dispatcher.Invoke(() =>
                 {
@@ -205,7 +206,8 @@ namespace TradingDashboard
                         0,
                         orderResult,
                         "AUDITED",
-                        $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
+                        $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}",
+                        exitStrategyCode: check.ExitStrategyCode);
                     _ = RefreshBalanceAsync("strategy live sell");
                 });
             }
@@ -287,7 +289,8 @@ namespace TradingDashboard
                 position.AveragePrice,
                 position.OpenQuantity,
                 position.Key,
-                position.SlotTag);
+                position.SlotTag,
+                position.ExitStrategyCode);
         }
 
         private static StrategyExitCheck EvaluateExitDecision(
@@ -295,18 +298,19 @@ namespace TradingDashboard
             long entryPrice,
             long quantity,
             string positionKey,
-            string slotTag)
+            string slotTag,
+            string exitStrategyCode = "")
         {
             if (currentPrice <= 0 || entryPrice <= 0)
                 return StrategyExitCheck.None(currentPrice, entryPrice);
 
             decimal profitRate = CalculateProfitRate(currentPrice, entryPrice);
             if (profitRate <= StrategyStopLossRate)
-                return StrategyExitCheck.Signal("STOP", currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity);
+                return StrategyExitCheck.Signal("STOP", currentPrice, entryPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
             if (profitRate >= StrategyFirstTargetRate)
             {
                 long targetQuantity = quantity > 1 ? Math.Max(1, quantity / 2) : quantity;
-                return StrategyExitCheck.Signal("TARGET1", currentPrice, entryPrice, profitRate, positionKey, slotTag, targetQuantity);
+                return StrategyExitCheck.Signal("TARGET1", currentPrice, entryPrice, profitRate, positionKey, slotTag, targetQuantity, exitStrategyCode);
             }
 
             return StrategyExitCheck.None(currentPrice, entryPrice, profitRate);
@@ -480,7 +484,15 @@ namespace TradingDashboard
                 positionKey = manualPosition.Key;
             }
 
-            return StrategyExitCheck.Signal(reason, currentPrice, anchor.EntryLow, CalculateProfitRate(currentPrice, anchor.EntryLow), positionKey, "MANUAL", quantity);
+            return StrategyExitCheck.Signal(
+                reason,
+                currentPrice,
+                anchor.EntryLow,
+                CalculateProfitRate(currentPrice, anchor.EntryLow),
+                positionKey,
+                "MANUAL",
+                quantity,
+                StrategyExitStrategyRegistry.ManualBuyStopAssist);
         }
 
         private static bool IsManualBuyStopMa5Breakdown(StrategyMinuteFrameSnapshot frame)
@@ -546,13 +558,13 @@ namespace TradingDashboard
         private string BuildStrategyExitAlertKey(WatchStockItem stock, StrategyExitCheck check)
         {
             string owner = string.IsNullOrWhiteSpace(check.PositionKey) ? check.SlotTag : check.PositionKey;
-            return $"{NormalizeStockCode(stock.Code)}|EXIT|{owner}|{check.Reason}|{DateTime.Today:yyyyMMdd}";
+            return $"{NormalizeStockCode(stock.Code)}|EXIT|{owner}|{check.ExitStrategyCode}|{check.Reason}|{DateTime.Today:yyyyMMdd}";
         }
 
         private string BuildStrategyLiveSellOrderKey(WatchStockItem stock, StrategyExitCheck check)
         {
             string owner = string.IsNullOrWhiteSpace(check.PositionKey) ? check.SlotTag : check.PositionKey;
-            return $"{NormalizeStockCode(stock.Code)}|LIVE_SELL|{owner}|{check.Reason}|{DateTime.Today:yyyyMMdd}";
+            return $"{NormalizeStockCode(stock.Code)}|LIVE_SELL|{owner}|{check.ExitStrategyCode}|{check.Reason}|{DateTime.Today:yyyyMMdd}";
         }
 
         private bool HasStrategyLiveSellOrderToday(WatchStockItem stock, StrategyExitCheck check)
@@ -581,12 +593,14 @@ namespace TradingDashboard
             string name = WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(stock.Name) ? stock.Code : stock.Name);
             string code = WebUtility.HtmlEncode(stock.Code);
             string reason = WebUtility.HtmlEncode(check.Reason);
+            string exitStrategy = WebUtility.HtmlEncode(StrategyExitStrategyRegistry.Resolve(check.ExitStrategyCode).Name);
             string mode = WebUtility.HtmlEncode(orderMode);
 
             return string.Join(Environment.NewLine, new[]
             {
                 $"<b>STRATEGY EXIT SIGNAL</b> {name} ({code})",
                 $"reason: {reason}",
+                $"exit strategy: {exitStrategy}",
                 $"price: {check.CurrentPrice:N0} / avg: {check.AverageBuyPrice:N0}",
                 $"slot: {WebUtility.HtmlEncode(check.SlotTag)} / qty: {check.Quantity:N0}",
                 $"pnl: {check.ProfitRate:0.##}%",
@@ -602,7 +616,8 @@ namespace TradingDashboard
             decimal ProfitRate,
             string PositionKey,
             string SlotTag,
-            long Quantity)
+            long Quantity,
+            string ExitStrategyCode)
         {
             public static StrategyExitCheck Signal(
                 string reason,
@@ -611,11 +626,12 @@ namespace TradingDashboard
                 decimal profitRate,
                 string positionKey = "",
                 string slotTag = "",
-                long quantity = 0) =>
-                new(true, reason, currentPrice, averageBuyPrice, profitRate, positionKey, slotTag, quantity);
+                long quantity = 0,
+                string exitStrategyCode = "") =>
+                new(true, reason, currentPrice, averageBuyPrice, profitRate, positionKey, slotTag, quantity, exitStrategyCode);
 
             public static StrategyExitCheck None(long currentPrice, long averageBuyPrice, decimal profitRate = 0) =>
-                new(false, string.Empty, currentPrice, averageBuyPrice, profitRate, string.Empty, string.Empty, 0);
+                new(false, string.Empty, currentPrice, averageBuyPrice, profitRate, string.Empty, string.Empty, 0, string.Empty);
         }
 
         private readonly record struct StrategyLiveSellGuardResult(

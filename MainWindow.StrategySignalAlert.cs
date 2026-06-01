@@ -81,6 +81,7 @@ namespace TradingDashboard
 
             try
             {
+                string exitStrategyCode = ResolveStrategySlotExitStrategyCode(result.SlotId);
                 KiwoomOrderRequest request = KiwoomOrderRequest.SorLimitFromCurrentPrice(
                     stock.Code,
                     guard.Quantity,
@@ -103,7 +104,8 @@ namespace TradingDashboard
                     guard.ReferencePrice,
                     request.OrderPrice,
                     orderResult,
-                    "SUBMITTED");
+                    "SUBMITTED",
+                    exitStrategyCode: exitStrategyCode);
 
                 Dispatcher.Invoke(() =>
                 {
@@ -154,6 +156,7 @@ namespace TradingDashboard
                     {
                         AppendReadyLog(
                             $"STRATEGY POSITION TAGGED: {stock.Code} {stock.Name} / {positionEntry.SlotTag} / " +
+                            $"exit {StrategyExitStrategyRegistry.Resolve(positionEntry.ExitStrategyCode).Name} / " +
                             $"qty {positionEntry.Quantity:N0} / avg {positionEntry.AveragePrice:N0} / entry5m low {positionEntry.Entry5MinuteLow:N0}");
                     }
                     SaveStrategyOrderJournal(
@@ -167,7 +170,8 @@ namespace TradingDashboard
                         0,
                         orderResult,
                         "AUDITED",
-                        $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}");
+                        $"open {openOrders.Count:N0} / unfilled {unfilled:N0} / fills {fills.Count:N0} / filled {filled:N0}",
+                        exitStrategyCode: ResolveStrategySlotExitStrategyCode(result.SlotId));
                     _ = RefreshBalanceAsync("strategy live buy");
                 });
             }
@@ -345,7 +349,8 @@ namespace TradingDashboard
             long orderPrice,
             KiwoomOrderResult orderResult,
             string stage,
-            string memo = "")
+            string memo = "",
+            string exitStrategyCode = "")
         {
             _strategyOrderJournalStore.UpsertToday(new StrategyOrderJournalEntry
             {
@@ -354,6 +359,7 @@ namespace TradingDashboard
                 Code = NormalizeStockCode(stock.Code),
                 Name = stock.Name,
                 SlotId = slotId,
+                ExitStrategyCode = exitStrategyCode,
                 Reason = reason,
                 Quantity = quantity,
                 ReferencePrice = referencePrice,

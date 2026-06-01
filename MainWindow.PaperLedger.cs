@@ -36,6 +36,7 @@ namespace TradingDashboard
                 return null;
 
             string now = DateTime.Now.ToString("yyyyMMddHHmmss");
+            string exitStrategyCode = ResolveStrategySlotExitStrategyCode(result.SlotId);
             var entry = new PaperPositionLedgerEntry
             {
                 Key = key,
@@ -43,6 +44,8 @@ namespace TradingDashboard
                 Code = NormalizeStockCode(stock.Code),
                 Name = stock.Name,
                 SlotTag = FormatStrategySlotNumber(result.SlotId),
+                EntryStrategyCode = result.SlotId.ToString(),
+                ExitStrategyCode = exitStrategyCode,
                 Status = "OPEN",
                 Quantity = quantity,
                 EntryPrice = price,
@@ -113,7 +116,8 @@ namespace TradingDashboard
                 entry.EntryPrice,
                 entry.Quantity,
                 entry.Key,
-                entry.SlotTag);
+                entry.SlotTag,
+                entry.ExitStrategyCode);
             if (!decision.HasExitSignal)
                 return;
 
@@ -143,6 +147,8 @@ namespace TradingDashboard
                 Code = entry.Code,
                 Name = entry.Name,
                 SlotTag = entry.SlotTag,
+                EntryStrategyCode = entry.EntryStrategyCode,
+                ExitStrategyCode = entry.ExitStrategyCode,
                 Event = eventName,
                 Quantity = entry.Quantity,
                 Price = price,

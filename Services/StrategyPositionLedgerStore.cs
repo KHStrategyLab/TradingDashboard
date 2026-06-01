@@ -74,6 +74,10 @@ namespace TradingDashboard.Services
                 entry.SlotId = existing.SlotId;
             if (string.IsNullOrWhiteSpace(entry.SlotTag))
                 entry.SlotTag = existing.SlotTag;
+            if (string.IsNullOrWhiteSpace(entry.EntryStrategyCode))
+                entry.EntryStrategyCode = existing.EntryStrategyCode;
+            if (string.IsNullOrWhiteSpace(entry.ExitStrategyCode))
+                entry.ExitStrategyCode = existing.ExitStrategyCode;
             if (string.IsNullOrWhiteSpace(entry.Source))
                 entry.Source = existing.Source;
             if (string.IsNullOrWhiteSpace(entry.BuyOrderNo))

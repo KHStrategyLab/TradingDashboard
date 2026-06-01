@@ -73,6 +73,22 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-stoch-ab", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunSmallBaseStochasticAbBacktest();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-stoch-quick-reaction", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunSmallBaseStochasticQuickReactionBacktest();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             base.OnStartup(e);
         }
 
@@ -166,6 +182,48 @@ namespace TradingDashboard
                 {
                     RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
                     Error = $"backtest small-base center pullback failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunSmallBaseStochasticAbBacktest()
+        {
+            try
+            {
+                var backtest = new SmallBaseStochasticAbBacktest();
+                BacktestRunResult result = backtest.Run();
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest small-base stochastic A/B failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunSmallBaseStochasticQuickReactionBacktest()
+        {
+            try
+            {
+                var backtest = new SmallBaseStochasticQuickReactionBacktest();
+                BacktestRunResult result = backtest.Run();
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest stochastic quick reaction failed: {ex.GetType().Name}: {ex.Message}"
                 };
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 1;
