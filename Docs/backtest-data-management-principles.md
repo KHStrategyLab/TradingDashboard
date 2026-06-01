@@ -193,3 +193,19 @@ The first implementation should stay small:
 5. Save verified base-candle rows.
 
 Minute partial download, strategy execution, exit-rule comparison, and reports come after that.
+
+Current first-step code locations:
+
+```text
+Models/BacktestCandidate.cs
+Models/BacktestDailyBar.cs
+Models/BacktestBaseCandle.cs
+Models/BacktestDatasetUpdateSummary.cs
+Services/Backtests/BacktestCandidateImportService.cs
+Services/Backtests/BacktestDataStore.cs
+Services/Backtests/DailyBaseCandleVerifier.cs
+Services/Backtests/BacktestDatasetBuilder.cs
+Docs/backtest-datastore-runbook.md
+```
+
+These services are intentionally not wired to `Engine Start`, realtime strategy evaluation, or live order flow.
