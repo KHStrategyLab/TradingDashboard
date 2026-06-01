@@ -121,6 +121,40 @@ namespace TradingDashboard
 
         private async Task RegisterRealtime0BAsync(ClientWebSocket ws, CancellationToken ct)
         {
+            bool useNxtMarket = ShouldUseNxtMarketNow();
+
+            if (useNxtMarket)
+            {
+                string[] nxtItems = [.. _watchStockByCode
+                    .Where(kv => kv.Value.SupportsNxt && !string.IsNullOrWhiteSpace(kv.Key))
+                    .Select(kv => $"{kv.Key}_NX")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+                if (nxtItems.Length == 0)
+                {
+                    AppendLog("0B NXT after-market only: 0stocks / KRX registration skipped");
+                    return;
+                }
+
+                await SendWsJsonAsync(ws, new
+                {
+                    trnm = "REG",
+                    grp_no = "900",
+                    refresh = "1",
+                    data = new[]
+                    {
+                        new
+                        {
+                            item = nxtItems,
+                            type = new[] { "0B" }
+                        }
+                    }
+                }, ct);
+
+                AppendLog($"0B NXT after-market only registered: {nxtItems.Length}stocks / KRX registration skipped");
+                return;
+            }
+
             string[] krxItems = [.. _watchStockByCode.Keys
                 .Where(code => !string.IsNullOrWhiteSpace(code))
                 .Distinct(StringComparer.Ordinal)];
@@ -143,39 +177,7 @@ namespace TradingDashboard
                 }
             }, ct);
 
-            bool useNxtMarket = ShouldUseNxtMarketNow();
-            AppendLog($"0B KRX registered: {krxItems.Length}stocks / realtime market {(useNxtMarket ? "NXT" : "KRX")}");
-
-            if (!useNxtMarket)
-                return;
-
-            string[] nxtItems = [.. _watchStockByCode
-                .Where(kv => kv.Value.SupportsNxt)
-                .Select(kv => $"{kv.Key}_NX")
-                .Distinct(StringComparer.OrdinalIgnoreCase)];
-
-            if (nxtItems.Length == 0)
-            {
-                AppendLog("0B NXT after-market registered: 0stocks");
-                return;
-            }
-
-            await SendWsJsonAsync(ws, new
-            {
-                trnm = "REG",
-                grp_no = "900",
-                refresh = "0",
-                data = new[]
-                {
-                    new
-                    {
-                        item = nxtItems,
-                        type = new[] { "0B" }
-                    }
-                }
-            }, ct);
-
-            AppendLog($"0B NXT after-market registered: {nxtItems.Length}stocks");
+            AppendLog($"0B KRX registered: {krxItems.Length}stocks / realtime market KRX");
         }
 
         private static bool IsNxtMarketWindow()
@@ -990,6 +992,7 @@ namespace TradingDashboard
                 stock.PriceBrush = code == _selectedStockCode && stock.CurrentPrice > 0
                     ? ResolveHogaBrushByKrxPrevClose(stock.CurrentPrice)
                     : change > 0 ? _upColorBrush : change < 0 ? _downColorBrush : _whiteBrush;
+                stock.ApplyMiniDailyRealtimePrice(stock.CurrentPrice, ResolveMiniDailyBrush(stock.MiniDailyOpen, stock.CurrentPrice));
 
                 ProcessStrategySignalAlerts(stock, EvaluateEnabledStrategySlots(stock));
                 ProcessStrategyExitAlerts(stock);

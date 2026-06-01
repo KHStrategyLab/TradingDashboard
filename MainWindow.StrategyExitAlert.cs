@@ -56,26 +56,8 @@ namespace TradingDashboard
                 return;
             }
 
-            StrategyExitCheck check = EvaluateStrategyExitCheck(stock, holding);
-            if (!check.HasExitSignal)
-                return;
-
-            if (execution.AllowsLiveBuy)
-                _ = TrySubmitStrategyLiveSellAsync(stock, holding, check);
-
-            string key = BuildStrategyExitAlertKey(stock, check);
-            if (!_strategyExitAlertLoggedKeys.Add(key))
-                return;
-
-            string orderMode = execution.LiveBuyEnabled
-                ? "LIVE ORDERS ON / sell handoff pending"
-                : "LIVE ORDERS OFF / alert only";
-
-            AppendReadyLog(
-                $"STRATEGY EXIT SIGNAL: {stock.Code} {stock.Name} / {check.Reason} / " +
-                $"price {check.CurrentPrice:N0} / avg {check.AverageBuyPrice:N0} / pnl {check.ProfitRate:0.##}% / {orderMode}");
-
-            _ = TrySendStrategyExitAlertAsync(stock, check, orderMode);
+            // 매도/손절 알림은 자동 전략 장부 또는 Manual Buy Stop Assist가 명시적으로 소유한 포지션만 처리한다.
+            // 보유 종목 전체를 평균단가 기준으로 훑는 fallback은 꺼진 4번 손절기까지 알림을 내는 원인이 되므로 금지한다.
         }
 
         private bool ProcessStrategyPositionExitAlerts(

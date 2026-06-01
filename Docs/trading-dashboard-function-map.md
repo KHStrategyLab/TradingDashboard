@@ -159,7 +159,7 @@ Date: 2026-06-01
 | 후보별 캐시 키 | `StrategyMinuteCacheService` | `CandidateMinuteCache`, `BuildMinuteCacheKey` | `종목코드|시장|분봉` |
 | 실시간 현재봉 입력 | `ApplyRealtimeTickToStrategyMinuteLedger`, `StrategyMinuteCacheService.ApplyRealtimeTick` | `ApplyRealtimeTickToCandidateMinuteCache` | 0B 현재가와 거래량으로 현재봉을 갱신한다. 신호/주문은 만들지 않는다. |
 | 봉마감 확정봉 입력 | `StrategyMinuteCacheService.ApplyClosedBar` | `ApplyRealtimeTickToCandidateMinuteCache` | 명시적 확정봉 입력구. 향후 봉마감 이벤트나 seed 보강에서 사용한다. |
-| READY 판정 | `IsStrategyMinuteDataReady`, `StrategyMinuteDataStatus`, `BuildStrategyMinuteDataStatus` | `TryGetReadyCandidateMinuteCache` | 요청 분봉 최소 개수와 MA/20봉 준비, 최신 예상 분봉 bucket 추종 여부를 모두 만족해야 매수 판단 가능 |
+| READY 판정 | `IsStrategyMinuteDataReady`, `StrategyMinuteDataStatus`, `BuildStrategyMinuteDataStatus` | `TryGetReadyCandidateMinuteCache` | 요청 분봉 최소 개수와 MA/20봉 준비를 확인한다. KRX는 최신 예상 분봉 bucket 추종을 요구하고, NXT 장외는 방금 REST/0B로 갱신된 스냅샷이면 체결 공백 bucket을 허용한다. |
 | 상태머신 | 전략 슬롯별 `Evaluate` 확장 | `MainWindow.Strategy.BuySignalCheck.cs` | WAIT -> pullback -> recovery -> signal 흐름 |
 | 주문 연결 | `ProcessStrategySignalAlerts`, `ProcessStrategyExitAlerts`, `KiwoomTradingClient` | `EvaluateLiveBuyRiskGuard` | 신호 -> RiskGuard -> 주문 순서. 전략 클래스와 0B 수신부가 주문을 직접 보내지 않는다. |
 

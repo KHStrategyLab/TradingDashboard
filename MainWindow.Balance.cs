@@ -140,14 +140,31 @@ namespace TradingDashboard
 
             List<KiwoomHolding> holdings = [.. krx.Holdings];
             List<string> sources = [$"{krx.SourceApi}:{krx.QueryMarket}"];
+            HashSet<string> knownCodes = [.. holdings
+                .Select(item => NormalizeStockCode(item.StockCode))
+                .Where(code => !string.IsNullOrWhiteSpace(code))];
 
             try
             {
+                using CancellationTokenSource nxtCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                nxtCts.CancelAfter(TimeSpan.FromSeconds(3));
                 KiwoomBalanceSnapshot nxt = await _tradingClient
-                    .GetEvaluationBalanceAsync(KiwoomTradingConstants.MarketNxt, cancellationToken)
+                    .GetEvaluationBalanceAsync(KiwoomTradingConstants.MarketNxt, nxtCts.Token)
                     .ConfigureAwait(true);
-                holdings.AddRange(nxt.Holdings);
-                sources.Add($"{nxt.SourceApi}:{nxt.QueryMarket}");
+                IReadOnlyList<KiwoomHolding> missingNxtHoldings = [.. nxt.Holdings
+                    .Where(item => item.HoldingQuantity > 0 && !knownCodes.Contains(NormalizeStockCode(item.StockCode)))];
+                if (missingNxtHoldings.Count > 0)
+                {
+                    holdings.AddRange(missingNxtHoldings);
+                    foreach (KiwoomHolding item in missingNxtHoldings)
+                        knownCodes.Add(NormalizeStockCode(item.StockCode));
+                    sources.Add($"{nxt.SourceApi}:{nxt.QueryMarket}-missing");
+                    AppendLog($"balance NXT snapshot supplemented missing holdings only: {missingNxtHoldings.Count}items");
+                }
+                else
+                {
+                    AppendLog($"balance NXT snapshot reference only: {nxt.Holdings.Count}items / duplicate merge blocked");
+                }
             }
             catch (OperationCanceledException)
             {
@@ -160,12 +177,13 @@ namespace TradingDashboard
 
             try
             {
+                using CancellationTokenSource executionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                executionCts.CancelAfter(TimeSpan.FromSeconds(3));
                 KiwoomBalanceSnapshot executionKrx = await _tradingClient
-                    .GetExecutionBalanceAsync(KiwoomTradingConstants.MarketKrx, cancellationToken)
+                    .GetExecutionBalanceAsync(KiwoomTradingConstants.MarketKrx, executionCts.Token)
                     .ConfigureAwait(true);
-                HashSet<string> knownCodes = [.. holdings.Select(item => item.StockCode).Where(code => !string.IsNullOrWhiteSpace(code))];
                 IReadOnlyList<KiwoomHolding> missingExecutionHoldings = [.. executionKrx.Holdings
-                    .Where(item => item.HoldingQuantity > 0 && !knownCodes.Contains(item.StockCode))];
+                    .Where(item => item.HoldingQuantity > 0 && !knownCodes.Contains(NormalizeStockCode(item.StockCode)))];
                 if (missingExecutionHoldings.Count > 0)
                 {
                     holdings.AddRange(missingExecutionHoldings);
@@ -175,7 +193,10 @@ namespace TradingDashboard
             }
             catch (OperationCanceledException)
             {
-                throw;
+                if (cancellationToken.IsCancellationRequested)
+                    throw;
+
+                AppendLog("balance kt00005 supplement skipped: timeout 3s");
             }
             catch (Exception ex)
             {
@@ -194,7 +215,7 @@ namespace TradingDashboard
 
             return new KiwoomBalanceSnapshot(
                 string.Join("+", sources),
-                "KRX+NXT",
+                "KRX baseline + NXT overlay",
                 DateTime.Now,
                 totalPurchase,
                 totalEvaluation,
@@ -224,31 +245,50 @@ namespace TradingDashboard
                     continue;
                 }
 
-                if (!await IsBalanceNxtEligibleAsync(code, cancellationToken).ConfigureAwait(true))
+                try
+                {
+                    using CancellationTokenSource overlayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    overlayCts.CancelAfter(TimeSpan.FromSeconds(4));
+
+                    if (!await IsBalanceNxtEligibleAsync(code, overlayCts.Token).ConfigureAwait(true))
+                    {
+                        corrected.Add(holding);
+                        continue;
+                    }
+
+                    eligibleCount++;
+
+                    (long price, string source) = await FetchNxtBalanceOverlayPriceAsync(code, overlayCts.Token)
+                        .ConfigureAwait(true);
+                    if (price <= 0)
+                    {
+                        corrected.Add(holding);
+                        continue;
+                    }
+
+                    KiwoomHolding revalued = RevalueHoldingWithCurrentPrice(holding, price);
+                    corrected.Add(revalued);
+                    if (price != holding.CurrentPrice || revalued.EvaluationAmount != holding.EvaluationAmount)
+                    {
+                        appliedCount++;
+                        AppendLog($"balance NXT overlay: {holding.StockName}({code}) / {source} / now {holding.CurrentPrice:N0}->{price:N0} / eval {revalued.EvaluationAmount:N0} / pl {revalued.EvaluationProfit:N0}");
+                    }
+
+                    await Task.Delay(120, cancellationToken).ConfigureAwait(true);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        throw;
+
+                    corrected.Add(holding);
+                    AppendLog($"balance NXT overlay skipped: {holding.StockName}({code}) / timeout 4s");
+                }
+                catch (Exception ex)
                 {
                     corrected.Add(holding);
-                    continue;
+                    AppendLog($"balance NXT overlay skipped: {holding.StockName}({code}) / {ex.GetType().Name} / {ex.Message}");
                 }
-
-                eligibleCount++;
-
-                (long price, string source) = await FetchNxtBalanceOverlayPriceAsync(code, cancellationToken)
-                    .ConfigureAwait(true);
-                if (price <= 0)
-                {
-                    corrected.Add(holding);
-                    continue;
-                }
-
-                KiwoomHolding revalued = RevalueHoldingWithCurrentPrice(holding, price);
-                corrected.Add(revalued);
-                if (price != holding.CurrentPrice || revalued.EvaluationAmount != holding.EvaluationAmount)
-                {
-                    appliedCount++;
-                    AppendLog($"balance NXT overlay: {holding.StockName}({code}) / {source} / now {holding.CurrentPrice:N0}->{price:N0} / eval {revalued.EvaluationAmount:N0} / pl {revalued.EvaluationProfit:N0}");
-                }
-
-                await Task.Delay(120, cancellationToken).ConfigureAwait(true);
             }
 
             if (eligibleCount > 0)
@@ -409,29 +449,12 @@ namespace TradingDashboard
         {
             return [.. (holdings ?? [])
                 .Where(item => item.HoldingQuantity > 0 && !string.IsNullOrWhiteSpace(item.StockCode))
-                .GroupBy(item => item.StockCode, StringComparer.Ordinal)
+                .GroupBy(item => NormalizeStockCode(item.StockCode), StringComparer.Ordinal)
                 .Select(group =>
                 {
-                    long quantity = group.Sum(item => Math.Max(0, item.HoldingQuantity));
-                    long orderable = group.Sum(item => Math.Max(0, item.OrderableQuantity));
-                    long purchase = group.Sum(item => Math.Max(0, item.PurchaseAmount));
-                    long evaluation = group.Sum(item => Math.Max(0, item.EvaluationAmount));
-                    long profit = group.Sum(item => item.EvaluationProfit);
-                    long averagePrice = quantity > 0 && purchase > 0 ? purchase / quantity : group.First().AverageBuyPrice;
-                    long currentPrice = quantity > 0 && evaluation > 0 ? evaluation / quantity : group.First().CurrentPrice;
-                    decimal profitRate = purchase > 0 ? profit / (decimal)purchase * 100m : group.First().ProfitRate;
-
-                    return new KiwoomHolding(
-                        group.Key,
-                        group.FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.StockName))?.StockName ?? string.Empty,
-                        quantity,
-                        orderable,
-                        currentPrice,
-                        averagePrice,
-                        purchase,
-                        evaluation,
-                        profit,
-                        profitRate);
+                    // KRX/NXT 잔고 스냅샷은 같은 계좌 보유를 시장별로 중복 반환할 수 있다.
+                    // 같은 종목은 절대 합산하지 않고, 먼저 확보한 기준 행만 평가 오버레이 대상으로 둔다.
+                    return group.First();
                 })
                 .OrderByDescending(item => Math.Abs(item.EvaluationAmount))];
         }
@@ -534,22 +557,22 @@ namespace TradingDashboard
 
                 var merged = kt00018Krx.Holdings
                     .Concat(kt00018Nxt.Holdings)
-                    .GroupBy(x => x.StockCode, StringComparer.Ordinal)
+                    .GroupBy(x => NormalizeStockCode(x.StockCode), StringComparer.Ordinal)
                     .Select(group => new
                     {
                         Code = group.Key,
                         Name = group.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.StockName))?.StockName ?? string.Empty,
-                        Quantity = group.Sum(x => x.HoldingQuantity),
-                        Orderable = group.Sum(x => x.OrderableQuantity),
-                        Evaluation = group.Sum(x => x.EvaluationAmount),
-                        Profit = group.Sum(x => x.EvaluationProfit)
+                        Quantity = group.First().HoldingQuantity,
+                        Orderable = group.First().OrderableQuantity,
+                        Evaluation = group.First().EvaluationAmount,
+                        Profit = group.First().EvaluationProfit
                     })
                     .OrderByDescending(x => Math.Abs(x.Evaluation))
                     .ToList();
 
                 AppendLog($"balance verify kt00018 KRX: {kt00018Krx.Holdings.Count}items / eval {kt00018Krx.TotalEvaluationAmount:N0} / pl {kt00018Krx.TotalEvaluationProfit:N0} / rate {kt00018Krx.TotalProfitRate:N2}%");
                 AppendLog($"balance verify kt00018 NXT: {kt00018Nxt.Holdings.Count}items / eval {kt00018Nxt.TotalEvaluationAmount:N0} / pl {kt00018Nxt.TotalEvaluationProfit:N0} / rate {kt00018Nxt.TotalProfitRate:N2}%");
-                AppendLog($"balance verify kt00018 merged: {merged.Count}items / eval {merged.Sum(x => x.Evaluation):N0} / pl {merged.Sum(x => x.Profit):N0}");
+                AppendLog($"balance verify kt00018 KRX-primary union: {merged.Count}items / eval {merged.Sum(x => x.Evaluation):N0} / pl {merged.Sum(x => x.Profit):N0}");
                 AppendLog($"balance verify kt00005 KRX: {kt00005Krx.Holdings.Count}items / eval {kt00005Krx.TotalEvaluationAmount:N0} / pl {kt00005Krx.TotalEvaluationProfit:N0} / rate {kt00005Krx.TotalProfitRate:N2}%");
 
                 foreach (var row in merged.Take(8))

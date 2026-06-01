@@ -892,7 +892,7 @@ namespace TradingDashboard
             return hasMinuteStrategy || enabledSettings.Count > 0;
         }
 
-        private static bool HasFreshMa60AndBreakout20(
+        private bool HasFreshMa60AndBreakout20(
             StrategyMinuteSnapshotSet snapshots,
             int ma60Minute,
             int breakoutMinute) =>
@@ -900,10 +900,13 @@ namespace TradingDashboard
             IsStrategyMinuteFrameFresh(snapshots.Get(ma60Minute)) &&
             IsStrategyMinuteFrameFresh(snapshots.Get(breakoutMinute));
 
-        private static bool IsStrategyMinuteFrameFresh(StrategyMinuteFrameSnapshot? frame)
+        private bool IsStrategyMinuteFrameFresh(StrategyMinuteFrameSnapshot? frame)
         {
             if (frame == null || !frame.IsReady)
                 return false;
+
+            if (IsNxtStrategyMinuteFrame(frame) && ShouldUseNxtMarketNow())
+                return IsNxtStrategyMinuteFrameFresh(frame);
 
             DateTime latest = frame.CurrentBarTime > frame.LastCompletedBarTime
                 ? frame.CurrentBarTime
@@ -913,6 +916,30 @@ namespace TradingDashboard
 
             DateTime expectedLatestBucket = ResolveExpectedLatestMinuteBucket(frame.Minute, DateTime.Now);
             return CountMissingMinuteBars(latest, expectedLatestBucket, frame.Minute) <= 0;
+        }
+
+        private static bool IsNxtStrategyMinuteFrame(StrategyMinuteFrameSnapshot frame) =>
+            string.Equals(frame.Market, "NXT", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsNxtStrategyMinuteFrameFresh(StrategyMinuteFrameSnapshot frame)
+        {
+            DateTime latestSource = frame.LastRealtimeAt > frame.LoadedAt
+                ? frame.LastRealtimeAt
+                : frame.LoadedAt;
+
+            // NXT 장외는 체결이 분 단위로 연속 발생하지 않을 수 있다.
+            // 방금 REST/0B로 갱신한 NXT 장부는 현재 시각 버킷이 비어 있어도 최신 스냅샷으로 본다.
+            if (latestSource != DateTime.MinValue &&
+                (DateTime.Now - latestSource).TotalMinutes <= 5)
+                return true;
+
+            DateTime latestBar = frame.CurrentBarTime > frame.LastCompletedBarTime
+                ? frame.CurrentBarTime
+                : frame.LastCompletedBarTime;
+
+            return latestBar.Date == DateTime.Today &&
+                latestBar != DateTime.MinValue &&
+                CountMissingMinuteBars(latestBar, ResolveExpectedLatestMinuteBucket(frame.Minute, DateTime.Now), frame.Minute) <= 0;
         }
 
         private string FormatStrategyMinuteReadiness(WatchStockItem stock)

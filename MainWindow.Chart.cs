@@ -167,6 +167,19 @@ namespace TradingDashboard
             _lastRealtimeChartDrawAt = DateTime.MinValue;
             ResetChartViewport();
 
+            if (period == ChartPeriod.Daily &&
+                candles.Count > 0 &&
+                _watchStockByCode.TryGetValue(selectedStockCode, out WatchStockItem? stock))
+            {
+                ChartCandle latest = candles[^1];
+                ApplyMiniDailyCandle(
+                    stock,
+                    (long)Math.Round(latest.Open),
+                    (long)Math.Round(latest.High),
+                    (long)Math.Round(latest.Low),
+                    (long)Math.Round(latest.Close));
+            }
+
             DrawFullChart(reason);
             UpdateStrategyProgressRows();
         }
@@ -488,9 +501,12 @@ namespace TradingDashboard
 
             DateTime now = DateTime.Now;
             ChartCandle last = _currentChartCandles[^1];
+            bool isNewCandle = false;
+            bool viewportSnapped = false;
             bool shouldSnapViewportToLatest = IsChartViewportNearLatest();
             if (!IsSameCalendarChartBucket(last.Date, period, now))
             {
+                isNewCandle = true;
                 last = new ChartCandle
                 {
                     Date = BuildCalendarChartBucketDate(period, now),
@@ -509,11 +525,11 @@ namespace TradingDashboard
                 }
 
                 if (shouldSnapViewportToLatest)
-                    SnapChartViewportToLatestIfNear(force: true);
+                    viewportSnapped = SnapChartViewportToLatestIfNear(force: true);
             }
             else
             {
-                SnapChartViewportToLatestIfNear();
+                viewportSnapped = SnapChartViewportToLatestIfNear();
                 if (last.Open <= 0)
                     last.Open = price;
                 last.Close = price;
@@ -533,13 +549,20 @@ namespace TradingDashboard
                 }
             }
 
-            if ((DateTime.Now - _lastRealtimeChartDrawAt).TotalMilliseconds < DailyChartRealtimeDrawIntervalMs)
+            if (viewportSnapped)
+            {
+                _lastRealtimeChartDrawAt = DateTime.Now;
+                DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(period)} snap to latest");
+                return;
+            }
+
+            if (!isNewCandle && (DateTime.Now - _lastRealtimeChartDrawAt).TotalMilliseconds < DailyChartRealtimeDrawIntervalMs)
             {
                 if (TryUpdateLastChartVisual(last))
                     return;
             }
 
-            if (TryUpdateLastChartVisual(last))
+            if (!isNewCandle && TryUpdateLastChartVisual(last))
                 return;
 
             _lastRealtimeChartDrawAt = DateTime.Now;
@@ -571,6 +594,7 @@ namespace TradingDashboard
             string bucketTime = BuildMinuteBucketTime(tradeTimeText, minute);
             ChartCandle last = _currentChartCandles[^1];
             bool isNewCandle = false;
+            bool viewportSnapped = false;
             bool shouldSnapViewportToLatest = IsChartViewportNearLatest();
             if (!IsSameChartDate(last.Date, bucketTime))
             {
@@ -586,18 +610,18 @@ namespace TradingDashboard
                 };
 
                 _currentChartCandles.Add(last);
-                if (_currentChartCandles.Count > MinuteChartCandleCount)
+                if (_currentChartCandles.Count > ResolveChartCandleCount(_currentChartDataPeriod))
                 {
                     _currentChartCandles.RemoveAt(0);
                     _chartViewStartIndex = Math.Max(0, _chartViewStartIndex - 1);
                 }
 
                 if (shouldSnapViewportToLatest)
-                    SnapChartViewportToLatestIfNear(force: true);
+                    viewportSnapped = SnapChartViewportToLatestIfNear(force: true);
             }
             else
             {
-                SnapChartViewportToLatestIfNear();
+                viewportSnapped = SnapChartViewportToLatestIfNear();
                 if (last.Open <= 0)
                     last.Open = price;
                 last.Close = price;
@@ -605,6 +629,13 @@ namespace TradingDashboard
                 last.Low = Math.Min(last.Low > 0 ? last.Low : price, price);
                 if (tradeVolume > 0)
                     last.Volume += tradeVolume;
+            }
+
+            if (viewportSnapped)
+            {
+                _lastRealtimeChartDrawAt = DateTime.Now;
+                DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} snap to latest");
+                return;
             }
 
             if (!isNewCandle && (DateTime.Now - _lastRealtimeChartDrawAt).TotalMilliseconds < MinuteChartRealtimeDrawIntervalMs)
@@ -649,21 +680,24 @@ namespace TradingDashboard
 
             int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, _chartViewStartIndex + _chartViewCount - 1);
             int distanceFromLatest = Math.Max(0, _currentChartCandles.Count - 1 - visibleEndIndex);
-            int snapDistance = IsMinuteChartPeriod(_currentChartDataPeriod)
-                ? MinuteChartRealtimeSnapToLatestDistance
-                : ChartRealtimeSnapToLatestDistance;
+            int snapDistance = ResolveChartRealtimeSnapToLatestDistance(_currentChartDataPeriod);
             return distanceFromLatest <= snapDistance;
         }
 
-        private void SnapChartViewportToLatestIfNear(bool force = false)
+        private bool SnapChartViewportToLatestIfNear(bool force = false)
         {
             if (_chartViewCount <= 0 || _currentChartCandles.Count == 0)
-                return;
+                return false;
 
             if (!force && !IsChartViewportNearLatest())
-                return;
+                return false;
 
-            _chartViewStartIndex = Math.Max(0, _currentChartCandles.Count - _chartViewCount);
+            int nextStartIndex = Math.Max(0, _currentChartCandles.Count - _chartViewCount);
+            if (nextStartIndex == _chartViewStartIndex)
+                return false;
+
+            _chartViewStartIndex = nextStartIndex;
+            return true;
         }
 
         private List<ChartCandle> GetVisibleChartCandles()
@@ -939,8 +973,19 @@ namespace TradingDashboard
                 ChartPeriod.Daily => 120,
                 ChartPeriod.Weekly => 100,
                 ChartPeriod.Monthly => 60,
+                ChartPeriod.Minute1 => OneMinuteChartCandleCount,
                 _ when IsMinuteChartPeriod(period) => MinuteChartCandleCount,
                 _ => 120
+            };
+        }
+
+        private static int ResolveChartRealtimeSnapToLatestDistance(ChartPeriod period)
+        {
+            return period switch
+            {
+                ChartPeriod.Minute1 => OneMinuteChartRealtimeSnapToLatestDistance,
+                _ when IsMinuteChartPeriod(period) => MinuteChartRealtimeSnapToLatestDistance,
+                _ => ChartRealtimeSnapToLatestDistance
             };
         }
 

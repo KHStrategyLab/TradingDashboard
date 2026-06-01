@@ -105,6 +105,7 @@ namespace TradingDashboard
         private readonly HashSet<string> _conditionEnterAlertSentStockCodes = new(StringComparer.Ordinal);
         private readonly object _conditionEnterAlertLock = new();
         private DateTime _conditionEnterAlertSentDate = DateTime.Today;
+        private const int OneMinuteChartCandleCount = 240;
         private const int MinuteChartCandleCount = 700;
         private const int DailyChartRealtimeDrawIntervalMs = 350;
         private const int MinuteChartRealtimeDrawIntervalMs = 1500;
@@ -112,6 +113,7 @@ namespace TradingDashboard
         private const int MaxChartMemoryCacheCandles = 100_000;
         private const int MinChartDragCandleCount = 10;
         private const int ChartRealtimeSnapToLatestDistance = 10;
+        private const int OneMinuteChartRealtimeSnapToLatestDistance = 10;
         private const int MinuteChartRealtimeSnapToLatestDistance = 50;
         private readonly List<ChartCandle> _currentChartCandles = [];
         private readonly Dictionary<ChartCacheKey, ChartCacheEntry> _chartMemoryCache = [];
@@ -2300,9 +2302,35 @@ namespace TradingDashboard
             stock.PriceBrush = currentPrice > 0
                 ? ResolveHogaBrushByKrxPrevClose(currentPrice)
                 : changeAmount > 0 ? _upColorBrush : changeAmount < 0 ? _downColorBrush : _whiteBrush;
+            ApplyMiniDailyCandle(
+                stock,
+                ParseLongAbs(metrics.OpenPriceText),
+                ParseLongAbs(metrics.HighPriceText),
+                ParseLongAbs(metrics.LowPriceText),
+                currentPrice);
 
             string rateText = stock.ChangeRateText;
             HogaStatusText.Text = $"Price {(currentPrice > 0 ? currentPrice.ToString("N0") : stock.CurrentPrice > 0 ? stock.CurrentPrice.ToString("N0") : "-")} / Rate {rateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
+        }
+
+        private void ApplyMiniDailyCandle(WatchStockItem stock, long open, long high, long low, long close)
+        {
+            if (stock == null)
+                return;
+
+            stock.SetMiniDailyCandle(open, high, low, close, ResolveMiniDailyBrush(open, close));
+        }
+
+        private Brush ResolveMiniDailyBrush(long open, long close)
+        {
+            if (open <= 0 || close <= 0)
+                return _whiteBrush;
+
+            if (close > open)
+                return _upColorBrush;
+            if (close < open)
+                return _downColorBrush;
+            return _whiteBrush;
         }
 
         private void AppendLog(string message)

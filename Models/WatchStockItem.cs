@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -30,7 +31,12 @@ namespace TradingDashboard.Models
         private long _gateBaseCandleTradeValue;
         private bool _isIntradayPreCandidate;
         private long _lastPrice;
+        private long _miniDailyOpen;
+        private long _miniDailyHigh;
+        private long _miniDailyLow;
+        private long _miniDailyClose;
         private Brush _priceBrush = Brushes.White;
+        private Brush _miniDailyBrush = Brushes.Transparent;
         private bool _supportsNxt;
 
         public string Code
@@ -263,10 +269,40 @@ namespace TradingDashboard.Models
             }
         }
 
+        public long MiniDailyOpen
+        {
+            get => _miniDailyOpen;
+            private set => SetField(ref _miniDailyOpen, value);
+        }
+
+        public long MiniDailyHigh
+        {
+            get => _miniDailyHigh;
+            private set => SetField(ref _miniDailyHigh, value);
+        }
+
+        public long MiniDailyLow
+        {
+            get => _miniDailyLow;
+            private set => SetField(ref _miniDailyLow, value);
+        }
+
+        public long MiniDailyClose
+        {
+            get => _miniDailyClose;
+            private set => SetField(ref _miniDailyClose, value);
+        }
+
         public Brush PriceBrush
         {
             get => _priceBrush;
             set => SetField(ref _priceBrush, value);
+        }
+
+        public Brush MiniDailyBrush
+        {
+            get => _miniDailyBrush;
+            set => SetField(ref _miniDailyBrush, value);
         }
 
         public bool SupportsNxt
@@ -311,6 +347,11 @@ namespace TradingDashboard.Models
         }
 
         public string PreCandidateBadgeText => IsIntradayPreCandidate ? "NEW" : string.Empty;
+        public bool MiniDailyHasCandle => MiniDailyOpen > 0 && MiniDailyHigh > 0 && MiniDailyLow > 0 && MiniDailyClose > 0;
+        public double MiniDailyWickTop => CalculateMiniDailyY(MiniDailyHigh);
+        public double MiniDailyWickHeight => Math.Max(2, CalculateMiniDailyY(MiniDailyLow) - CalculateMiniDailyY(MiniDailyHigh));
+        public double MiniDailyBodyTop => Math.Min(CalculateMiniDailyY(MiniDailyOpen), CalculateMiniDailyY(MiniDailyClose));
+        public double MiniDailyBodyHeight => Math.Max(3, Math.Abs(CalculateMiniDailyY(MiniDailyOpen) - CalculateMiniDailyY(MiniDailyClose)));
 
         public string AlertListBadgeText => !string.IsNullOrWhiteSpace(OrderWarningListBadgeText)
             ? OrderWarningListBadgeText
@@ -332,6 +373,45 @@ namespace TradingDashboard.Models
             }
         }
 
+        public void SetMiniDailyCandle(long open, long high, long low, long close, Brush brush)
+        {
+            if (open <= 0 && high <= 0 && low <= 0 && close <= 0)
+                return;
+
+            long safeClose = close > 0 ? close : CurrentPrice;
+            if (safeClose <= 0)
+                safeClose = open > 0 ? open : high > 0 ? high : low;
+
+            long safeOpen = open > 0 ? open : safeClose;
+            long safeHigh = Math.Max(Math.Max(high, safeOpen), safeClose);
+            long safeLow = low > 0 ? Math.Min(Math.Min(low, safeOpen), safeClose) : Math.Min(safeOpen, safeClose);
+
+            MiniDailyOpen = safeOpen;
+            MiniDailyHigh = safeHigh;
+            MiniDailyLow = safeLow;
+            MiniDailyClose = safeClose;
+            MiniDailyBrush = brush;
+            NotifyMiniDailyChanged();
+        }
+
+        public void ApplyMiniDailyRealtimePrice(long price, Brush brush)
+        {
+            if (price <= 0)
+                return;
+
+            if (!MiniDailyHasCandle)
+            {
+                SetMiniDailyCandle(price, price, price, price, brush);
+                return;
+            }
+
+            MiniDailyHigh = Math.Max(MiniDailyHigh, price);
+            MiniDailyLow = MiniDailyLow > 0 ? Math.Min(MiniDailyLow, price) : price;
+            MiniDailyClose = price;
+            MiniDailyBrush = brush;
+            NotifyMiniDailyChanged();
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
@@ -349,6 +429,15 @@ namespace TradingDashboard.Models
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
+        private void NotifyMiniDailyChanged()
+        {
+            OnPropertyChanged(nameof(MiniDailyHasCandle));
+            OnPropertyChanged(nameof(MiniDailyWickTop));
+            OnPropertyChanged(nameof(MiniDailyWickHeight));
+            OnPropertyChanged(nameof(MiniDailyBodyTop));
+            OnPropertyChanged(nameof(MiniDailyBodyHeight));
+        }
+
         private static string NormalizeText(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
@@ -357,6 +446,20 @@ namespace TradingDashboard.Models
         private static string NormalizeDash(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        }
+
+        private double CalculateMiniDailyY(long price)
+        {
+            const double height = 34d;
+            if (!MiniDailyHasCandle || price <= 0)
+                return height / 2d;
+
+            long high = Math.Max(MiniDailyHigh, Math.Max(MiniDailyOpen, MiniDailyClose));
+            long low = MiniDailyLow > 0
+                ? Math.Min(MiniDailyLow, Math.Min(MiniDailyOpen, MiniDailyClose))
+                : Math.Min(MiniDailyOpen, MiniDailyClose);
+            double range = Math.Max(1d, high - low);
+            return Math.Max(1d, Math.Min(height - 1d, (high - price) / range * (height - 4d) + 2d));
         }
 
         private static string NormalizeMarketName(string value)
