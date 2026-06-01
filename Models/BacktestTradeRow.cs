@@ -11,6 +11,8 @@ namespace TradingDashboard.Models
         public string ExitTime { get; set; } = string.Empty;
         public long EntryPrice { get; set; }
         public long ExitPrice { get; set; }
+        public long MaxHigh { get; set; }
+        public long MinLow { get; set; }
         public int Quantity { get; set; }
         public decimal ProfitRate { get; set; }
         public long ProfitAmount { get; set; }

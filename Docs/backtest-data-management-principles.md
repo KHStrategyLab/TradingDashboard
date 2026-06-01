@@ -270,3 +270,13 @@ trades.csv
 summaries.json
 strategy_comparison.csv
 ```
+
+The first smoke-test strategy is `TEN_MA60_PULLBACK_FIVE_HIGH20_BREAK`.
+
+It is run with:
+
+```powershell
+dotnet run -- --backtest-ten-pullback-five-breakout
+```
+
+It measures signal quality by holding for six same-day 5-minute bars and recording the 30-minute high/low range. It is not connected to live trading.

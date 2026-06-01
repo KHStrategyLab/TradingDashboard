@@ -171,3 +171,39 @@ Storage/Backtests/Runs/{RunId}/strategy_comparison.csv
 ```
 
 Do not write strategy outputs back into `DataStore`.
+
+## First Strategy Smoke Test
+
+Operator command:
+
+```powershell
+dotnet run -- --backtest-ten-pullback-five-breakout
+```
+
+Strategy:
+
+```text
+TEN_MA60_PULLBACK_FIVE_HIGH20_BREAK
+```
+
+Rules:
+
+```text
+1. Use only verified base-candle stock/market pairs.
+2. Start after the earliest verified base-candle date for that stock/market pair.
+3. 10-minute bars must have crossed down from MA60 and still be below MA60.
+4. Current 5-minute bar must be bullish.
+5. Current 5-minute close must break the previous 20 completed 5-minute bars' highest close.
+6. Current 5-minute open must still be at or below that previous high-close price.
+7. Current 5-minute volume must exceed the volume of the previous high-close bar.
+8. If six same-day 5-minute bars are not available after entry, skip the signal.
+```
+
+Observation exit:
+
+```text
+Hold for the next six same-day 5-minute bars.
+Record MaxHigh, MinLow, MFE, MAE, and the 30-minute exit close.
+```
+
+This is a signal-quality test, not a live strategy.

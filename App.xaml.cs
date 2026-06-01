@@ -33,6 +33,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-ten-pullback-five-breakout", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunTenPullbackFiveBreakoutBacktest();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             base.OnStartup(e);
         }
 
@@ -84,6 +92,27 @@ namespace TradingDashboard
         private static void WriteBacktestJobSummary(BacktestDatasetUpdateSummary summary)
         {
             WriteBacktestJobSummary(summary, "last_daily_update_summary.json", $"daily_update_summary_{summary.RunId}.json");
+        }
+
+        private static int RunTenPullbackFiveBreakoutBacktest()
+        {
+            try
+            {
+                var backtest = new TenMinutePullbackFiveMinuteBreakoutBacktest();
+                BacktestRunResult result = backtest.Run();
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest strategy failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
         }
 
         private static void WriteBacktestJobSummary<T>(T summary, string latestFileName, string runFileName)

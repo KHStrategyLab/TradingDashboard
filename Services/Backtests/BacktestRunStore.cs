@@ -75,7 +75,7 @@ namespace TradingDashboard.Services.Backtests
         private static string BuildTradesCsv(IEnumerable<BacktestTradeRow> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("RunId,StrategyCode,ExitRuleCode,Code,Market,EntryTime,ExitTime,EntryPrice,ExitPrice,Quantity,ProfitRate,ProfitAmount,MAE,MFE,HoldingMinutes,EntryReason,ExitReason");
+            sb.AppendLine("RunId,StrategyCode,ExitRuleCode,Code,Market,EntryTime,ExitTime,EntryPrice,ExitPrice,MaxHigh,MinLow,Quantity,ProfitRate,ProfitAmount,MAE,MFE,HoldingMinutes,EntryReason,ExitReason");
             foreach (BacktestTradeRow row in rows)
             {
                 AppendCsvLine(sb,
@@ -88,6 +88,8 @@ namespace TradingDashboard.Services.Backtests
                     row.ExitTime,
                     row.EntryPrice.ToString(CultureInfo.InvariantCulture),
                     row.ExitPrice.ToString(CultureInfo.InvariantCulture),
+                    row.MaxHigh.ToString(CultureInfo.InvariantCulture),
+                    row.MinLow.ToString(CultureInfo.InvariantCulture),
                     row.Quantity.ToString(CultureInfo.InvariantCulture),
                     row.ProfitRate.ToString(CultureInfo.InvariantCulture),
                     row.ProfitAmount.ToString(CultureInfo.InvariantCulture),
