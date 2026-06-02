@@ -1543,7 +1543,7 @@ namespace TradingDashboard
             UpdateStrategyMinutePreloadControlLock();
             UpdateStrategyControlBoard();
             if (completed >= stocks.Count)
-                AppendReadyLog($"strategy minute auto preload ALL READY TO USE: {completed:N0}/{stocks.Count:N0}stocks");
+                AppendHotLog($"strategy minute auto preload ALL READY TO USE: {completed:N0}/{stocks.Count:N0}stocks");
             else
                 AppendLog($"strategy minute auto preload finished with failures: ready {completed:N0}/{stocks.Count:N0} / failed {failed:N0}");
         }

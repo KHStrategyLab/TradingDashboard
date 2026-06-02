@@ -47,18 +47,21 @@ namespace TradingDashboard.Services.Backtests
                 {
                     string code = BacktestDataStore.NormalizeCode(item.Code);
                     bool supportsNxt = stockMasterByCode.TryGetValue(code, out StockMasterItem? master) && master.SupportsNxt;
+                    string market = BacktestMarketModeHelper.IsSorMixed(_settings) && supportsNxt
+                        ? "NXT"
+                        : "KRX";
                     return new BacktestCandidate
                     {
                         Code = code,
                         Name = string.IsNullOrWhiteSpace(item.Name) && master != null ? master.Name : item.Name,
-                        Market = "KRX",
+                        Market = market,
                         CandidateDate = today,
                         NxtEnabled = supportsNxt,
                         StrategyCode = "BASE_CANDLE",
                         Source = "KIWOOM_CONDITION",
                         SourceName = sourceName,
                         Memo = supportsNxt
-                            ? $"condition {conditionSeq}: {conditionName} / SOR mixed NXT eligible"
+                            ? $"condition {conditionSeq}: {conditionName} / SOR mixed NXT eligible / base market {market}"
                             : $"condition {conditionSeq}: {conditionName}",
                         ImportedAt = importedAt
                     };

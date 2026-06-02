@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
@@ -28,9 +29,16 @@ namespace TradingDashboard
         private const int MaxWatchlistMemoryCacheCount = 200;
         private const int DuplicateStockSelectionBlockMs = 200;
         private const string KrxPreviousCloseBasePriceSource = "KRX_PREV_CLOSE";
-        private const int GateBaseCandleLookbackCount = 10;
+        private const int GateBaseCandleLookbackCount = 6;
         private const long GateBaseCandleMinTradeValue = 100_000_000_000;
-        private const double GateBaseCandleMinChangeRate = 20.0;
+        private const double GateBaseCandleMinChangeRate = 25.0;
+        private const long GateBaseCandleLargeTradeValue = 300_000_000_000;
+        private const double GateBaseCandleLargeTradeMinChangeRate = 20.0;
+        private const double GateBaseCandleMinPrevHighDistanceRate = 10.0;
+        private const double GateBaseCandleMaxUpperTailPercent = 20.0;
+        private const double GateBaseCandleMinCloseLocationPercent = 80.0;
+        private const int GateBaseCandleBollingerPeriod = 20;
+        private const string GateBaseCandleRuleVersion = "NXT_FIRST_100B25_OR_300B20_PREVHIGH10_BB_TAIL_CLOSE_COUNT_TODAY_20260602";
         private const double ChartRightPadding = 25d;
         private readonly AppConfig _config;
         private readonly NaverNewsService _newsService;
@@ -76,6 +84,7 @@ namespace TradingDashboard
         private readonly ObservableCollection<PaperPositionLedgerEntry> _paperPositions = [];
         private readonly List<NewsItem> _marketNewsCache = [];
         private readonly Dictionary<string, WatchStockItem> _watchStockByCode = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, WatchStockItem> _watchStockByIdentity = new(StringComparer.Ordinal);
         private readonly Dictionary<string, WatchlistStockCacheEntry> _watchlistMemoryCache = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ClosingSnapshotCacheEntry> _closingSnapshotMemoryCache = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastTickPriceByCode = new(StringComparer.Ordinal);
@@ -151,6 +160,7 @@ namespace TradingDashboard
         private int _chartViewCount;
         private int _chartAdditionalCandleCount;
         private string _selectedStockCode = string.Empty;
+        private string _selectedStockMarket = string.Empty;
         private long _buyTradeVolume;
         private long _sellTradeVolume;
         private StockStatusMetrics _currentStatusMetrics = new();
@@ -408,7 +418,7 @@ namespace TradingDashboard
                     true,
                     "Checking base-candle gate...",
                     $"{stocks.Count} stocks received from {conditionLabel}",
-                    "Discarding stocks without a recent 100B/20% candle");
+                    "Discarding stocks without a recent 100B/25% or 300B/20% + prev-high+10/BB candle");
                 List<WatchStockItem> gatedStocks = await FilterWatchlistByBaseCandleGateAsync(stocks);
 
                 SetStartupLoading(
@@ -461,7 +471,7 @@ namespace TradingDashboard
                     continue;
                 }
 
-                AppendLog($"gate discard: {stock.Name} ({stock.Code}) / no 10-day 100B+20% candle");
+                AppendLog($"gate discard: {stock.Name} ({stock.Code}) / no 10-day 100B+25% or 300B+20% + prev-high+10+BB candle");
             }
 
             return result;
@@ -470,7 +480,7 @@ namespace TradingDashboard
         private async Task<bool> TryApplyBaseCandleGateAsync(WatchStockItem stock, CancellationToken cancellationToken = default)
         {
             string today = DateTime.Now.ToString("yyyyMMdd");
-            WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stock.Code);
+            WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stock.Code, stock.GateBaseCandleMarket);
             string gateMarket = ResolveGateBaseCandleMarket(stock, cache);
             if (cache != null &&
                 IsActiveGateBaseCandleCacheForMarket(cache, today, gateMarket))
@@ -502,37 +512,46 @@ namespace TradingDashboard
                 stock.AuditInfo,
                 stock.StockState,
                 stock.SectorName,
-                saveFile: false);
+                saveFile: false,
+                candidateMarket: gateMarket);
             ApplyGateStockToCache(stock, entry, today);
             return stock.GateBaseCandleFound;
         }
 
-        private string ResolveGateBaseCandleMarket(WatchStockItem stock, WatchlistStockCacheEntry? cache = null)
+        private string ResolveGateBaseCandleMarket(WatchStockItem? stock, WatchlistStockCacheEntry? cache = null)
         {
-            // NXT 후보의 기준봉은 KRX fallback을 타지 않는다.
-            // 기준가는 KRX 전일종가로 유지하지만, 기준봉 게이트 검증 시장은 현재 표시/추적 시장과 맞춘다.
-            bool supportsNxt = stock.SupportsNxt || cache?.SupportsNxt == true;
-            return supportsNxt && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow())
-                ? "NXT"
-                : "KRX";
+            if (stock != null && TryNormalizeCandidateMarket(stock.GateBaseCandleMarket, out string stockMarket))
+                return stockMarket;
+
+            if (cache != null && TryNormalizeCandidateMarket(cache.GateBaseCandleMarket, out string cacheMarket))
+                return cacheMarket;
+
+            // Base price remains KRX previous close, but base-candle quality follows NXT when the stock supports it.
+            bool supportsNxt = stock?.SupportsNxt == true || cache?.SupportsNxt == true;
+            return supportsNxt ? "NXT" : "KRX";
         }
 
-        private string ResolveGateBaseCandleMarket(WatchlistStockCacheEntry entry)
+        private string ResolveGateBaseCandleMarket(WatchlistStockCacheEntry? entry)
         {
-            return entry.SupportsNxt && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow())
-                ? "NXT"
-                : "KRX";
+            if (entry != null && TryNormalizeCandidateMarket(entry.GateBaseCandleMarket, out string market))
+                return market;
+
+            return entry?.SupportsNxt == true ? "NXT" : "KRX";
         }
 
         private async Task<BaseCandleGateResult?> FindBaseCandleGateAsync(string code, bool useNxtMarket, string market, CancellationToken cancellationToken)
         {
             List<DailyCandle> candles = await _kiwoomConditionService
-                .GetDailyCandlesAsync(code, useNxtMarket, GateBaseCandleLookbackCount + 1, cancellationToken)
+                .GetDailyCandlesAsync(code, useNxtMarket, GateBaseCandleLookbackCount + GateBaseCandleBollingerPeriod, cancellationToken)
                 .ConfigureAwait(false);
             if (candles.Count < 2)
                 return null;
 
             List<DailyCandle> ordered = [.. candles.OrderBy(c => c.Date)];
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            int latestOffsetIndex = ordered.Count - 1;
+            int progressDayOffset = ShouldCountTodayAsProgressCandle(ordered[^1].Date, today) ? 1 : 0;
+
             int start = Math.Max(1, ordered.Count - GateBaseCandleLookbackCount);
             for (int i = ordered.Count - 1; i >= start; i--)
             {
@@ -544,10 +563,25 @@ namespace TradingDashboard
                 double changeRate = (candle.Close - prev.Close) / prev.Close * 100.0;
                 long estimatedTradingValue = EstimateTradingValue(candle);
                 long tradingValue = Math.Max(candle.TradingValue, estimatedTradingValue);
-                if (tradingValue < GateBaseCandleMinTradeValue || changeRate < GateBaseCandleMinChangeRate)
+                double prevHighDistanceRate = prev.High > 0
+                    ? (candle.Close - prev.High) / prev.High * 100.0
+                    : double.MinValue;
+                double? bollingerUpper20 = ResolveBollingerUpper(ordered, i, GateBaseCandleBollingerPeriod);
+                double closeLocationPercent = ResolveCloseLocationPercent(candle);
+                double upperTailPercent = ResolveUpperTailPercent(candle);
+                bool standardPower = tradingValue >= GateBaseCandleMinTradeValue &&
+                    changeRate >= GateBaseCandleMinChangeRate;
+                bool largeMoneyPower = tradingValue >= GateBaseCandleLargeTradeValue &&
+                    changeRate >= GateBaseCandleLargeTradeMinChangeRate;
+                if ((!standardPower && !largeMoneyPower) ||
+                    prevHighDistanceRate < GateBaseCandleMinPrevHighDistanceRate ||
+                    !bollingerUpper20.HasValue ||
+                    candle.Close <= bollingerUpper20.Value ||
+                    upperTailPercent > GateBaseCandleMaxUpperTailPercent ||
+                    closeLocationPercent < GateBaseCandleMinCloseLocationPercent)
                     continue;
 
-                int offset = ordered.Count - 1 - i;
+                int offset = Math.Max(0, latestOffsetIndex - i + progressDayOffset);
                 return new BaseCandleGateResult(
                     offset,
                     candle.Date,
@@ -565,6 +599,52 @@ namespace TradingDashboard
                 return 0;
 
             return (long)Math.Min(long.MaxValue, candle.Close * (double)candle.Volume);
+        }
+
+        private static double ResolveCloseLocationPercent(DailyCandle candle)
+        {
+            double range = candle.High - candle.Low;
+            if (range <= 0)
+                return 0;
+
+            return (candle.Close - candle.Low) / range * 100.0;
+        }
+
+        private static double ResolveUpperTailPercent(DailyCandle candle)
+        {
+            double range = candle.High - candle.Low;
+            if (range <= 0)
+                return 0;
+
+            double bodyHigh = Math.Max(candle.Open, candle.Close);
+            return (candle.High - bodyHigh) / range * 100.0;
+        }
+
+        private static double? ResolveBollingerUpper(IReadOnlyList<DailyCandle> ordered, int index, int period)
+        {
+            if (ordered == null || index < period - 1 || index >= ordered.Count)
+                return null;
+
+            List<double> closes = [.. ordered.Skip(index - period + 1).Take(period).Select(candle => candle.Close)];
+            double average = closes.Average();
+            double variance = closes.Sum(close => Math.Pow(close - average, 2)) / period;
+            return average + Math.Sqrt(variance) * 2.0;
+        }
+
+        private static bool ShouldCountTodayAsProgressCandle(string latestCandleDate, string today)
+        {
+            if (string.IsNullOrWhiteSpace(latestCandleDate) ||
+                string.IsNullOrWhiteSpace(today) ||
+                string.Equals(latestCandleDate, today, StringComparison.Ordinal) ||
+                string.CompareOrdinal(latestCandleDate, today) > 0)
+            {
+                return false;
+            }
+
+            if (!DateTime.TryParseExact(today, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime todayDate))
+                return false;
+
+            return todayDate.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday;
         }
 
         private static void ApplyGateResultToStock(WatchStockItem stock, BaseCandleGateResult? gate)
@@ -597,12 +677,14 @@ namespace TradingDashboard
             entry.GateBaseCandleChangeRate = stock.GateBaseCandleChangeRate;
             entry.GateBaseCandleTradeValue = stock.GateBaseCandleTradeValue;
             entry.GateBaseCandleCheckedDate = checkedDate;
+            entry.GateBaseCandleRuleVersion = GateBaseCandleRuleVersion;
         }
 
         private static bool IsActiveGateBaseCandleCache(WatchlistStockCacheEntry? entry, string today)
         {
             return entry is { GateBaseCandleFound: true } &&
-                string.Equals(entry.GateBaseCandleCheckedDate, today, StringComparison.Ordinal);
+                string.Equals(entry.GateBaseCandleCheckedDate, today, StringComparison.Ordinal) &&
+                string.Equals(entry.GateBaseCandleRuleVersion, GateBaseCandleRuleVersion, StringComparison.Ordinal);
         }
 
         private static bool IsActiveGateBaseCandleCacheForMarket(WatchlistStockCacheEntry? entry, string today, string expectedMarket)
@@ -706,12 +788,13 @@ namespace TradingDashboard
         {
             var cleanStocks = stocks
                 .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
-                .GroupBy(stock => stock.Code ?? string.Empty, StringComparer.Ordinal)
+                .GroupBy(stock => BuildWatchStockIdentityKey(stock), StringComparer.Ordinal)
                 .Select(group => group.First())
                 .ToList();
 
             _watchStocks.Clear();
             _watchStockByCode.Clear();
+            _watchStockByIdentity.Clear();
             if (cleanStocks.Count == 0)
             {
                 int emptyListBalanceTracked = EnsureBalanceHoldingsTrackedInRealtimeMap();
@@ -735,8 +818,7 @@ namespace TradingDashboard
                 ApplyWatchlistTradeValueEstimate(stock);
                 ApplyCachedMiniDailyCandleToStock(stock);
                 _watchStocks.Add(stock);
-                if (!string.IsNullOrWhiteSpace(stock.Code))
-                    _watchStockByCode[stock.Code] = stock;
+                IndexWatchStock(stock);
             }
 
             int balanceTracked = EnsureBalanceHoldingsTrackedInRealtimeMap();
@@ -794,7 +876,9 @@ namespace TradingDashboard
                     entry.LastUsedAt = DateTime.Now;
                     if (entry.SnapshotDate != today)
                         entry.LastSeenConditionDate = string.Empty;
-                    _watchlistMemoryCache[entry.Code] = entry;
+                    string key = BuildMarketIdentityKey(entry.Code, entry.GateBaseCandleMarket);
+                    if (!string.IsNullOrWhiteSpace(key))
+                        _watchlistMemoryCache[key] = entry;
                 }
 
                 TrimWatchlistMemoryCache();
@@ -830,7 +914,11 @@ namespace TradingDashboard
                         stock.AuditInfo,
                         stock.StockState,
                         stock.SectorName,
-                        saveFile: false);
+                        saveFile: false,
+                        stock.DisplayPriceMarket,
+                        stock.KrxDisplayPrice,
+                        stock.NxtDisplayPrice,
+                        ResolveWatchStockIdentityMarket(stock));
                     if (!IsTrustedKrxBasePrice(entry, today))
                         ClearCachedBasePrice(entry);
 
@@ -872,6 +960,12 @@ namespace TradingDashboard
                     AuditInfo = s.AuditInfo,
                     StockState = s.StockState,
                     SectorName = s.SectorName,
+                    GateBaseCandleFound = s.GateBaseCandleFound,
+                    GateBaseCandleOffset = s.GateBaseCandleOffset,
+                    GateBaseCandleDate = s.GateBaseCandleDate,
+                    GateBaseCandleMarket = s.GateBaseCandleMarket,
+                    GateBaseCandleChangeRate = s.GateBaseCandleChangeRate,
+                    GateBaseCandleTradeValue = s.GateBaseCandleTradeValue,
                     SupportsNxt = s.SupportsNxt
                 })];
 
@@ -890,17 +984,22 @@ namespace TradingDashboard
             }
 
             string today = DateTime.Now.ToString("yyyyMMdd");
-            var snapshotCodes = stocks
+            var snapshotStocks = stocks
                 .Where(s => !string.IsNullOrWhiteSpace(s.Code))
-                .Select(s => s.Code)
-                .Distinct(StringComparer.Ordinal)
+                .GroupBy(s => BuildWatchStockIdentityKey(s), StringComparer.Ordinal)
+                .Select(group => group.First())
                 .ToList();
 
             bool changed = false;
-            foreach (string code in snapshotCodes)
+            foreach (WatchStockItem stock in snapshotStocks)
             {
-                if (!_watchlistMemoryCache.TryGetValue(code, out WatchlistStockCacheEntry? entry))
+                string code = NormalizeStockCode(stock.Code);
+                string key = BuildMarketIdentityKey(code, ResolveWatchStockIdentityMarket(stock));
+                if (string.IsNullOrWhiteSpace(key) ||
+                    !_watchlistMemoryCache.TryGetValue(key, out WatchlistStockCacheEntry? entry))
+                {
                     continue;
+                }
                 if (IsTrustedKrxBasePrice(entry, today))
                     continue;
 
@@ -929,12 +1028,16 @@ namespace TradingDashboard
             if (!changed)
                 return;
 
-            Dispatcher.Invoke(() => AppendLog("watchlist base-price memory refreshed"));
+            Dispatcher.Invoke(() =>
+            {
+                SaveWatchlistMemoryCache("base-price refresh", log: false);
+                AppendLog("watchlist base-price memory refreshed + saved");
+            });
         }
 
         private void ApplyWatchlistCacheToStock(WatchStockItem stock)
         {
-            WatchlistStockCacheEntry? entry = GetWatchlistMemoryCache(stock.Code);
+            WatchlistStockCacheEntry? entry = GetWatchlistMemoryCache(stock.Code, ResolveWatchStockIdentityMarket(stock));
             if (entry == null)
                 return;
 
@@ -946,8 +1049,45 @@ namespace TradingDashboard
                 stock.MarketName = entry.MarketName;
             if (string.IsNullOrWhiteSpace(stock.ProgramMarketType))
                 stock.ProgramMarketType = entry.ProgramMarketType;
-            if (stock.CurrentPrice <= 0)
-                ApplyWatchStockDisplayPrice(stock, entry.CurrentPrice, ResolveCachedPriceMarket(stock), "watchlist cache");
+            string desiredCachedMarket = ResolveCachedPriceMarket(stock);
+            if (string.Equals(desiredCachedMarket, "NXT", StringComparison.OrdinalIgnoreCase) &&
+                stock.NxtDisplayPrice <= 0 &&
+                !string.Equals(stock.DisplayPriceMarket, "NXT", StringComparison.OrdinalIgnoreCase))
+            {
+                if (stock.CurrentPrice > 0)
+                    stock.StoreMarketPrice(stock.CurrentPrice, "KRX");
+                stock.WaitForDisplayPrice("NXT");
+            }
+
+            bool hasDesiredCachedPrice = string.Equals(desiredCachedMarket, "NXT", StringComparison.OrdinalIgnoreCase)
+                ? entry.NxtDisplayPrice > 0
+                : entry.KrxDisplayPrice > 0 || entry.CurrentPrice > 0;
+            bool shouldApplyCachedPrice = stock.CurrentPrice <= 0 ||
+                (hasDesiredCachedPrice &&
+                 !string.Equals(stock.DisplayPriceMarket, desiredCachedMarket, StringComparison.OrdinalIgnoreCase));
+            if (shouldApplyCachedPrice)
+            {
+                if (entry.KrxDisplayPrice > 0)
+                    stock.StoreMarketPrice(entry.KrxDisplayPrice, "KRX");
+                if (entry.NxtDisplayPrice > 0)
+                    stock.StoreMarketPrice(entry.NxtDisplayPrice, "NXT");
+
+                string cachedMarket = ResolveCachedDisplayPriceMarket(stock, entry);
+                long cachedPrice = cachedMarket == "NXT"
+                    ? entry.NxtDisplayPrice > 0 ? entry.NxtDisplayPrice : entry.CurrentPrice
+                    : entry.KrxDisplayPrice > 0 ? entry.KrxDisplayPrice : entry.CurrentPrice;
+                if (string.Equals(desiredCachedMarket, "NXT", StringComparison.OrdinalIgnoreCase) &&
+                    cachedMarket != "NXT")
+                {
+                    if (stock.CurrentPrice > 0)
+                        stock.StoreMarketPrice(stock.CurrentPrice, "KRX");
+                    stock.WaitForDisplayPrice("NXT");
+                }
+                else
+                {
+                    ApplyWatchStockDisplayPrice(stock, cachedPrice, cachedMarket, "watchlist cache");
+                }
+            }
             if (stock.ChangeAmount == 0)
                 stock.ChangeAmount = entry.ChangeAmount;
             if (string.IsNullOrWhiteSpace(stock.ChangeRateText) || stock.ChangeRateText == "-")
@@ -1003,10 +1143,51 @@ namespace TradingDashboard
             ApplyMiniDailyCandle(stock, open, high, low, close, useNxtMarket);
         }
 
-        private WatchlistStockCacheEntry? GetWatchlistMemoryCache(string code)
+        private WatchlistStockCacheEntry? GetWatchlistMemoryCache(string code, string? market = null)
         {
-            if (string.IsNullOrWhiteSpace(code) || !_watchlistMemoryCache.TryGetValue(code, out WatchlistStockCacheEntry? entry))
+            string normalizedCode = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(normalizedCode))
                 return null;
+
+            if (TryNormalizeCandidateMarket(market, out string explicitMarket))
+            {
+                WatchlistStockCacheEntry? explicitEntry = GetWatchlistMemoryCacheByKey(normalizedCode, explicitMarket);
+                if (explicitEntry != null)
+                    return explicitEntry;
+            }
+
+            if (TryResolveCandidateMarketForStock(normalizedCode, out string candidateMarket))
+            {
+                WatchlistStockCacheEntry? candidateEntry = GetWatchlistMemoryCacheByKey(normalizedCode, candidateMarket);
+                if (candidateEntry != null)
+                    return candidateEntry;
+            }
+
+            if (_watchlistMemoryCache.TryGetValue(normalizedCode, out WatchlistStockCacheEntry? legacyEntry))
+            {
+                legacyEntry.LastUsedAt = DateTime.Now;
+                return legacyEntry;
+            }
+
+            List<WatchlistStockCacheEntry> matches = [.. _watchlistMemoryCache.Values
+                .Where(entry => string.Equals(NormalizeStockCode(entry.Code), normalizedCode, StringComparison.Ordinal))];
+            if (matches.Count == 1)
+            {
+                matches[0].LastUsedAt = DateTime.Now;
+                return matches[0];
+            }
+
+            return null;
+        }
+
+        private WatchlistStockCacheEntry? GetWatchlistMemoryCacheByKey(string code, string market)
+        {
+            string key = BuildMarketIdentityKey(code, market);
+            if (string.IsNullOrWhiteSpace(key) ||
+                !_watchlistMemoryCache.TryGetValue(key, out WatchlistStockCacheEntry? entry))
+            {
+                return null;
+            }
 
             entry.LastUsedAt = DateTime.Now;
             return entry;
@@ -1049,15 +1230,127 @@ namespace TradingDashboard
             entry.BasePriceSource = string.Empty;
         }
 
-        private WatchlistStockCacheEntry UpsertWatchlistMemoryCache(string code, string name, bool? supportsNxt, string? marketTypeCode, string? marketName, string? programMarketType, long? currentPrice, long? changeAmount, string? changeRateText, string? volumeText, long? lastPrice, string? orderWarning, string? auditInfo, string? stockState, string? sectorName, bool saveFile)
+        private string ResolveCachedDisplayPriceMarket(WatchStockItem stock, WatchlistStockCacheEntry entry)
         {
-            if (!_watchlistMemoryCache.TryGetValue(code, out WatchlistStockCacheEntry? entry))
+            string currentPriceMarket = NormalizeMarketCode(entry.CurrentPriceMarket);
+            if (currentPriceMarket == "NXT" && entry.NxtDisplayPrice > 0)
+                return "NXT";
+            if (currentPriceMarket == "KRX" && (entry.KrxDisplayPrice > 0 || entry.CurrentPrice > 0))
+                return "KRX";
+
+            if (stock.SupportsNxt &&
+                string.Equals(ResolveCachedPriceMarket(stock), "NXT", StringComparison.OrdinalIgnoreCase) &&
+                entry.NxtDisplayPrice > 0)
             {
-                entry = new WatchlistStockCacheEntry { Code = code };
-                _watchlistMemoryCache[code] = entry;
+                return "NXT";
+            }
+
+            // Untyped legacy CurrentPrice values are treated as KRX so they cannot masquerade as NXT.
+            return "KRX";
+        }
+
+        private static string NormalizeMarketCode(string? value)
+        {
+            string normalized = (value ?? string.Empty).Trim().ToUpperInvariant();
+            if (normalized.Contains("NXT") || normalized.Contains("_NX") || normalized.Contains("NX"))
+                return "NXT";
+            if (normalized.Contains("KRX") || normalized.Contains("KOSPI") || normalized.Contains("KOSDAQ"))
+                return "KRX";
+            return normalized is "N" ? "NXT" : normalized is "K" ? "KRX" : string.Empty;
+        }
+
+        private static string NormalizeIdentityMarket(string? value)
+        {
+            return TryNormalizeCandidateMarket(value, out string market)
+                ? market
+                : "KRX";
+        }
+
+        private static string BuildMarketIdentityKey(string code, string? market)
+        {
+            string normalizedCode = NormalizeStockCode(code);
+            string normalizedMarket = NormalizeIdentityMarket(market);
+            return string.IsNullOrWhiteSpace(normalizedCode)
+                ? string.Empty
+                : $"{normalizedCode}|{normalizedMarket}";
+        }
+
+        private string ResolveWatchStockIdentityMarket(WatchStockItem? stock, WatchlistStockCacheEntry? cache = null)
+        {
+            if (stock != null && TryNormalizeCandidateMarket(stock.GateBaseCandleMarket, out string stockMarket))
+                return stockMarket;
+
+            if (cache != null && TryNormalizeCandidateMarket(cache.GateBaseCandleMarket, out string cacheMarket))
+                return cacheMarket;
+
+            string displayMarket = NormalizeMarketCode(stock?.DisplayPriceMarket);
+            if (displayMarket is "KRX" or "NXT")
+                return displayMarket;
+
+            if (stock?.SupportsNxt == true && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow()))
+                return "NXT";
+
+            return "KRX";
+        }
+
+        private string BuildWatchStockIdentityKey(WatchStockItem stock)
+        {
+            return BuildMarketIdentityKey(stock?.Code ?? string.Empty, ResolveWatchStockIdentityMarket(stock));
+        }
+
+        private void IndexWatchStock(WatchStockItem stock, bool preferAsCodeFallback = false)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return;
+
+            stock.Code = NormalizeStockCode(stock.Code);
+            string identityKey = BuildWatchStockIdentityKey(stock);
+            if (!string.IsNullOrWhiteSpace(identityKey))
+                _watchStockByIdentity[identityKey] = stock;
+
+            if (preferAsCodeFallback || !_watchStockByCode.ContainsKey(stock.Code))
+                _watchStockByCode[stock.Code] = stock;
+        }
+
+        private WatchlistStockCacheEntry UpsertWatchlistMemoryCache(
+            string code,
+            string name,
+            bool? supportsNxt,
+            string? marketTypeCode,
+            string? marketName,
+            string? programMarketType,
+            long? currentPrice,
+            long? changeAmount,
+            string? changeRateText,
+            string? volumeText,
+            long? lastPrice,
+            string? orderWarning,
+            string? auditInfo,
+            string? stockState,
+            string? sectorName,
+            bool saveFile,
+            string? currentPriceMarket = null,
+            long? krxDisplayPrice = null,
+            long? nxtDisplayPrice = null,
+            string? candidateMarket = null)
+        {
+            string normalizedCode = NormalizeStockCode(code);
+            string normalizedCandidateMarket = TryNormalizeCandidateMarket(candidateMarket, out string resolvedCandidateMarket)
+                ? resolvedCandidateMarket
+                : NormalizeIdentityMarket(currentPriceMarket);
+            string cacheKey = BuildMarketIdentityKey(normalizedCode, normalizedCandidateMarket);
+            if (string.IsNullOrWhiteSpace(cacheKey))
+                cacheKey = normalizedCode;
+
+            if (!_watchlistMemoryCache.TryGetValue(cacheKey, out WatchlistStockCacheEntry? entry))
+            {
+                entry = new WatchlistStockCacheEntry { Code = normalizedCode };
+                _watchlistMemoryCache[cacheKey] = entry;
             }
 
             entry.Name = string.IsNullOrWhiteSpace(name) ? entry.Name : name.Trim();
+            if (TryNormalizeCandidateMarket(candidateMarket, out string entryCandidateMarket))
+                entry.GateBaseCandleMarket = entryCandidateMarket;
             if (supportsNxt.HasValue)
                 entry.SupportsNxt = supportsNxt.Value;
             entry.Market = entry.SupportsNxt ? "KRX,NXT" : "KRX";
@@ -1067,8 +1360,21 @@ namespace TradingDashboard
                 entry.MarketName = marketName.Trim();
             if (!string.IsNullOrWhiteSpace(programMarketType))
                 entry.ProgramMarketType = programMarketType.Trim();
+            string normalizedCurrentMarket = NormalizeMarketCode(currentPriceMarket);
+            if (krxDisplayPrice.HasValue && krxDisplayPrice.Value > 0)
+                entry.KrxDisplayPrice = krxDisplayPrice.Value;
+            if (nxtDisplayPrice.HasValue && nxtDisplayPrice.Value > 0)
+                entry.NxtDisplayPrice = nxtDisplayPrice.Value;
             if (currentPrice.HasValue && currentPrice.Value > 0)
+            {
                 entry.CurrentPrice = currentPrice.Value;
+                if (!string.IsNullOrWhiteSpace(normalizedCurrentMarket))
+                    entry.CurrentPriceMarket = normalizedCurrentMarket;
+                if (normalizedCurrentMarket == "NXT")
+                    entry.NxtDisplayPrice = currentPrice.Value;
+                else if (normalizedCurrentMarket == "KRX")
+                    entry.KrxDisplayPrice = currentPrice.Value;
+            }
             if (changeAmount.HasValue)
                 entry.ChangeAmount = changeAmount.Value;
             if (!string.IsNullOrWhiteSpace(changeRateText) && changeRateText != "-")
@@ -1089,8 +1395,22 @@ namespace TradingDashboard
 
             TrimWatchlistMemoryCache();
             if (saveFile)
-                _watchlistCacheStore.Save(_watchlistMemoryCache.Values);
+                SaveWatchlistMemoryCache("upsert", log: false);
             return entry;
+        }
+
+        private void SaveWatchlistMemoryCache(string reason, bool log)
+        {
+            try
+            {
+                _watchlistCacheStore.Save(_watchlistMemoryCache.Values);
+                if (log)
+                    AppendLog($"watchlist cache saved: {_watchlistMemoryCache.Count}items / {reason}");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"watchlist cache save error({reason}): {ex.Message}");
+            }
         }
 
         private void TrimWatchlistMemoryCache()
@@ -1411,6 +1731,9 @@ namespace TradingDashboard
                 _ => string.Empty
             };
             string stockCode = selectedItem is WatchStockItem selectedWatch ? selectedWatch.Code : string.Empty;
+            string stockMarket = selectedItem is WatchStockItem selectedMarketStock
+                ? ResolveWatchStockIdentityMarket(selectedMarketStock)
+                : string.Empty;
             if (string.IsNullOrWhiteSpace(stockName))
                 stockName = stockCode;
             if (string.IsNullOrWhiteSpace(stockName))
@@ -1437,6 +1760,7 @@ namespace TradingDashboard
             CancellationToken requestToken = _selectedRequestCts.Token;
             SelectedStockTitle.Text = stockName;
             _selectedStockCode = stockCode;
+            _selectedStockMarket = stockMarket;
             UpdateStrategyProgressRows();
             _recentTrades.Clear();
             _buyTradeVolume = 0;
@@ -1450,11 +1774,11 @@ namespace TradingDashboard
             _lastRealtimeChartDrawAt = DateTime.MinValue;
             ResetChartLoadMoreCount();
             ClearSelectedChartVisuals();
-            HogaStatusText.Text = "Price - / Rate - / 0D -";
-            UpdateHogaSummary(0, 0);
+            ResetSelectedHogaRows("select");
             ResetTradeSummaryInfo();
             InfoBasePriceText.Text = "-";
             InfoBasePriceText.Foreground = _whiteBrush;
+            TryApplyTrustedCachedBasePriceToSelection(stockCode);
             AppendLog($"stock selected: {stockName}");
             if (selectedItem is WatchStockItem recentStock)
             {
@@ -1462,16 +1786,11 @@ namespace TradingDashboard
                 AddRecentViewedStock(recentStock);
             }
 
-            await PrimeSelectedDisplayPriceBeforeChartAsync(stockCode, selectionVersion, requestToken);
-            if (!IsCurrentSelection(stockCode, selectionVersion))
-                return;
-
             StartSelectedChartRender();
+            _ = PrimeSelectedDisplayPriceBeforeChartAsync(stockCode, selectionVersion, requestToken);
             _ = LoadNewsAsync(stockName, selectionVersion, requestToken);
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
-            await LoadSelectedBasePriceAsync(stockCode, selectionVersion, requestToken);
-            if (!IsCurrentSelection(stockCode, selectionVersion))
-                return;
+            _ = LoadSelectedBasePriceAsync(stockCode, selectionVersion, requestToken);
 
             await LoadSelectedOrderBookSnapshotAsync(stockCode, selectionVersion, requestToken);
             if (!IsCurrentSelection(stockCode, selectionVersion))
@@ -1490,7 +1809,8 @@ namespace TradingDashboard
             if (!_config.Kiwoom.UseRestApi ||
                 string.IsNullOrWhiteSpace(stockCode) ||
                 !ShouldUseNxtDataForStock(stockCode) ||
-                !_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? stock))
+                !TryGetWatchStockForMarket(stockCode, "NXT", out WatchStockItem? stock) ||
+                stock == null)
             {
                 return;
             }
@@ -1522,15 +1842,12 @@ namespace TradingDashboard
                     ? FormatKrxPreviousCloseRate(currentPrice)
                     : metrics.ChangeRateText;
                 stock.PriceBrush = ResolveHogaBrushByKrxPrevClose(currentPrice);
-                HogaStatusText.Text = $"Price {currentPrice:N0} / Rate {stock.ChangeRateText} / NXT price prime";
+                HogaStatusText.Text = $"{FormatHogaPriceStatus(stock, currentPrice)} / Rate {stock.ChangeRateText} / NXT price prime";
                 AppendLog($"NXT price prime before chart: {stockCode} / {currentPrice:N0}");
             }
             catch (OperationCanceledException)
             {
-                if (cancellationToken.IsCancellationRequested)
-                    throw;
-
-                AppendLog($"NXT price prime skipped: {stockCode} / timeout");
+                // selection changed or REST queue was busy; status/order-book loaders will continue the screen update.
             }
             catch (Exception ex)
             {
@@ -1544,12 +1861,16 @@ namespace TradingDashboard
                 return;
 
             string code = NormalizeStockCode(stock.Code);
-            if (_watchStockByCode.TryGetValue(code, out WatchStockItem? tracked))
+            string identityKey = BuildWatchStockIdentityKey(stock);
+            if (_watchStockByIdentity.TryGetValue(identityKey, out WatchStockItem? tracked) ||
+                _watchStockByCode.TryGetValue(code, out tracked))
+            {
                 MergeBalanceStockMetadata(stock, tracked);
+            }
 
             for (int i = _recentViewedStocks.Count - 1; i >= 0; i--)
             {
-                if (string.Equals(NormalizeStockCode(_recentViewedStocks[i].Code), code, StringComparison.Ordinal))
+                if (string.Equals(BuildWatchStockIdentityKey(_recentViewedStocks[i]), identityKey, StringComparison.Ordinal))
                 {
                     MergeBalanceStockMetadata(stock, _recentViewedStocks[i]);
                     _recentViewedStocks.RemoveAt(i);
@@ -1567,9 +1888,10 @@ namespace TradingDashboard
                 return;
 
             string code = NormalizeStockCode(stock.Code);
+            string identityKey = BuildWatchStockIdentityKey(stock);
             for (int i = _recentViewedStocks.Count - 1; i >= 0; i--)
             {
-                if (string.Equals(NormalizeStockCode(_recentViewedStocks[i].Code), code, StringComparison.Ordinal))
+                if (string.Equals(BuildWatchStockIdentityKey(_recentViewedStocks[i]), identityKey, StringComparison.Ordinal))
                     _recentViewedStocks.RemoveAt(i);
             }
 
@@ -1619,6 +1941,20 @@ namespace TradingDashboard
             _chartViewCount = 0;
         }
 
+        private bool TryApplyTrustedCachedBasePriceToSelection(string stockCode)
+        {
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stockCode, _selectedStockMarket);
+            if (!IsTrustedKrxBasePrice(cache, today))
+                return false;
+
+            _krxPrevClosePrice = cache!.BasePrice;
+            InfoBasePriceText.Text = _krxPrevClosePrice.ToString("N0");
+            InfoBasePriceText.Foreground = _whiteBrush;
+            HighlightCenterPriceInHoga();
+            return true;
+        }
+
         private async Task LoadSelectedBasePriceAsync(string stockCode, int selectionVersion, CancellationToken cancellationToken = default)
         {
             try
@@ -1627,20 +1963,28 @@ namespace TradingDashboard
                     return;
 
                 string today = DateTime.Now.ToString("yyyyMMdd");
-                WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stockCode);
+                WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stockCode, _selectedStockMarket);
                 // base price invariant: Query KRX base price only when a trusted cached previous close is unavailable.
                 // Never replace it with another market, realtime, or stock-info value.
-                long basePrice = IsTrustedKrxBasePrice(cache, today)
+                bool usedCachedBasePrice = IsTrustedKrxBasePrice(cache, today);
+                long basePrice = usedCachedBasePrice
                     ? cache!.BasePrice
                     : await _kiwoomConditionService.GetKrxPreviousClosePriceAsync(stockCode, cancellationToken);
                 if (selectionVersion != _selectionVersion)
                     return;
 
+                string selectedDisplayMarket = TryNormalizeCandidateMarket(_selectedStockMarket, out string resolvedSelectedMarket)
+                    ? resolvedSelectedMarket
+                    : ShouldUseNxtDataForStock(stockCode) ? "NXT" : "KRX";
+
                 if (basePrice > 0)
                 {
                     WatchlistStockCacheEntry entry = UpsertWatchlistMemoryCache(
                         stockCode,
-                        _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? stock) ? stock.Name : stockCode,
+                        TryGetWatchStockForMarket(
+                            stockCode,
+                            selectedDisplayMarket,
+                            out WatchStockItem? stock) && stock != null ? stock.Name : stockCode,
                         null,
                         stock?.MarketTypeCode,
                         stock?.MarketName,
@@ -1654,14 +1998,32 @@ namespace TradingDashboard
                         stock?.AuditInfo,
                         stock?.StockState,
                         stock?.SectorName,
-                        saveFile: false);
+                        saveFile: false,
+                        stock?.DisplayPriceMarket,
+                        stock?.KrxDisplayPrice,
+                        stock?.NxtDisplayPrice,
+                        string.IsNullOrWhiteSpace(_selectedStockMarket) ? stock?.GateBaseCandleMarket : _selectedStockMarket);
                     SetCachedKrxBasePrice(entry, basePrice, today);
+                    SaveWatchlistMemoryCache("base-price lock", log: false);
                 }
                 _krxPrevClosePrice = basePrice;
                 InfoBasePriceText.Text = basePrice > 0 ? basePrice.ToString("N0") : "-";
                 InfoBasePriceText.Foreground = _whiteBrush;
+                HighlightCenterPriceInHoga();
+                if (TryGetWatchStockForMarket(
+                        stockCode,
+                        selectedDisplayMarket,
+                        out WatchStockItem? selectedStock) &&
+                    selectedStock != null &&
+                    selectedStock.CurrentPrice > 0)
+                {
+                    selectedStock.ChangeAmount = basePrice > 0 ? selectedStock.CurrentPrice - basePrice : selectedStock.ChangeAmount;
+                    selectedStock.ChangeRateText = FormatKrxPreviousCloseRate(selectedStock.CurrentPrice);
+                    selectedStock.PriceBrush = ResolveHogaBrushByKrxPrevClose(selectedStock.CurrentPrice);
+                    HogaStatusText.Text = $"{FormatHogaPriceStatus(selectedStock, selectedStock.CurrentPrice)} / Rate {selectedStock.ChangeRateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
+                }
                 AppendLog(basePrice > 0
-                    ? $"base price locked(KRX prev close{(IsTrustedKrxBasePrice(cache, today) ? " cache" : "")}): {basePrice:N0}"
+                    ? $"base price locked(KRX prev close{(usedCachedBasePrice ? " cache" : "")}): {basePrice:N0}"
                     : "base price lock failed(KRX prev close, NXT fallback forbidden)");
             }
             catch (OperationCanceledException)
@@ -1927,6 +2289,13 @@ namespace TradingDashboard
                     if (TryApplyCurrentPriceFallbackHoga(stockCode, "order book REST fallback"))
                         return;
 
+                    if (useNxtMarket)
+                    {
+                        ResetSelectedHogaRows("NXT order book waiting");
+                        AppendLog($"NXT order book empty, wait for NXT data: {stockCode}");
+                        return;
+                    }
+
                     AppendLog($"order book REST empty, keep existing order book: {stockCode}");
                     return;
                 }
@@ -1973,6 +2342,13 @@ namespace TradingDashboard
 
                 if (IsEmptyStockStatus(m))
                 {
+                    if (useNxtMarket)
+                    {
+                        ClearSelectedMarketMetrics("NXT metrics waiting");
+                        AppendLog($"NXT stock metrics empty, wait for NXT data: {stockCode}");
+                        return;
+                    }
+
                     AppendLog($"stock metrics empty, keep existing metrics: {stockCode}");
                     return;
                 }
@@ -1983,7 +2359,7 @@ namespace TradingDashboard
                     $"stock metrics TR: {statusRequestCode} / {(useNxtMarket ? "NXT" : "KRX")} / " +
                     $"screen base(KRX) {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} / " +
                     $"response base {m.BasePriceText} / open {m.OpenPriceText} / high {m.HighPriceText} / low {m.LowPriceText} / close {m.ClosePriceText} / volume {m.VolumeText}");
-                if (_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selectedForCompare) && selectedForCompare.SupportsNxt)
+                if (IsNxtSupportedStock(stockCode))
                     await LogStockStatusCompareAsync(stockCode, selectionVersion, cancellationToken);
 
                 _currentStatusMetrics = m;
@@ -2123,7 +2499,9 @@ namespace TradingDashboard
 
         private async Task<StockStatusMetrics> LoadExecutionSummaryByMarketAsync(string stockCode, bool useNxtMarketNow, CancellationToken cancellationToken)
         {
-            bool supportsNxt = _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selected) && selected.SupportsNxt;
+            string market = useNxtMarketNow || IsNxtFrozenWindow() ? "NXT" : "KRX";
+            bool hasMarketStock = TryGetWatchStockForMarket(stockCode, market, out WatchStockItem? selected) && selected != null;
+            bool supportsNxt = hasMarketStock ? selected!.SupportsNxt : IsNxtSupportedStock(stockCode);
             string programMarketType = selected?.ProgramMarketType ?? string.Empty;
             bool useNxtExecution = supportsNxt && (useNxtMarketNow || IsNxtFrozenWindow());
             StockStatusMetrics exec = await _kiwoomConditionService.GetTodayExecutionSummaryAsync(stockCode, useNxtExecution, programMarketType, cancellationToken);
@@ -2200,7 +2578,11 @@ namespace TradingDashboard
         {
             SelectedStockSubInfo.Inlines.Clear();
             if (!string.IsNullOrWhiteSpace(_selectedStockCode)
-                && _watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? stock)
+                && TryGetWatchStockForMarket(
+                    _selectedStockCode,
+                    TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket) ? selectedMarket : ShouldUseNxtDataForStock(_selectedStockCode) ? "NXT" : "KRX",
+                    out WatchStockItem? stock)
+                && stock != null
                 && stock.MetaBadgeText != "-")
             {
                 SelectedStockSubInfo.Inlines.Add(new Run($"{stock.MetaBadgeText} · "));
@@ -2220,8 +2602,11 @@ namespace TradingDashboard
                 if (selectionVersion != _selectionVersion)
                     return;
 
-                bool supportsNxt = _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selected)
-                    && selected.SupportsNxt;
+                bool supportsNxt = TryGetWatchStockForMarket(
+                        stockCode,
+                        TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket) ? selectedMarket : ShouldUseNxtDataForStock(stockCode) ? "NXT" : "KRX",
+                        out WatchStockItem? selected) &&
+                    selected?.SupportsNxt == true;
                 bool useNxtSnapshot = supportsNxt && IsNxtFrozenWindow();
 
                 if (supportsNxt && IsNxtMarketWindow() && !useNxtSnapshot)
@@ -2279,7 +2664,7 @@ namespace TradingDashboard
             if (ShouldBlockKrxPriceUiApply(snapshot.Code, sourceIsNxt, source))
                 return;
 
-            if (_watchStockByCode.TryGetValue(snapshot.Code, out WatchStockItem? stock))
+            if (TryGetWatchStockForMarket(snapshot.Code, sourceIsNxt ? "NXT" : "KRX", out WatchStockItem? stock) && stock != null)
             {
                 ApplyWatchStockDisplayPrice(stock, snapshot.CurrentPrice, sourceIsNxt ? "NXT" : "KRX", source);
                 stock.ChangeAmount = stock.CurrentPrice > 0 && _krxPrevClosePrice > 0
@@ -2311,7 +2696,7 @@ namespace TradingDashboard
                 InfoPrevTimeVolumeRatioText.Text = verifiedVolumeRatioText;
                 InfoPrevTimeVolumeRatioText.Foreground = verifiedVolumeRatioBrush;
                 _currentStatusMetrics.VolumeRatioText = verifiedVolumeRatioText;
-                if (_watchStockByCode.TryGetValue(snapshot.Code, out WatchStockItem? stockForVolume))
+                if (TryGetWatchStockForMarket(snapshot.Code, sourceIsNxt ? "NXT" : "KRX", out WatchStockItem? stockForVolume) && stockForVolume != null)
                     stockForVolume.VolumeText = InfoVolumeText.Text;
                 AppendLog($"{source} unified daily trade detail total: total {verifiedVolume:N0} / pre {snapshot.BeforeMarketTradeQty:N0} / regular {snapshot.RegularMarketTradeQty:N0} / after {snapshot.AfterMarketTradeQty:N0}");
             }
@@ -2400,6 +2785,26 @@ namespace TradingDashboard
             InfoBuyRatioText.Text = "-";
         }
 
+        private void ClearSelectedMarketMetrics(string reason)
+        {
+            _currentStatusMetrics = new StockStatusMetrics();
+            _selectedUsesUnifiedDailyVolume = false;
+            _selectedPreviousVolume = 0;
+            InfoOpenPriceText.Text = "-";
+            InfoHighPriceText.Text = "-";
+            InfoLowPriceText.Text = "-";
+            InfoTradingValueText.Text = "-";
+            InfoVolumeText.Text = "-";
+            InfoTurnoverRateText.Text = "-";
+            InfoPrevTimeVolumeRatioText.Text = "-";
+            InfoPrevTimeVolumeRatioText.Foreground = _whiteBrush;
+            ApplySelectedPriceInfoColors(_currentStatusMetrics);
+            ApplyProgramTradeInfo(_currentStatusMetrics);
+            ResetTradeSummaryInfo();
+            SetSelectedStockSubInfo(_currentStatusMetrics, "-", _whiteBrush);
+            HogaStatusText.Text = $"{FormatSelectedHogaPriceStatus()} / Rate - / {reason}";
+        }
+
         private void ApplySelectedPriceInfoColors(StockStatusMetrics metrics)
         {
             InfoOpenPriceText.Foreground = ResolveHogaBrushByKrxPrevClose(ParseLongAbs(metrics.OpenPriceText));
@@ -2445,8 +2850,12 @@ namespace TradingDashboard
 
         private void ApplySelectedWatchStockPriceInfo(string stockCode, StockStatusMetrics metrics, bool sourceIsNxt)
         {
-            if (string.IsNullOrWhiteSpace(stockCode) || !_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? stock))
+            if (string.IsNullOrWhiteSpace(stockCode) ||
+                !TryGetWatchStockForMarket(stockCode, sourceIsNxt ? "NXT" : "KRX", out WatchStockItem? stock) ||
+                stock == null)
+            {
                 return;
+            }
 
             bool blockKrxUiApply = !sourceIsNxt && ShouldUseNxtDataForStock(stockCode);
             long currentPrice = ParseLongAbs(metrics.ClosePriceText);
@@ -2476,7 +2885,7 @@ namespace TradingDashboard
 
             long displayPrice = blockKrxUiApply ? stock.CurrentPrice : currentPrice;
             string rateText = stock.ChangeRateText;
-            HogaStatusText.Text = $"Price {(displayPrice > 0 ? displayPrice.ToString("N0") : stock.CurrentPrice > 0 ? stock.CurrentPrice.ToString("N0") : "-")} / Rate {rateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
+            HogaStatusText.Text = $"{FormatHogaPriceStatus(stock, displayPrice > 0 ? displayPrice : stock.CurrentPrice)} / Rate {rateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
         }
 
         private void ApplyMiniDailyCandle(WatchStockItem stock, long open, long high, long low, long close, bool sourceIsNxt = false)
@@ -2508,7 +2917,11 @@ namespace TradingDashboard
             if (ShouldBlockKrxPriceUiApply(stock.Code, sourceIsNxt, source))
             {
                 stock.StoreMarketPrice(price, "KRX");
-                return stock.TryKeepNxtDisplayPrice();
+                if (stock.TryKeepNxtDisplayPrice())
+                    return true;
+
+                stock.WaitForDisplayPrice("NXT");
+                return false;
             }
 
             stock.ApplyDisplayPrice(price, sourceIsNxt ? "NXT" : "KRX");
@@ -2518,6 +2931,23 @@ namespace TradingDashboard
 
         private string ResolveCachedPriceMarket(WatchStockItem stock)
         {
+            if (stock != null && TryNormalizeCandidateMarket(stock.GateBaseCandleMarket, out string stockMarket))
+                return stockMarket;
+
+            string code = NormalizeStockCode(stock?.Code ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(code) &&
+                string.Equals(code, _selectedStockCode, StringComparison.Ordinal) &&
+                TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket))
+            {
+                return selectedMarket;
+            }
+
+            if (!string.IsNullOrWhiteSpace(code) &&
+                TryResolveCandidateMarketForStock(code, out string candidateMarket))
+            {
+                return candidateMarket;
+            }
+
             if (stock?.SupportsNxt == true && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow()))
                 return "NXT";
 
@@ -2545,7 +2975,7 @@ namespace TradingDashboard
             }
 
             string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-            _logLines.Enqueue(new LogLineEntry(line, false));
+            _logLines.Enqueue(new LogLineEntry(line, LogLineKind.Normal));
 
             while (_logLines.Count > MaxLogLines)
             {
@@ -2564,7 +2994,26 @@ namespace TradingDashboard
             }
 
             string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-            _logLines.Enqueue(new LogLineEntry(line, true));
+            _logLines.Enqueue(new LogLineEntry(line, LogLineKind.Ready));
+
+            while (_logLines.Count > MaxLogLines)
+            {
+                _logLines.Dequeue();
+            }
+
+            RenderLogLines();
+        }
+
+        private void AppendHotLog(string message)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => AppendHotLog(message));
+                return;
+            }
+
+            string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            _logLines.Enqueue(new LogLineEntry(line, LogLineKind.Hot));
 
             while (_logLines.Count > MaxLogLines)
             {
@@ -2587,15 +3036,21 @@ namespace TradingDashboard
 
         private static Paragraph CreateLogParagraph(LogLineEntry entry, Brush normalLogBrush)
         {
+            bool isReady = entry.Kind == LogLineKind.Ready;
+            bool isHot = entry.Kind == LogLineKind.Hot;
             var paragraph = new Paragraph(new Run(entry.Text))
             {
                 Margin = new Thickness(0),
                 LineHeight = 14,
-                Foreground = entry.IsReady ? new SolidColorBrush(Color.FromRgb(183, 255, 74)) : normalLogBrush,
-                FontWeight = entry.IsReady ? FontWeights.Bold : FontWeights.Normal
+                Foreground = isHot
+                    ? new SolidColorBrush(Color.FromRgb(255, 88, 88))
+                    : isReady ? new SolidColorBrush(Color.FromRgb(183, 255, 74)) : normalLogBrush,
+                FontWeight = isReady || isHot ? FontWeights.Bold : FontWeights.Normal
             };
 
-            if (entry.IsReady)
+            if (isHot)
+                paragraph.TextEffects = CreateHotLogTextEffects(entry.Text.Length);
+            else if (isReady)
                 paragraph.TextEffects = CreateReadyLogTextEffects(entry.Text.Length);
 
             return paragraph;
@@ -2611,6 +3066,16 @@ namespace TradingDashboard
             }
         ];
 
+        private static TextEffectCollection CreateHotLogTextEffects(int textLength) =>
+        [
+            new()
+            {
+                Foreground = new SolidColorBrush(Color.FromArgb(145, 255, 88, 88)),
+                PositionStart = 0,
+                PositionCount = textLength
+            }
+        ];
+
         private void LeftLogTextBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
@@ -2618,7 +3083,14 @@ namespace TradingDashboard
             AppendLog("Log cleared");
         }
 
-        private sealed record LogLineEntry(string Text, bool IsReady);
+        private sealed record LogLineEntry(string Text, LogLineKind Kind);
+
+        private enum LogLineKind
+        {
+            Normal,
+            Ready,
+            Hot
+        }
 
         private void SetStartupLoading(bool isVisible, string message, string statusLine1 = "", string statusLine2 = "")
         {

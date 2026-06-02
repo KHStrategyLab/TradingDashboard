@@ -9,6 +9,9 @@ namespace TradingDashboard.Models
         public string MarketName { get; set; } = string.Empty;
         public string ProgramMarketType { get; set; } = string.Empty;
         public long CurrentPrice { get; set; }
+        public string CurrentPriceMarket { get; set; } = string.Empty;
+        public long KrxDisplayPrice { get; set; }
+        public long NxtDisplayPrice { get; set; }
         public long ChangeAmount { get; set; }
         public string ChangeRateText { get; set; } = string.Empty;
         public string VolumeText { get; set; } = string.Empty;
@@ -24,6 +27,7 @@ namespace TradingDashboard.Models
         public double GateBaseCandleChangeRate { get; set; }
         public long GateBaseCandleTradeValue { get; set; }
         public string GateBaseCandleCheckedDate { get; set; } = string.Empty;
+        public string GateBaseCandleRuleVersion { get; set; } = string.Empty;
         public bool SupportsNxt { get; set; }
         public long BasePrice { get; set; }
         public string BasePriceDate { get; set; } = string.Empty;

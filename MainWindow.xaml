@@ -1547,8 +1547,8 @@
                                                                  <Setter Property="Visibility" Value="Collapsed"/>
                                                              </DataTrigger>
                                                              <DataTrigger Binding="{Binding GateBaseCandleOffset}" Value="0">
-                                                                 <Setter Property="BorderBrush" Value="{StaticResource PalettePink}"/>
-                                                                 <Setter Property="Background" Value="#4A161C"/>
+                                                                 <Setter Property="BorderBrush" Value="{StaticResource PaletteBlueGray}"/>
+                                                                 <Setter Property="Background" Value="#18242E"/>
                                                              </DataTrigger>
                                                          </Style.Triggers>
                                                      </Style>
@@ -1564,7 +1564,7 @@
                                                              <Setter Property="Foreground" Value="{StaticResource UpBrush}"/>
                                                              <Style.Triggers>
                                                                  <DataTrigger Binding="{Binding GateBaseCandleOffset}" Value="0">
-                                                                     <Setter Property="Foreground" Value="{StaticResource PalettePink}"/>
+                                                                     <Setter Property="Foreground" Value="{StaticResource PaletteBlueGray}"/>
                                                                  </DataTrigger>
                                                              </Style.Triggers>
                                                          </Style>

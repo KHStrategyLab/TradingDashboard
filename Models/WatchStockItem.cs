@@ -234,7 +234,10 @@ namespace TradingDashboard.Models
             set
             {
                 if (SetField(ref _gateBaseCandleDate, NormalizeText(value)))
+                {
+                    OnPropertyChanged(nameof(GateBaseCandleBadgeText));
                     OnPropertyChanged(nameof(GateBaseCandleDetailText));
+                }
             }
         }
 
@@ -277,7 +280,10 @@ namespace TradingDashboard.Models
             set
             {
                 if (SetField(ref _isIntradayPreCandidate, value))
+                {
                     OnPropertyChanged(nameof(PreCandidateBadgeText));
+                    OnPropertyChanged(nameof(GateBaseCandleBadgeText));
+                }
             }
         }
 
@@ -356,6 +362,13 @@ namespace TradingDashboard.Models
                 if (!GateBaseCandleFound || GateBaseCandleOffset < 0)
                     return string.Empty;
 
+                if (IsIntradayPreCandidate)
+                    return string.Empty;
+
+                if (GateBaseCandleOffset == 0 &&
+                    string.Equals(GateBaseCandleDate, DateTime.Now.ToString("yyyyMMdd"), StringComparison.Ordinal))
+                    return "NEW";
+
                 return $"D+{GateBaseCandleOffset}";
             }
         }
@@ -433,6 +446,12 @@ namespace TradingDashboard.Models
             DisplayPriceMarket = "NXT";
             CurrentPrice = NxtDisplayPrice;
             return true;
+        }
+
+        public void WaitForDisplayPrice(string market)
+        {
+            DisplayPriceMarket = NormalizeMarketCode(market);
+            CurrentPrice = 0;
         }
 
         public void SetMiniDailyCandle(long open, long high, long low, long close, Brush brush, string market = "")

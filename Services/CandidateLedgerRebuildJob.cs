@@ -11,6 +11,8 @@ namespace TradingDashboard.Services
     {
         private const long DefaultMinTradingValue = 100_000_000_000;
         private const decimal DefaultMinChangeRate = 25m;
+        private const long DefaultLargeTradingValue = 300_000_000_000;
+        private const decimal DefaultLargeTradeMinChangeRate = 20m;
 
         private readonly BacktestDataStore _dataStore;
         private readonly CandidateLedgerStore _store;
@@ -31,7 +33,7 @@ namespace TradingDashboard.Services
             int resolvedLookback = Math.Max(1, lookbackTradingDays);
             string runId = DateTime.Now.ToString("yyyyMMddHHmmss");
             Dictionary<string, string> stockNameByCode = LoadStockNameByCode();
-            List<DailySeries> seriesList = LoadKrxDailySeries(_dataStore);
+            List<DailySeries> seriesList = LoadPreferredDailySeries(_dataStore);
             List<BacktestDailyBar> allBars = [.. seriesList.SelectMany(series => series.Bars)];
             List<string> recentDates = [.. allBars
                 .Select(bar => BacktestDataStore.NormalizeDate(bar.Date))
@@ -57,7 +59,7 @@ namespace TradingDashboard.Services
 
                     long tradingValue = ResolveTradingValue(today);
                     decimal changeRate = ResolveChangeRate(today);
-                    if (tradingValue < minTradingValue || changeRate < minChangeRate)
+                    if (!PassesPowerGate(tradingValue, changeRate, minTradingValue, minChangeRate))
                         continue;
 
                     BacktestDailyBar? previous = i > 0 ? series.Bars[i - 1] : null;
@@ -110,6 +112,7 @@ namespace TradingDashboard.Services
                 [
                     $"candidate ledger rebuilt: {active.Count}active / {startDate}-{endDate}",
                     $"active path: {_store.ActivePath}",
+                    "NXT daily series is preferred when available; KRX is used as fallback",
                     "score fields are intentionally left Pending",
                     "market cap, listed shares, and floating shares remain Pending until a data source is attached"
                 ]
@@ -148,16 +151,17 @@ namespace TradingDashboard.Services
                 : null;
 
             string missing = "MarketCap;ListedShares;FloatingShares";
+            string market = BacktestDataStore.NormalizeMarket(series.Market);
             return new CandidateLedgerEntry
             {
-                Key = $"{code}|KRX|{date}|DataStoreRebuild",
+                Key = $"{code}|{market}|{date}|DataStoreRebuild",
                 Code = code,
                 Name = stockNameByCode.TryGetValue(code, out string? name) ? name : code,
-                Market = "KRX",
+                Market = market,
                 CandidateTime = $"{date}000000",
                 CandidateDate = date,
-                ConditionName = "DataStore recent 6D 100B+25%",
-                ConditionId = "DATASTORE_RECENT6_100B_25P",
+                ConditionName = "DataStore recent 6D NXT-first 100B+25% or 300B+20%",
+                ConditionId = "DATASTORE_RECENT6_NXTFIRST_100B25_OR_300B20",
                 Source = "DataStoreRebuild",
                 SorMode = "SOR_READY",
                 CurrentPrice = today.Close,
@@ -188,10 +192,10 @@ namespace TradingDashboard.Services
                 TradingValue = tradingValue,
                 VolumeSource = "DataStoreDaily",
                 TradingValueSource = "DataStoreDaily",
-                DataMarket = "KRX",
-                PriceMarket = "KRX",
-                VolumeMarket = "KRX",
-                TradingValueMarket = "KRX",
+                DataMarket = market,
+                PriceMarket = market,
+                VolumeMarket = market,
+                TradingValueMarket = market,
                 VolumeVsPrevDayRatioPercent = previous?.Volume > 0 ? today.Volume / (decimal)previous.Volume * 100m : null,
                 VolumeVsPrevDayIncreasePercent = previous?.Volume > 0 ? (today.Volume - previous.Volume) / (decimal)previous.Volume * 100m : null,
                 TradingValueVsPrevDayRatioPercent = previousTradingValue > 0 ? tradingValue / (decimal)previousTradingValue * 100m : null,
@@ -232,28 +236,55 @@ namespace TradingDashboard.Services
             };
         }
 
-        private static List<DailySeries> LoadKrxDailySeries(BacktestDataStore dataStore)
+        private static List<DailySeries> LoadPreferredDailySeries(BacktestDataStore dataStore)
         {
             string dailyDirectory = Path.Combine(dataStore.RootPath, "daily");
             if (!Directory.Exists(dailyDirectory))
                 return [];
 
-            List<DailySeries> result = [];
-            foreach (string path in Directory.EnumerateFiles(dailyDirectory, "*_KRX_daily.json", SearchOption.TopDirectoryOnly))
+            var resultByCode = new Dictionary<string, DailySeries>(StringComparer.Ordinal);
+            foreach (string path in Directory.EnumerateFiles(dailyDirectory, "*_*_daily.json", SearchOption.TopDirectoryOnly))
             {
                 string fileName = Path.GetFileNameWithoutExtension(path);
-                string code = BacktestDataStore.NormalizeCode(fileName.Split('_').FirstOrDefault() ?? string.Empty);
+                string[] parts = fileName.Split('_', StringSplitOptions.RemoveEmptyEntries);
+                string code = BacktestDataStore.NormalizeCode(parts.FirstOrDefault() ?? string.Empty);
+                string market = parts.Length >= 2 ? BacktestDataStore.NormalizeMarket(parts[1]) : "KRX";
                 if (string.IsNullOrWhiteSpace(code))
                     continue;
 
-                List<BacktestDailyBar> bars = [.. dataStore.LoadDailyBars(code, "KRX")
+                List<BacktestDailyBar> bars = [.. dataStore.LoadDailyBars(code, market)
                     .Where(bar => bar != null && !string.IsNullOrWhiteSpace(bar.Date))
                     .OrderBy(bar => BacktestDataStore.NormalizeDate(bar.Date))];
-                if (bars.Count > 0)
-                    result.Add(new DailySeries(code, bars));
+                if (bars.Count == 0)
+                    continue;
+
+                if (!resultByCode.TryGetValue(code, out DailySeries? existing) ||
+                    ShouldPreferMarket(market, existing.Market))
+                {
+                    resultByCode[code] = new DailySeries(code, market, bars);
+                }
             }
 
-            return result;
+            return [.. resultByCode.Values
+                .OrderBy(series => series.Code)];
+        }
+
+        private static bool ShouldPreferMarket(string candidateMarket, string currentMarket)
+        {
+            string candidate = BacktestDataStore.NormalizeMarket(candidateMarket);
+            string current = BacktestDataStore.NormalizeMarket(currentMarket);
+            return string.Equals(candidate, "NXT", StringComparison.Ordinal) &&
+                !string.Equals(current, "NXT", StringComparison.Ordinal);
+        }
+
+        private static bool PassesPowerGate(
+            long tradingValue,
+            decimal changeRate,
+            long minTradingValue,
+            decimal minChangeRate)
+        {
+            return (tradingValue >= minTradingValue && changeRate >= minChangeRate) ||
+                (tradingValue >= DefaultLargeTradingValue && changeRate >= DefaultLargeTradeMinChangeRate);
         }
 
         private static Dictionary<string, string> LoadStockNameByCode()
@@ -372,6 +403,6 @@ namespace TradingDashboard.Services
             return Math.Round(100m - (100m / (1m + rs)), 2);
         }
 
-        private sealed record DailySeries(string Code, List<BacktestDailyBar> Bars);
+        private sealed record DailySeries(string Code, string Market, List<BacktestDailyBar> Bars);
     }
 }
