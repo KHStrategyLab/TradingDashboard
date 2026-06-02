@@ -115,6 +115,7 @@ namespace TradingDashboard.Services
                 CloseLocationPercent = candidate.CloseLocationPercent ?? 0m,
                 UpperTailPercent = candidate.UpperTailPercent ?? 0m,
                 MarketCap = candidate.MarketCap,
+                MarketCapClass = candidate.MarketCapClass,
                 ValueToMarketCapPercent = candidate.ValueToMarketCapPercent,
                 TradingValueToMarketCapPercent = candidate.TradingValueToMarketCapPercent ?? candidate.ValueToMarketCapPercent,
                 TurnoverRate = candidate.TurnoverRateByFloatingShares ?? candidate.TurnoverRateByListedShares,

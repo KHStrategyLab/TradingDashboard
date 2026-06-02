@@ -87,7 +87,7 @@ namespace TradingDashboard.Services
                 Directory.CreateDirectory(directory);
 
             var builder = new StringBuilder();
-            builder.AppendLine("PriorityRank,DailyRank,Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,Source,Status,TradingValue,ChangeRate,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,ValueToMarketCapPercent,TradingValueToMarketCapPercent,TurnoverRate,KrxClose,NxtClose,QualityReason");
+            builder.AppendLine("PriorityRank,DailyRank,Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,Source,Status,TradingValue,ChangeRate,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,MarketCapClass,ValueToMarketCapPercent,TradingValueToMarketCapPercent,TurnoverRate,KrxClose,NxtClose,QualityReason");
             foreach (LeaderHistoryEntry row in rows)
             {
                 builder.AppendLine(string.Join(",", new[]
@@ -110,6 +110,7 @@ namespace TradingDashboard.Services
                     row.BollingerUpperBreak ? "true" : "false",
                     row.PrevHighPlus10 ? "true" : "false",
                     row.MarketCap?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
+                    Escape(row.MarketCapClass),
                     row.ValueToMarketCapPercent?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.TradingValueToMarketCapPercent?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.TurnoverRate?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,

@@ -91,6 +91,7 @@ Fundamental and market-rank fields remain pending until a source is attached:
 
 ```text
 MarketCap
+MarketCapClass
 ListedShares
 FloatingShares
 ValueToMarketCapPercent
@@ -125,6 +126,16 @@ raw value >= 1,000,000 => treat as 1-share unit
 ```
 
 Market cap uses listed shares. Turnover prefers floating shares, then listed shares if floating shares are missing.
+
+Market cap class is a coarse helper tag:
+
+```text
+MegaCap     = market cap 10T+
+LargeCap    = market cap 3T+
+MidLargeCap = market cap 1T+
+MidCap      = market cap 300B+
+SmallCap    = below 300B
+```
 
 Ratio naming:
 

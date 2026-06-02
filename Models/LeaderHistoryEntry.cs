@@ -19,6 +19,7 @@ namespace TradingDashboard.Models
         public decimal CloseLocationPercent { get; set; }
         public decimal UpperTailPercent { get; set; }
         public decimal? MarketCap { get; set; }
+        public string MarketCapClass { get; set; } = string.Empty;
         public decimal? ValueToMarketCapPercent { get; set; }
         public decimal? TradingValueToMarketCapPercent { get; set; }
         public decimal? TurnoverRate { get; set; }

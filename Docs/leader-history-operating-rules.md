@@ -152,6 +152,7 @@ Reserved fields are kept for later expansion:
 
 ```text
 MarketCap
+MarketCapClass
 ValueToMarketCapPercent
 TradingValueToMarketCapPercent
 TurnoverRate
@@ -159,7 +160,27 @@ TurnoverRate
 
 `TradingValueToMarketCapPercent` means daily trading value divided by market cap. `ValueToMarketCapPercent` is kept as a compatibility alias for the same value. `TurnoverRate` remains share-volume based and should not be mixed with market-cap ratio.
 
+`MarketCapClass` is a coarse helper tag: `MegaCap`, `LargeCap`, `MidLargeCap`, `MidCap`, `SmallCap`, or `Unknown`.
+
 When market cap is missing, the scorer gives a neutral placeholder instead of blocking the leader record. Later, when market cap or listed-share data is available, the same record shape can distinguish absolute market leaders from stock-relative leaders.
+
+The current scorer also gives provisional helper weight to market-cap scale and turnover. This is only ranking support; it is not a save gate.
+
+Current provisional score components:
+
+```text
+TradingValue                 max 22
+MarketCap scale              max 8
+TradingValue/MarketCap ratio max 18
+TurnoverRate                 max 7
+ChangeRate                   max 12
+PrevHighPlus10               max 12
+CloseLocationPercent         max 8
+UpperTailPercent             max 8
+BollingerUpperBreak          max 5
+```
+
+A++ should remain rare. If too many rows become A++, the weights should be tightened before strategy slots depend on the grade.
 
 Current grade labels:
 

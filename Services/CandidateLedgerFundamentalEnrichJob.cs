@@ -91,6 +91,7 @@ namespace TradingDashboard.Services
                 marketCap = closePrice * listedShares;
 
             candidate.MarketCap = marketCap > 0 ? marketCap : null;
+            candidate.MarketCapClass = ResolveMarketCapClass(candidate.MarketCap);
             candidate.ListedShares = listedShares > 0 ? listedShares : null;
             candidate.FloatingShares = floatingShares > 0 ? floatingShares : null;
             candidate.FloatingSharesUnit = "share";
@@ -133,6 +134,23 @@ namespace TradingDashboard.Services
             if (candidate.FloatingShares is null or <= 0)
                 missing.Add("FloatingShares");
             return string.Join(";", missing);
+        }
+
+        private static string ResolveMarketCapClass(decimal? marketCap)
+        {
+            if (marketCap is not decimal cap || cap <= 0)
+                return "Unknown";
+
+            decimal capB = cap / 100_000_000m;
+            if (capB >= 100_000m)
+                return "MegaCap";
+            if (capB >= 30_000m)
+                return "LargeCap";
+            if (capB >= 10_000m)
+                return "MidLargeCap";
+            if (capB >= 3_000m)
+                return "MidCap";
+            return "SmallCap";
         }
     }
 }
