@@ -97,6 +97,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--candidate-ledger-rebuild", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunCandidateLedgerRebuild();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             base.OnStartup(e);
         }
 
@@ -255,6 +263,27 @@ namespace TradingDashboard
                     Logs = [$"leader history rebuild failed: {ex.GetType().Name}: {ex.Message}"]
                 };
                 WriteBacktestJobSummary(summary, "last_leader_history_rebuild_summary.json", $"leader_history_rebuild_summary_{summary.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunCandidateLedgerRebuild()
+        {
+            try
+            {
+                var job = new CandidateLedgerRebuildJob();
+                CandidateLedgerRebuildSummary summary = job.Rebuild(lookbackTradingDays: 6);
+                WriteBacktestJobSummary(summary, "last_candidate_ledger_rebuild_summary.json", $"candidate_ledger_rebuild_summary_{summary.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var summary = new CandidateLedgerRebuildSummary
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Logs = [$"candidate ledger rebuild failed: {ex.GetType().Name}: {ex.Message}"]
+                };
+                WriteBacktestJobSummary(summary, "last_candidate_ledger_rebuild_summary.json", $"candidate_ledger_rebuild_summary_{summary.RunId}.json");
                 return 1;
             }
         }

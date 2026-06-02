@@ -27,6 +27,7 @@ Storage/PaperPositions/
 Storage/PaperTradeMarks/
 Storage/Backtests/
 Storage/LeaderHistory/
+Storage/CandidateLedger/
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
