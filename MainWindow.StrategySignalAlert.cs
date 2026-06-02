@@ -205,6 +205,8 @@ namespace TradingDashboard
                 return StrategyLiveBuyGuardResult.Blocked("minute ledger not ready");
             if (!result.HasSignal)
                 return StrategyLiveBuyGuardResult.Blocked("signal not active");
+            if (!TryResolveStrategyEntry5MinuteLow(stock, out _, out _))
+                return StrategyLiveBuyGuardResult.Blocked("entry 5m stop anchor missing");
             if (execution.SlotCount <= 0)
                 return StrategyLiveBuyGuardResult.Blocked("slot count missing");
             if (CountStrategyLiveBuyOrdersToday() >= execution.SlotCount)

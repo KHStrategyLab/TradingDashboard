@@ -281,6 +281,19 @@ namespace TradingDashboard
         private static StrategyExitCheck EvaluatePositionExitCheck(WatchStockItem stock, StrategyPositionLedgerEntry position)
         {
             long currentPrice = ResolveStrategySignalPrice(stock);
+            if (currentPrice > 0 && position.AveragePrice > 0 && position.Entry5MinuteLow > 0 && currentPrice <= position.Entry5MinuteLow)
+            {
+                return StrategyExitCheck.Signal(
+                    "ENTRY_5M_LOW_STOP",
+                    currentPrice,
+                    position.AveragePrice,
+                    CalculateProfitRate(currentPrice, position.AveragePrice),
+                    position.Key,
+                    position.SlotTag,
+                    position.OpenQuantity,
+                    position.ExitStrategyCode);
+            }
+
             DateTime entryTime = ParseLedgerTime(position.FillTime);
             return EvaluateExitDecision(
                 currentPrice,

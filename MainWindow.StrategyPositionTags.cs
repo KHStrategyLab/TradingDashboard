@@ -40,14 +40,13 @@ namespace TradingDashboard
                 .First();
             DateTime fillTime = ParseFillTime(firstFill.OrderTime);
 
-            string market = ShouldUseNxtDataForStock(stock.Code) ? "NXT" : "KRX";
             long entryLow = 0;
             DateTime entryBarTime = DateTime.MinValue;
             if (fillTime != DateTime.MinValue &&
-                _strategyMinuteCacheService.TryGetBarAt(stock.Code, market, 5, fillTime, out StrategyMinuteBar entryBar))
+                TryResolveStrategyEntry5MinuteLow(stock, fillTime, out long resolvedEntryLow, out DateTime resolvedEntryBarTime))
             {
-                entryLow = entryBar.Low;
-                entryBarTime = entryBar.BucketTime;
+                entryLow = resolvedEntryLow;
+                entryBarTime = resolvedEntryBarTime;
             }
 
             string slotTag = FormatStrategySlotNumber(result.SlotId);
@@ -132,6 +131,36 @@ namespace TradingDashboard
         {
             string safeOrderNo = string.IsNullOrWhiteSpace(orderNo) ? "NOORDER" : orderNo.Trim();
             return $"{NormalizeStockCode(code)}|{slotId}|{safeOrderNo}|{DateTime.Today:yyyyMMdd}";
+        }
+
+        private bool TryResolveStrategyEntry5MinuteLow(
+            WatchStockItem stock,
+            out long entryLow,
+            out DateTime entryBarTime) =>
+            TryResolveStrategyEntry5MinuteLow(stock, DateTime.Now, out entryLow, out entryBarTime);
+
+        private bool TryResolveStrategyEntry5MinuteLow(
+            WatchStockItem stock,
+            DateTime sourceTime,
+            out long entryLow,
+            out DateTime entryBarTime)
+        {
+            entryLow = 0;
+            entryBarTime = DateTime.MinValue;
+
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code) || sourceTime == DateTime.MinValue)
+                return false;
+
+            string market = ShouldUseNxtDataForStock(stock.Code) ? "NXT" : "KRX";
+            if (!_strategyMinuteCacheService.TryGetBarAt(stock.Code, market, 5, sourceTime, out StrategyMinuteBar entryBar) ||
+                entryBar.Low <= 0)
+            {
+                return false;
+            }
+
+            entryLow = entryBar.Low;
+            entryBarTime = entryBar.BucketTime;
+            return true;
         }
 
         private string FormatStrategyPositionTag(string slotId)
