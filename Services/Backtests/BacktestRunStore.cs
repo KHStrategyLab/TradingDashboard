@@ -27,6 +27,8 @@ namespace TradingDashboard.Services.Backtests
         public string CreateRunId(string prefix = "run")
         {
             string safePrefix = SanitizeFileName(string.IsNullOrWhiteSpace(prefix) ? "run" : prefix);
+            if (!safePrefix.StartsWith("SORON_", StringComparison.OrdinalIgnoreCase))
+                safePrefix = $"SORON_{safePrefix}";
             return $"{safePrefix}_{DateTime.Now:yyyyMMddHHmmss}";
         }
 
@@ -34,7 +36,8 @@ namespace TradingDashboard.Services.Backtests
             string runId,
             IEnumerable<BacktestSignalRow> signals,
             IEnumerable<BacktestTradeRow> trades,
-            IEnumerable<BacktestRunSummary> summaries)
+            IEnumerable<BacktestRunSummary> summaries,
+            BacktestRunConfig? runConfig = null)
         {
             string resolvedRunId = string.IsNullOrWhiteSpace(runId) ? CreateRunId() : SanitizeFileName(runId);
             string directory = Path.Combine(_rootPath, resolvedRunId);
@@ -43,13 +46,53 @@ namespace TradingDashboard.Services.Backtests
             List<BacktestSignalRow> signalRows = [.. signals ?? []];
             List<BacktestTradeRow> tradeRows = [.. trades ?? []];
             List<BacktestRunSummary> summaryRows = [.. summaries ?? []];
+            BacktestRunConfig resolvedConfig = BuildRunConfig(resolvedRunId, summaryRows, runConfig);
 
             File.WriteAllText(Path.Combine(directory, "signals.csv"), BuildSignalsCsv(signalRows), Encoding.UTF8);
             File.WriteAllText(Path.Combine(directory, "trades.csv"), BuildTradesCsv(tradeRows), Encoding.UTF8);
             File.WriteAllText(Path.Combine(directory, "summaries.json"), JsonSerializer.Serialize(summaryRows, JsonOptions), Encoding.UTF8);
+            File.WriteAllText(Path.Combine(directory, "summary.json"), BuildSummaryJson(resolvedRunId, summaryRows), Encoding.UTF8);
             File.WriteAllText(Path.Combine(directory, "strategy_comparison.csv"), BuildSummaryCsv(summaryRows), Encoding.UTF8);
+            File.WriteAllText(Path.Combine(directory, "samples.csv"), BuildSamplesCsv(tradeRows), Encoding.UTF8);
+            File.WriteAllText(Path.Combine(directory, "run_config.json"), JsonSerializer.Serialize(resolvedConfig, JsonOptions), Encoding.UTF8);
 
             return directory;
+        }
+
+        private static BacktestRunConfig BuildRunConfig(
+            string runId,
+            IReadOnlyCollection<BacktestRunSummary> summaries,
+            BacktestRunConfig? config)
+        {
+            BacktestRunConfig resolved = config ?? new BacktestRunConfig();
+            resolved.RunId = runId;
+            resolved.BacktestMode = string.IsNullOrWhiteSpace(resolved.BacktestMode) ? "SOR_ON" : resolved.BacktestMode;
+            resolved.OrderMode = string.IsNullOrWhiteSpace(resolved.OrderMode) ? "None" : resolved.OrderMode;
+            resolved.ExecutionType = string.IsNullOrWhiteSpace(resolved.ExecutionType) ? "BacktestOnly" : resolved.ExecutionType;
+            resolved.LiveOrder = false;
+            resolved.StrategyCodes = [.. summaries
+                .Select(item => item.StrategyCode)
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(item => item, StringComparer.Ordinal)];
+            resolved.ExitRuleCodes = [.. summaries
+                .Select(item => item.ExitRuleCode)
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(item => item, StringComparer.Ordinal)];
+            return resolved;
+        }
+
+        private static string BuildSummaryJson(string runId, IReadOnlyList<BacktestRunSummary> summaries)
+        {
+            object payload = summaries.Count == 1
+                ? summaries[0]
+                : new
+                {
+                    RunId = runId,
+                    Summaries = summaries
+                };
+            return JsonSerializer.Serialize(payload, JsonOptions);
         }
 
         private static string BuildSignalsCsv(IEnumerable<BacktestSignalRow> rows)
@@ -130,6 +173,51 @@ namespace TradingDashboard.Services.Backtests
                     row.ConsecutiveLosses.ToString(CultureInfo.InvariantCulture),
                     row.FeeAdjustedProfit.ToString(CultureInfo.InvariantCulture),
                     row.SlippageAdjustedProfit.ToString(CultureInfo.InvariantCulture));
+            }
+
+            return sb.ToString();
+        }
+
+        private static string BuildSamplesCsv(IReadOnlyList<BacktestTradeRow> rows)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("SampleType,RunId,StrategyCode,ExitRuleCode,Code,Market,EntryTime,ExitTime,EntryPrice,ExitPrice,ProfitRate,MAE,MFE,MaxR,MinR,HoldingMinutes,EntryReason,ExitReason");
+
+            IEnumerable<BacktestTradeRow> good = rows
+                .Where(row => row.ProfitRate > 0)
+                .OrderByDescending(row => row.ProfitRate)
+                .Take(10);
+            IEnumerable<BacktestTradeRow> failed = rows
+                .Where(row => row.ProfitRate < 0)
+                .OrderBy(row => row.ProfitRate)
+                .Take(10);
+            IEnumerable<BacktestTradeRow> ambiguous = rows
+                .Where(row => row.ProfitRate == 0)
+                .Take(10);
+
+            foreach ((string sampleType, BacktestTradeRow row) in good.Select(row => ("GOOD", row))
+                .Concat(failed.Select(row => ("FAILED", row)))
+                .Concat(ambiguous.Select(row => ("AMBIGUOUS", row))))
+            {
+                AppendCsvLine(sb,
+                    sampleType,
+                    row.RunId,
+                    row.StrategyCode,
+                    row.ExitRuleCode,
+                    row.Code,
+                    row.Market,
+                    row.EntryTime,
+                    row.ExitTime,
+                    row.EntryPrice.ToString(CultureInfo.InvariantCulture),
+                    row.ExitPrice.ToString(CultureInfo.InvariantCulture),
+                    row.ProfitRate.ToString(CultureInfo.InvariantCulture),
+                    row.Mae.ToString(CultureInfo.InvariantCulture),
+                    row.Mfe.ToString(CultureInfo.InvariantCulture),
+                    row.MaxR.ToString(CultureInfo.InvariantCulture),
+                    row.MinR.ToString(CultureInfo.InvariantCulture),
+                    row.HoldingMinutes.ToString(CultureInfo.InvariantCulture),
+                    row.EntryReason,
+                    row.ExitReason);
             }
 
             return sb.ToString();
