@@ -266,7 +266,7 @@ namespace TradingDashboard
                         continue;
                     }
 
-                    KiwoomHolding revalued = RevalueHoldingWithCurrentPrice(holding, price);
+                    KiwoomHolding revalued = RevalueHoldingWithCurrentPrice(holding, price, "NXT");
                     corrected.Add(revalued);
                     if (price != holding.CurrentPrice || revalued.EvaluationAmount != holding.EvaluationAmount)
                     {
@@ -339,14 +339,15 @@ namespace TradingDashboard
             return (0, string.Empty);
         }
 
-        private static KiwoomHolding RevalueHoldingWithCurrentPrice(KiwoomHolding holding, long currentPrice)
+        private KiwoomHolding RevalueHoldingWithCurrentPrice(KiwoomHolding holding, long currentPrice, string market)
         {
             long quantity = Math.Max(0, holding.HoldingQuantity);
             long purchase = Math.Max(0, holding.PurchaseAmount);
             long evaluation = quantity > 0 && currentPrice > 0
                 ? (long)Math.Min(long.MaxValue, quantity * (double)currentPrice)
                 : Math.Max(0, holding.EvaluationAmount);
-            long profit = purchase > 0 ? evaluation - purchase : holding.EvaluationProfit;
+            TradingCostEstimate cost = _tradingCostCalculator.Estimate(purchase, evaluation, market);
+            long profit = purchase > 0 ? evaluation - purchase - cost.TotalEstimatedCost : holding.EvaluationProfit;
             decimal profitRate = purchase > 0 ? profit / (decimal)purchase * 100m : holding.ProfitRate;
 
             return holding with
@@ -528,7 +529,7 @@ namespace TradingDashboard
                 if (!string.Equals(NormalizeStockCode(holding.StockCode), code, StringComparison.Ordinal))
                     continue;
 
-                _balanceHoldings[i] = DecorateHoldingPositionTag(RevalueHoldingWithCurrentPrice(holding, currentPrice));
+                _balanceHoldings[i] = DecorateHoldingPositionTag(RevalueHoldingWithCurrentPrice(holding, currentPrice, isNxtTick ? "NXT" : "KRX"));
                 RefreshBalanceSummaryFromCurrentHoldings();
                 return;
             }
