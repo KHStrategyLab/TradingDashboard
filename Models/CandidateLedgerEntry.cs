@@ -109,6 +109,13 @@ namespace TradingDashboard.Models
         public int? SectorChangeRateRank { get; set; }
         public bool? IsLargeCapEventCandidate { get; set; }
 
+        public long? ForeignNetBuyQuantity { get; set; }
+        public long? InstitutionNetBuyQuantity { get; set; }
+        public bool? IsForeignInstitutionDoubleNetBuy { get; set; }
+        public string InvestorNetBuySource { get; set; } = string.Empty;
+        public string InvestorNetBuyStatus { get; set; } = "Pending";
+        public string InvestorNetBuyUpdatedAt { get; set; } = string.Empty;
+
         public string FundamentalStatus { get; set; } = "Pending";
         public string MarketLogicStatus { get; set; } = "Pending";
         public string ScoreStatus { get; set; } = "Pending";

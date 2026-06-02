@@ -99,6 +99,9 @@ ValueToMarketCapPercent
 TradingValueToMarketCapPercent
 TurnoverRateByListedShares
 TurnoverRateByFloatingShares
+ForeignNetBuyQuantity
+InstitutionNetBuyQuantity
+IsForeignInstitutionDoubleNetBuy
 TradingValueRankInMarket
 ChangeRateRankInMarket
 TurnoverRankInMarket
@@ -148,6 +151,19 @@ TurnoverRateByFloatingShares   = Volume / FloatingShares * 100
 ```
 
 Trading-value-to-market-cap ratio and share turnover are separate concepts. Keep both when the data exists.
+
+Investor net-buy reference:
+
+```text
+TR          = ka10059 stock investor/institution request
+Date        = CandidateDate
+Market      = KRX stock code
+Mode        = amt_qty_tp 2, trde_tp 0, unit_tp 1
+Foreign     = frgnr_invsr
+Institution = orgn
+```
+
+Only net-buy quantity is stored for now. `IsForeignInstitutionDoubleNetBuy` is true when both foreign and institution quantities are positive. This is a reference field, not a save gate or score component.
 
 Daily RSI:
 

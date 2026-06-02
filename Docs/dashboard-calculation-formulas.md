@@ -214,6 +214,28 @@ MTS 기준에 맞춘 계산:
 - 상장주식수 기준으로 나누면 MTS 회전율과 맞지 않는다.
 - 시총 계산에는 전체 상장주식수를 사용하고, 회전율에는 유통주식수를 사용한다.
 
+## 외국인·기관 순매수 수량
+
+후보장부의 외국인·기관 양매수 참고값은 `ka10059` 종목별투자자기관별요청을 사용한다.
+
+```text
+dt = 후보일
+stk_cd = KRX 6자리 종목코드
+amt_qty_tp = 2  // 수량
+trde_tp = 0     // 순매수
+unit_tp = 1     // 단주
+```
+
+저장 필드:
+
+```text
+ForeignNetBuyQuantity = frgnr_invsr
+InstitutionNetBuyQuantity = orgn
+IsForeignInstitutionDoubleNetBuy = 둘 다 0보다 크면 true
+```
+
+이 값은 참고 데이터다. 저장 게이트나 대장 점수에는 아직 반영하지 않는다.
+
 ## 시가총액
 
 사용 값:

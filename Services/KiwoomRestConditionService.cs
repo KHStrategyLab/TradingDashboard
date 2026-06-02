@@ -208,6 +208,63 @@ namespace TradingDashboard.Services
                 .ToList();
         }
 
+        public async Task<InvestorNetBuyMetrics> GetInvestorNetBuyMetricsAsync(
+            string code,
+            string date,
+            CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            string baseCode = NormalizeStockCode(code);
+            string targetDate = NormalizeDate8(date);
+            var empty = new InvestorNetBuyMetrics
+            {
+                Code = baseCode,
+                Date = targetDate,
+                Found = false
+            };
+            if (string.IsNullOrWhiteSpace(baseCode) || string.IsNullOrWhiteSpace(targetDate))
+                return empty;
+
+            JsonElement root = await PostApiRootAsync(
+                token,
+                "ka10059",
+                "/api/dostk/stkinfo",
+                new
+                {
+                    dt = targetDate,
+                    stk_cd = baseCode,
+                    amt_qty_tp = "2",
+                    trde_tp = "0",
+                    unit_tp = "1"
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            JsonElement rows = FindArrayByKeySafe(root, "stk_invsr_orgn");
+            if (rows.ValueKind != JsonValueKind.Array)
+                return empty;
+
+            foreach (JsonElement row in rows.EnumerateArray())
+            {
+                string rowDate = NormalizeDate8(ReadAnyDeep(row, "dt", "date"));
+                if (!string.IsNullOrWhiteSpace(rowDate) && !string.Equals(rowDate, targetDate, StringComparison.Ordinal))
+                    continue;
+
+                return new InvestorNetBuyMetrics
+                {
+                    Code = baseCode,
+                    Date = targetDate,
+                    ForeignNetBuyQuantity = ParseLongSafe(ReadAnyDeep(row, "frgnr_invsr", "foreign_investor")),
+                    InstitutionNetBuyQuantity = ParseLongSafe(ReadAnyDeep(row, "orgn", "institution")),
+                    Source = "ka10059",
+                    Unit = "share",
+                    Found = true
+                };
+            }
+
+            return empty;
+        }
+
         private static bool IsExcludedFromStockAutocomplete(StockMasterItem item)
         {
             string name = item.Name ?? string.Empty;
@@ -1995,6 +2052,18 @@ namespace TradingDashboard.Services
                 return string.Empty;
 
             return int.TryParse(digits, out int number) ? number.ToString() : digits.TrimStart('0');
+        }
+
+        private static string NormalizeDate8(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            string digits = new([.. value.Where(char.IsDigit)]);
+            if (digits.Length < 8)
+                return string.Empty;
+
+            return digits[..8];
         }
 
         private static string NormalizeStockCode(string value)

@@ -67,6 +67,23 @@ namespace TradingDashboard.Services
                     summary.Logs.Add($"candidate fundamental enrich failed: {candidate.Code} / {ex.Message}");
                 }
 
+                try
+                {
+                    InvestorNetBuyMetrics investorMetrics = await _kiwoomService
+                        .GetInvestorNetBuyMetricsAsync(code, candidate.CandidateDate, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    ApplyInvestorNetBuy(candidate, investorMetrics, runId);
+                    summary.Logs.Add($"candidate investor net buy loaded: {candidate.Code} / foreign {candidate.ForeignNetBuyQuantity:0} / institution {candidate.InstitutionNetBuyQuantity:0} / double {candidate.IsForeignInstitutionDoubleNetBuy}");
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    candidate.InvestorNetBuyStatus = "Failed";
+                    candidate.DataErrorMemo = AppendMemo(candidate.DataErrorMemo, $"InvestorNetBuy {ex.GetType().Name}: {ex.Message}");
+                    candidate.UpdatedAt = runId;
+                    summary.Logs.Add($"candidate investor net buy failed: {candidate.Code} / {ex.Message}");
+                }
+
                 await Task.Delay(TimeSpan.FromMilliseconds(120), cancellationToken).ConfigureAwait(false);
             }
 
@@ -116,6 +133,29 @@ namespace TradingDashboard.Services
             candidate.UpdatedAt = runId;
         }
 
+        private static void ApplyInvestorNetBuy(CandidateLedgerEntry candidate, InvestorNetBuyMetrics metrics, string runId)
+        {
+            if (metrics.Found)
+            {
+                candidate.ForeignNetBuyQuantity = metrics.ForeignNetBuyQuantity;
+                candidate.InstitutionNetBuyQuantity = metrics.InstitutionNetBuyQuantity;
+                candidate.IsForeignInstitutionDoubleNetBuy = metrics.IsForeignInstitutionDoubleNetBuy;
+                candidate.InvestorNetBuySource = $"{metrics.Source}:{metrics.Unit}";
+                candidate.InvestorNetBuyStatus = "Loaded";
+            }
+            else
+            {
+                candidate.ForeignNetBuyQuantity = null;
+                candidate.InstitutionNetBuyQuantity = null;
+                candidate.IsForeignInstitutionDoubleNetBuy = null;
+                candidate.InvestorNetBuySource = "ka10059:share";
+                candidate.InvestorNetBuyStatus = "Empty";
+            }
+
+            candidate.InvestorNetBuyUpdatedAt = runId;
+            candidate.UpdatedAt = runId;
+        }
+
         private static void MarkFailed(CandidateLedgerEntry candidate, string runId, string message)
         {
             candidate.FundamentalStatus = "Failed";
@@ -134,6 +174,15 @@ namespace TradingDashboard.Services
             if (candidate.FloatingShares is null or <= 0)
                 missing.Add("FloatingShares");
             return string.Join(";", missing);
+        }
+
+        private static string AppendMemo(string current, string message)
+        {
+            if (string.IsNullOrWhiteSpace(current))
+                return message;
+            if (string.IsNullOrWhiteSpace(message))
+                return current;
+            return $"{current}; {message}";
         }
 
         private static string ResolveMarketCapClass(decimal? marketCap)

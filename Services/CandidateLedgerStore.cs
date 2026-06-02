@@ -91,7 +91,7 @@ namespace TradingDashboard.Services
                 Directory.CreateDirectory(directory);
 
             var builder = new StringBuilder();
-            builder.AppendLine("Code,Name,Market,CandidateDate,CandidateTime,Source,ConditionName,CurrentPrice,ChangeRate,DailyRsi14,Volume,TradingValue,MarketCap,MarketCapClass,ListedShares,FloatingShares,TodayOpen,TodayHigh,TodayLow,TodayClose,TodayVolume,TodayTradingValue,PrevOpen,PrevHigh,PrevLow,PrevClose,PrevVolume,PrevTradingValue,AvgTradingValue20D,ValueToMarketCapPercent,TradingValueToMarketCapPercent,TurnoverRateByListedShares,TurnoverRateByFloatingShares,CloseLocationPercent,UpperTailPercent,IsBollingerUpperBreak,PrevHighBreak,FundamentalStatus,DailyMetricsStatus,MarketLogicStatus,ScoreStatus,MissingFieldMemo");
+            builder.AppendLine("Code,Name,Market,CandidateDate,CandidateTime,Source,ConditionName,CurrentPrice,ChangeRate,DailyRsi14,Volume,TradingValue,MarketCap,MarketCapClass,ListedShares,FloatingShares,TodayOpen,TodayHigh,TodayLow,TodayClose,TodayVolume,TodayTradingValue,PrevOpen,PrevHigh,PrevLow,PrevClose,PrevVolume,PrevTradingValue,AvgTradingValue20D,ValueToMarketCapPercent,TradingValueToMarketCapPercent,TurnoverRateByListedShares,TurnoverRateByFloatingShares,ForeignNetBuyQuantity,InstitutionNetBuyQuantity,IsForeignInstitutionDoubleNetBuy,InvestorNetBuyStatus,CloseLocationPercent,UpperTailPercent,IsBollingerUpperBreak,PrevHighBreak,FundamentalStatus,DailyMetricsStatus,MarketLogicStatus,ScoreStatus,MissingFieldMemo");
             foreach (CandidateLedgerEntry row in rows)
             {
                 builder.AppendLine(string.Join(",", new[]
@@ -129,6 +129,10 @@ namespace TradingDashboard.Services
                     row.TradingValueToMarketCapPercent?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.TurnoverRateByListedShares?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.TurnoverRateByFloatingShares?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.ForeignNetBuyQuantity?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.InstitutionNetBuyQuantity?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.IsForeignInstitutionDoubleNetBuy?.ToString().ToLowerInvariant() ?? string.Empty,
+                    Escape(row.InvestorNetBuyStatus),
                     row.CloseLocationPercent?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.UpperTailPercent?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.IsBollingerUpperBreak?.ToString().ToLowerInvariant() ?? string.Empty,
