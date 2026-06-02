@@ -25,6 +25,7 @@ namespace TradingDashboard.Services.Backtests
 
         public async Task<BacktestMinuteDataStoreSummary> RunAsync(CancellationToken cancellationToken = default)
         {
+            int mirroredBaseCandles = await MirrorKrxBaseCandlesForSorMixedAsync(cancellationToken).ConfigureAwait(false);
             IReadOnlyList<BacktestBaseCandle> baseCandles = _dataStore.LoadBaseCandles();
             List<BaseCandleGroup> groups = [.. baseCandles
                 .Where(item => item != null && !string.IsNullOrWhiteSpace(item.Code) && !string.IsNullOrWhiteSpace(item.BaseCandleDate))
@@ -34,8 +35,12 @@ namespace TradingDashboard.Services.Backtests
                     BacktestDataStore.NormalizeMarket(group.First().Market),
                     group.Min(item => BacktestDataStore.NormalizeDate(item.BaseCandleDate)) ?? DateTime.Today.ToString("yyyyMMdd"),
                     group.Count()))
+                .Where(item => BacktestMarketModeHelper.PassesMarketFilter(item.Market, _settings.MinuteMarketFilter))
                 .OrderBy(item => item.Code)
                 .ThenBy(item => item.Market)];
+
+            if (_settings.MaxMinuteStockMarketGroups > 0)
+                groups = [.. groups.Take(_settings.MaxMinuteStockMarketGroups)];
 
             int[] intervals = ResolveIntervals(_settings.MinuteIntervals);
             int fetchCount = Math.Clamp(_settings.MinuteFetchCount, 60, 5000);
@@ -46,6 +51,10 @@ namespace TradingDashboard.Services.Backtests
                 StockMarketCount = groups.Count,
                 MinuteSetCount = groups.Count * intervals.Length
             };
+            if (mirroredBaseCandles > 0)
+                summary.Logs.Add($"base candles mirrored for SOR/NXT execution before minute download: {mirroredBaseCandles}events");
+            if (!string.IsNullOrWhiteSpace(_settings.MinuteMarketFilter) || _settings.MaxMinuteStockMarketGroups > 0)
+                summary.Logs.Add($"minute datastore filter: market={(_settings.MinuteMarketFilter.Length == 0 ? "ALL" : _settings.MinuteMarketFilter)} / groups={groups.Count} / max={_settings.MaxMinuteStockMarketGroups}");
 
             foreach (BaseCandleGroup group in groups)
             {
@@ -77,6 +86,18 @@ namespace TradingDashboard.Services.Backtests
             }
 
             return summary;
+        }
+
+        private async Task<int> MirrorKrxBaseCandlesForSorMixedAsync(CancellationToken cancellationToken)
+        {
+            if (!BacktestMarketModeHelper.IsSorMixed(_settings))
+                return 0;
+
+            IReadOnlyDictionary<string, StockMasterItem> stockMasterByCode =
+                await BacktestMarketModeHelper.LoadStockMasterByCodeAsync(cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BacktestBaseCandle> mirrors =
+                BacktestMarketModeHelper.BuildNxtExecutionBaseCandles(_dataStore.LoadBaseCandles(), stockMasterByCode);
+            return _dataStore.UpsertBaseCandles(mirrors);
         }
 
         private static bool ShouldDownload(IReadOnlyList<BacktestMinuteBar> existing, string earliestBaseDate)

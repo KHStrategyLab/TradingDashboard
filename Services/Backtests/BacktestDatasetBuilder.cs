@@ -28,6 +28,7 @@ namespace TradingDashboard.Services.Backtests
             int lookbackBars = 120,
             long minTradingValue = 50_000_000_000,
             decimal minChangeRate = 20m,
+            bool mirrorKrxBaseCandlesForNxt = false,
             CancellationToken cancellationToken = default)
         {
             List<BacktestCandidate> candidateList = [.. (candidates ?? [])
@@ -40,6 +41,9 @@ namespace TradingDashboard.Services.Backtests
                 RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
                 CandidateCount = candidateList.Count
             };
+            IReadOnlyDictionary<string, StockMasterItem> stockMasterByCode = mirrorKrxBaseCandlesForNxt
+                ? await BacktestMarketModeHelper.LoadStockMasterByCodeAsync(cancellationToken).ConfigureAwait(false)
+                : new Dictionary<string, StockMasterItem>(StringComparer.Ordinal);
 
             foreach (BacktestCandidate candidate in candidateList)
             {
@@ -82,6 +86,19 @@ namespace TradingDashboard.Services.Backtests
                 summary.BaseCandleCount += _dataStore.UpsertBaseCandles(baseCandles);
                 if (baseCandles.Count > 0)
                     summary.Logs.Add($"base candles verified: {candidate.Code} / {candidate.Market} / {baseCandles.Count}events");
+
+                if (mirrorKrxBaseCandlesForNxt &&
+                    candidate.NxtEnabled &&
+                    string.Equals(candidate.Market, "KRX", StringComparison.OrdinalIgnoreCase) &&
+                    baseCandles.Count > 0)
+                {
+                    IReadOnlyList<BacktestBaseCandle> mirrors =
+                        BacktestMarketModeHelper.BuildNxtExecutionBaseCandles(baseCandles, stockMasterByCode);
+                    int mirrored = _dataStore.UpsertBaseCandles(mirrors);
+                    summary.BaseCandleCount += mirrored;
+                    if (mirrored > 0)
+                        summary.Logs.Add($"base candles mirrored for SOR/NXT execution: {candidate.Code} / {mirrored}events");
+                }
             }
 
             return summary;

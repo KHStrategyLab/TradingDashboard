@@ -35,21 +35,33 @@ namespace TradingDashboard.Services.Backtests
             List<(string Code, string Name)> stocks = await _kiwoomService
                 .GetConditionBaseStocksAsync(conditionSeq, cancellationToken)
                 .ConfigureAwait(false);
+            IReadOnlyDictionary<string, StockMasterItem> stockMasterByCode =
+                await BacktestMarketModeHelper.LoadStockMasterByCodeAsync(cancellationToken).ConfigureAwait(false);
+
+            if (_settings.MaxConditionCandidates > 0)
+                stocks = [.. stocks.Take(_settings.MaxConditionCandidates)];
 
             return [.. stocks
                 .Where(item => !string.IsNullOrWhiteSpace(item.Code))
-                .Select(item => new BacktestCandidate
+                .Select(item =>
                 {
-                    Code = BacktestDataStore.NormalizeCode(item.Code),
-                    Name = item.Name,
-                    Market = "KRX",
-                    CandidateDate = today,
-                    NxtEnabled = false,
-                    StrategyCode = "BASE_CANDLE",
-                    Source = "KIWOOM_CONDITION",
-                    SourceName = sourceName,
-                    Memo = $"condition {conditionSeq}: {conditionName}",
-                    ImportedAt = importedAt
+                    string code = BacktestDataStore.NormalizeCode(item.Code);
+                    bool supportsNxt = stockMasterByCode.TryGetValue(code, out StockMasterItem? master) && master.SupportsNxt;
+                    return new BacktestCandidate
+                    {
+                        Code = code,
+                        Name = string.IsNullOrWhiteSpace(item.Name) && master != null ? master.Name : item.Name,
+                        Market = "KRX",
+                        CandidateDate = today,
+                        NxtEnabled = supportsNxt,
+                        StrategyCode = "BASE_CANDLE",
+                        Source = "KIWOOM_CONDITION",
+                        SourceName = sourceName,
+                        Memo = supportsNxt
+                            ? $"condition {conditionSeq}: {conditionName} / SOR mixed NXT eligible"
+                            : $"condition {conditionSeq}: {conditionName}",
+                        ImportedAt = importedAt
+                    };
                 })
                 .Where(item => !string.IsNullOrWhiteSpace(item.Code))
                 .GroupBy(item => $"{item.Code}|{item.Market}|{item.CandidateDate}", StringComparer.Ordinal)

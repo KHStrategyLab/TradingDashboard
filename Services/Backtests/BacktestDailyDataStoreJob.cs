@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingDashboard.Models;
@@ -33,10 +34,14 @@ namespace TradingDashboard.Services.Backtests
             _dataStore.SaveCandidates(candidates, _settings.CandidateSourceName);
 
             BacktestDatasetUpdateSummary summary = await _datasetBuilder
-                .BuildDailyDataStoreAsync(candidates, cancellationToken: cancellationToken)
+                .BuildDailyDataStoreAsync(
+                    candidates,
+                    mirrorKrxBaseCandlesForNxt: BacktestMarketModeHelper.IsSorMixed(_settings),
+                    cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            summary.Logs.Insert(0, $"condition candidates loaded: {_settings.CandidateConditionIndex} / {candidates.Count}stocks");
+            int nxtEligibleCount = candidates.Count(item => item.NxtEnabled);
+            summary.Logs.Insert(0, $"condition candidates loaded: {_settings.CandidateConditionIndex} / {candidates.Count}stocks / NXT eligible {nxtEligibleCount} / mode {_settings.MarketMode}");
             return summary;
         }
     }

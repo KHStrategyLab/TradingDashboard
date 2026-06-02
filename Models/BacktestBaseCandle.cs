@@ -6,6 +6,7 @@ namespace TradingDashboard.Models
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Market { get; set; } = "KRX";
+        public string BaseCandleMarket { get; set; } = "KRX";
         public string BaseCandleDate { get; set; } = string.Empty;
         public long BaseOpen { get; set; }
         public long BaseHigh { get; set; }

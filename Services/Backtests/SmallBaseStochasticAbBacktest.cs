@@ -58,7 +58,7 @@ namespace TradingDashboard.Services.Backtests
                 List<BacktestMinuteBar> entryBars = [.. _dataStore.LoadMinuteBars(group.Code, group.Market, entryMinute)
                     .Where(bar => IsAfterBase(bar.DateTime, group.BaseDate))
                     .OrderBy(bar => bar.DateTime)];
-                Dictionary<string, long> previousCloseByDate = _dataStore.LoadDailyBars(group.Code, group.Market)
+                Dictionary<string, long> previousCloseByDate = LoadDailyBarsWithKrxFallback(group.Code, group.Market)
                     .Where(bar => !string.IsNullOrWhiteSpace(bar.Date) && bar.PreviousClose > 0)
                     .GroupBy(bar => BacktestDataStore.NormalizeDate(bar.Date), StringComparer.Ordinal)
                     .ToDictionary(g => g.Key, g => g.Last().PreviousClose, StringComparer.Ordinal);
@@ -485,6 +485,15 @@ namespace TradingDashboard.Services.Backtests
         {
             string threshold = $"{BacktestDataStore.NormalizeDate(baseDate)}000000";
             return string.CompareOrdinal(dateTime, threshold) >= 0;
+        }
+
+        private IReadOnlyList<BacktestDailyBar> LoadDailyBarsWithKrxFallback(string code, string market)
+        {
+            IReadOnlyList<BacktestDailyBar> bars = _dataStore.LoadDailyBars(code, market);
+            if (bars.Count > 0 || string.Equals(BacktestDataStore.NormalizeMarket(market), "KRX", StringComparison.Ordinal))
+                return bars;
+
+            return _dataStore.LoadDailyBars(code, "KRX");
         }
 
         private sealed record BaseGroup(string Code, string Market, string BaseDate);

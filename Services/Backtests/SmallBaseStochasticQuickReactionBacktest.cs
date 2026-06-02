@@ -48,7 +48,7 @@ namespace TradingDashboard.Services.Backtests
 
             foreach (BaseGroup group in groups)
             {
-                List<BacktestDailyBar> dailyBars = [.. _dataStore.LoadDailyBars(group.Code, group.Market).OrderBy(bar => bar.Date)];
+                List<BacktestDailyBar> dailyBars = [.. LoadDailyBarsWithKrxFallback(group.Code, group.Market).OrderBy(bar => bar.Date)];
                 List<BacktestBaseCandle> verifiedDailyBaseCandles = [.. _dataStore.LoadBaseCandles()
                     .Where(item =>
                         string.Equals(BacktestDataStore.NormalizeCode(item.Code), group.Code, StringComparison.Ordinal) &&
@@ -437,6 +437,15 @@ namespace TradingDashboard.Services.Backtests
         {
             string threshold = $"{BacktestDataStore.NormalizeDate(baseDate)}000000";
             return string.CompareOrdinal(dateTime, threshold) >= 0;
+        }
+
+        private IReadOnlyList<BacktestDailyBar> LoadDailyBarsWithKrxFallback(string code, string market)
+        {
+            IReadOnlyList<BacktestDailyBar> bars = _dataStore.LoadDailyBars(code, market);
+            if (bars.Count > 0 || string.Equals(BacktestDataStore.NormalizeMarket(market), "KRX", StringComparison.Ordinal))
+                return bars;
+
+            return _dataStore.LoadDailyBars(code, "KRX");
         }
 
         private sealed record BaseGroup(string Code, string Market, string BaseDate);

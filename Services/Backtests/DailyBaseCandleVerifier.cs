@@ -38,6 +38,7 @@ namespace TradingDashboard.Services.Backtests
                     Code = BacktestDataStore.NormalizeCode(candidate.Code),
                     Name = candidate.Name,
                     Market = BacktestDataStore.NormalizeMarket(candidate.Market),
+                    BaseCandleMarket = BacktestDataStore.NormalizeMarket(candidate.Market),
                     BaseCandleDate = bar.Date,
                     BaseOpen = bar.Open,
                     BaseHigh = bar.High,
