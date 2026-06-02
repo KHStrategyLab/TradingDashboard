@@ -112,6 +112,7 @@ namespace TradingDashboard.Services
                 Volume = candidate.TodayVolume,
                 TradingValue = tradingValue,
                 ChangeRate = candidate.ChangeRate,
+                DailyRsi14 = candidate.DailyRsi14,
                 CloseLocationPercent = candidate.CloseLocationPercent ?? 0m,
                 UpperTailPercent = candidate.UpperTailPercent ?? 0m,
                 MarketCap = candidate.MarketCap,

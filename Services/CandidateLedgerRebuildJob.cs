@@ -142,6 +142,7 @@ namespace TradingDashboard.Services
             decimal? avgTradingValue20 = previous20.Count > 0 ? previous20.Average(bar => (decimal)ResolveTradingValue(bar)) : null;
             decimal? avgRange20 = previous20.Count > 0 ? previous20.Average(ResolveRangePercent) : null;
             decimal? avgChange20 = previous20.Count > 0 ? previous20.Average(ResolveChangeRate) : null;
+            decimal? dailyRsi14 = ResolveRsi14(series.Bars, todayIndex);
             decimal? bollingerUpper20 = previous20.Count >= 19
                 ? ResolveBollingerUpper20([.. previous20, today])
                 : null;
@@ -199,6 +200,7 @@ namespace TradingDashboard.Services
                 AvgTradingValue20D = avgTradingValue20,
                 AvgRange20D = avgRange20,
                 AvgChangeRate20D = avgChange20,
+                DailyRsi14 = dailyRsi14,
                 DailyBarsLoadedCount = previous20.Count + 1,
                 DailyMetricsStatus = previous20.Count >= 20 ? "Calculated" : "Loaded",
                 DailyMetricsUpdatedAt = runId,
@@ -340,6 +342,34 @@ namespace TradingDashboard.Services
             decimal variance = closes.Sum(close => (close - average) * (close - average)) / period;
             decimal stdDev = (decimal)Math.Sqrt((double)variance);
             return average + stdDev * 2m;
+        }
+
+        private static decimal? ResolveRsi14(IReadOnlyList<BacktestDailyBar> bars, int index)
+        {
+            const int period = 14;
+            if (bars == null || index < period || index >= bars.Count)
+                return null;
+
+            decimal gainSum = 0m;
+            decimal lossSum = 0m;
+            for (int i = index - period + 1; i <= index; i++)
+            {
+                long previousClose = bars[i - 1].Close;
+                long close = bars[i].Close;
+                decimal change = close - previousClose;
+                if (change > 0)
+                    gainSum += change;
+                else
+                    lossSum += Math.Abs(change);
+            }
+
+            decimal avgGain = gainSum / period;
+            decimal avgLoss = lossSum / period;
+            if (avgLoss == 0m)
+                return avgGain == 0m ? 50m : 100m;
+
+            decimal rs = avgGain / avgLoss;
+            return Math.Round(100m - (100m / (1m + rs)), 2);
         }
 
         private sealed record DailySeries(string Code, List<BacktestDailyBar> Bars);

@@ -117,6 +117,7 @@ BaseDate
 Volume
 TradingValue
 ChangeRate
+DailyRsi14
 CloseLocationPercent
 UpperTailPercent
 TurnoverRate
@@ -165,6 +166,8 @@ TurnoverRate
 When market cap is missing, the scorer gives a neutral placeholder instead of blocking the leader record. Later, when market cap or listed-share data is available, the same record shape can distinguish absolute market leaders from stock-relative leaders.
 
 The current scorer also gives provisional helper weight to market-cap scale and turnover. This is only ranking support; it is not a save gate.
+
+`DailyRsi14` is carried from CandidateLedger when promoted. Direct rebuild also calculates it from KRX daily close values. It is currently informational and not a score component.
 
 Current provisional score components:
 

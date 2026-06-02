@@ -83,6 +83,7 @@ PrevVolume
 PrevTradingValue
 AvgVolume20D
 AvgTradingValue20D
+DailyRsi14
 IsBollingerUpperBreak
 PrevHighBreak
 ```
@@ -147,6 +148,14 @@ TurnoverRateByFloatingShares   = Volume / FloatingShares * 100
 ```
 
 Trading-value-to-market-cap ratio and share turnover are separate concepts. Keep both when the data exists.
+
+Daily RSI:
+
+```text
+DailyRsi14 = RSI(14) calculated from KRX daily close values through CandidateDate
+```
+
+This is a ledger reference field. It does not block CandidateLedger save.
 
 Score fields remain pending:
 

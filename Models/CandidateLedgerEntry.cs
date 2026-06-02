@@ -74,6 +74,7 @@ namespace TradingDashboard.Models
         public decimal? AvgTradingValue20D { get; set; }
         public decimal? AvgRange20D { get; set; }
         public decimal? AvgChangeRate20D { get; set; }
+        public decimal? DailyRsi14 { get; set; }
         public int DailyBarsLoadedCount { get; set; }
         public string DailyMetricsStatus { get; set; } = "Pending";
         public string DailyMetricsUpdatedAt { get; set; } = string.Empty;

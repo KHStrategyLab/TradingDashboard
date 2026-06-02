@@ -72,6 +72,7 @@ namespace TradingDashboard.Services
                         Volume = bar.Volume,
                         TradingValue = tradingValue,
                         ChangeRate = changeRate,
+                        DailyRsi14 = ResolveRsi14(series.Bars, i),
                         CloseLocationPercent = ResolveCloseLocationPercent(bar),
                         UpperTailPercent = ResolveUpperTailPercent(bar),
                         KrxClose = bar.Close,
@@ -278,6 +279,34 @@ namespace TradingDashboard.Services
             decimal stdDev = (decimal)Math.Sqrt((double)variance);
             decimal upper = average + stdDev * 2m;
             return bars[index].Close > upper;
+        }
+
+        private static decimal? ResolveRsi14(IReadOnlyList<BacktestDailyBar> bars, int index)
+        {
+            const int period = 14;
+            if (bars == null || index < period || index >= bars.Count)
+                return null;
+
+            decimal gainSum = 0m;
+            decimal lossSum = 0m;
+            for (int i = index - period + 1; i <= index; i++)
+            {
+                long previousClose = bars[i - 1].Close;
+                long close = bars[i].Close;
+                decimal change = close - previousClose;
+                if (change > 0)
+                    gainSum += change;
+                else
+                    lossSum += Math.Abs(change);
+            }
+
+            decimal avgGain = gainSum / period;
+            decimal avgLoss = lossSum / period;
+            if (avgLoss == 0m)
+                return avgGain == 0m ? 50m : 100m;
+
+            decimal rs = avgGain / avgLoss;
+            return Math.Round(100m - (100m / (1m + rs)), 2);
         }
 
         private static string ResolveProjectRoot()

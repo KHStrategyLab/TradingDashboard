@@ -16,6 +16,7 @@ namespace TradingDashboard.Models
         public long Volume { get; set; }
         public long TradingValue { get; set; }
         public decimal ChangeRate { get; set; }
+        public decimal? DailyRsi14 { get; set; }
         public decimal CloseLocationPercent { get; set; }
         public decimal UpperTailPercent { get; set; }
         public decimal? MarketCap { get; set; }
