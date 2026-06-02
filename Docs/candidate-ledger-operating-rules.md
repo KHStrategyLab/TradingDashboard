@@ -102,6 +102,7 @@ TurnoverRateByFloatingShares
 ForeignNetBuyQuantity
 InstitutionNetBuyQuantity
 IsForeignInstitutionDoubleNetBuy
+InvestorNetBuyScore
 TradingValueRankInMarket
 ChangeRateRankInMarket
 TurnoverRankInMarket
@@ -164,6 +165,17 @@ Institution = orgn
 ```
 
 Only net-buy quantity is stored for now. `IsForeignInstitutionDoubleNetBuy` is true when both foreign and institution quantities are positive. This is a reference field, not a save gate or score component.
+
+Investor net-buy helper score:
+
+```text
+ForeignNetBuyQuantity > 0     => +1
+InstitutionNetBuyQuantity > 0 => +1
+Both positive                 => +1 extra
+Max                           => 3
+```
+
+This is a small helper score. It must not become a save gate by itself.
 
 Daily RSI:
 

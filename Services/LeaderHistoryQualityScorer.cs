@@ -18,6 +18,7 @@ namespace TradingDashboard.Services
             score += ScoreMarketCapScale(entry, reasons);
             score += ScoreMarketRelativePower(entry, reasons);
             score += ScoreTurnover(entry, reasons);
+            score += ScoreInvestorNetBuy(entry, reasons);
             score += ScoreChangeRate(entry.ChangeRate, reasons);
             score += ScorePrevHigh(entry.PrevHighPlus10, reasons);
             score += ScoreCloseLocation(entry.CloseLocationPercent, reasons);
@@ -154,6 +155,29 @@ namespace TradingDashboard.Services
                 return 2m;
 
             return 0m;
+        }
+
+        private static decimal ScoreInvestorNetBuy(LeaderHistoryEntry entry, List<string> reasons)
+        {
+            decimal score = 0m;
+            if (entry.ForeignNetBuyQuantity > 0)
+            {
+                score += 1m;
+                reasons.Add("foreign net buy");
+            }
+            if (entry.InstitutionNetBuyQuantity > 0)
+            {
+                score += 1m;
+                reasons.Add("institution net buy");
+            }
+            if (entry.IsForeignInstitutionDoubleNetBuy == true)
+            {
+                score += 1m;
+                reasons.Add("foreign+institution double net buy");
+            }
+
+            entry.InvestorNetBuyScore = score;
+            return score;
         }
 
         private static decimal ScoreChangeRate(decimal changeRate, List<string> reasons)

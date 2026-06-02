@@ -176,6 +176,7 @@ TradingValue                 max 22
 MarketCap scale              max 8
 TradingValue/MarketCap ratio max 18
 TurnoverRate                 max 7
+InvestorNetBuyScore          max 3
 ChangeRate                   max 12
 PrevHighPlus10               max 12
 CloseLocationPercent         max 8

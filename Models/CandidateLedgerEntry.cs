@@ -112,6 +112,7 @@ namespace TradingDashboard.Models
         public long? ForeignNetBuyQuantity { get; set; }
         public long? InstitutionNetBuyQuantity { get; set; }
         public bool? IsForeignInstitutionDoubleNetBuy { get; set; }
+        public decimal? InvestorNetBuyScore { get; set; }
         public string InvestorNetBuySource { get; set; } = string.Empty;
         public string InvestorNetBuyStatus { get; set; } = "Pending";
         public string InvestorNetBuyUpdatedAt { get; set; } = string.Empty;

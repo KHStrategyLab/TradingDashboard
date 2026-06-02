@@ -24,6 +24,10 @@ namespace TradingDashboard.Models
         public decimal? ValueToMarketCapPercent { get; set; }
         public decimal? TradingValueToMarketCapPercent { get; set; }
         public decimal? TurnoverRate { get; set; }
+        public long? ForeignNetBuyQuantity { get; set; }
+        public long? InstitutionNetBuyQuantity { get; set; }
+        public bool? IsForeignInstitutionDoubleNetBuy { get; set; }
+        public decimal? InvestorNetBuyScore { get; set; }
         public long KrxClose { get; set; }
         public long NxtClose { get; set; }
         public bool BollingerUpperBreak { get; set; }

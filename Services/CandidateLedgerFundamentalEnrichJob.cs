@@ -140,6 +140,7 @@ namespace TradingDashboard.Services
                 candidate.ForeignNetBuyQuantity = metrics.ForeignNetBuyQuantity;
                 candidate.InstitutionNetBuyQuantity = metrics.InstitutionNetBuyQuantity;
                 candidate.IsForeignInstitutionDoubleNetBuy = metrics.IsForeignInstitutionDoubleNetBuy;
+                candidate.InvestorNetBuyScore = CalculateInvestorNetBuyScore(metrics.ForeignNetBuyQuantity, metrics.InstitutionNetBuyQuantity);
                 candidate.InvestorNetBuySource = $"{metrics.Source}:{metrics.Unit}";
                 candidate.InvestorNetBuyStatus = "Loaded";
             }
@@ -148,12 +149,25 @@ namespace TradingDashboard.Services
                 candidate.ForeignNetBuyQuantity = null;
                 candidate.InstitutionNetBuyQuantity = null;
                 candidate.IsForeignInstitutionDoubleNetBuy = null;
+                candidate.InvestorNetBuyScore = null;
                 candidate.InvestorNetBuySource = "ka10059:share";
                 candidate.InvestorNetBuyStatus = "Empty";
             }
 
             candidate.InvestorNetBuyUpdatedAt = runId;
             candidate.UpdatedAt = runId;
+        }
+
+        private static decimal CalculateInvestorNetBuyScore(long foreignNetBuyQuantity, long institutionNetBuyQuantity)
+        {
+            decimal score = 0m;
+            if (foreignNetBuyQuantity > 0)
+                score += 1m;
+            if (institutionNetBuyQuantity > 0)
+                score += 1m;
+            if (foreignNetBuyQuantity > 0 && institutionNetBuyQuantity > 0)
+                score += 1m;
+            return score;
         }
 
         private static void MarkFailed(CandidateLedgerEntry candidate, string runId, string message)

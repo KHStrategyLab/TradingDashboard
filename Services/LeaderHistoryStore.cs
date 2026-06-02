@@ -87,7 +87,7 @@ namespace TradingDashboard.Services
                 Directory.CreateDirectory(directory);
 
             var builder = new StringBuilder();
-            builder.AppendLine("PriorityRank,DailyRank,Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,Source,Status,TradingValue,ChangeRate,DailyRsi14,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,MarketCapClass,ValueToMarketCapPercent,TradingValueToMarketCapPercent,TurnoverRate,KrxClose,NxtClose,QualityReason");
+            builder.AppendLine("PriorityRank,DailyRank,Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,Source,Status,TradingValue,ChangeRate,DailyRsi14,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,MarketCapClass,ValueToMarketCapPercent,TradingValueToMarketCapPercent,TurnoverRate,ForeignNetBuyQuantity,InstitutionNetBuyQuantity,IsForeignInstitutionDoubleNetBuy,InvestorNetBuyScore,KrxClose,NxtClose,QualityReason");
             foreach (LeaderHistoryEntry row in rows)
             {
                 builder.AppendLine(string.Join(",", new[]
@@ -115,6 +115,10 @@ namespace TradingDashboard.Services
                     row.ValueToMarketCapPercent?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.TradingValueToMarketCapPercent?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.TurnoverRate?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.ForeignNetBuyQuantity?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.InstitutionNetBuyQuantity?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.IsForeignInstitutionDoubleNetBuy?.ToString().ToLowerInvariant() ?? string.Empty,
+                    row.InvestorNetBuyScore?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
                     row.KrxClose.ToString(CultureInfo.InvariantCulture),
                     row.NxtClose > 0 ? row.NxtClose.ToString(CultureInfo.InvariantCulture) : string.Empty,
                     Escape(row.QualityReason)
