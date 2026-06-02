@@ -697,6 +697,34 @@ namespace TradingDashboard
             ApplyRealtimeCalendarChartTick(code, price, cumulativeVolume, tradeVolume);
         }
 
+        private void ApplySelectedChartDisplayPrice(string code, long price, string market, string source)
+        {
+            if (price <= 0 ||
+                string.IsNullOrWhiteSpace(code) ||
+                !string.Equals(NormalizeStockCode(code), NormalizeStockCode(_currentChartCode), StringComparison.Ordinal) ||
+                _currentChartCandles.Count == 0)
+            {
+                return;
+            }
+
+            bool sourceIsNxt = string.Equals(market, "NXT", StringComparison.OrdinalIgnoreCase);
+            bool chartIsNxt = ShouldUseNxtDataForStock(code);
+            if (sourceIsNxt != chartIsNxt)
+                return;
+
+            ChartCandle last = _currentChartCandles[^1];
+            if (last.Open <= 0)
+                last.Open = price;
+            last.Close = price;
+            last.High = Math.Max(last.High > 0 ? last.High : price, price);
+            last.Low = Math.Min(last.Low > 0 ? last.Low : price, price);
+
+            if (TryUpdateLastChartVisual(last))
+                return;
+
+            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} display price {source}");
+        }
+
         private void ApplyRealtimeMinuteChartTick(string code, long price, long tradeVolume, string tradeTimeText, int minute)
         {
             if (!IsMinuteChartPeriod(_currentChartDataPeriod) ||

@@ -2422,6 +2422,7 @@ namespace TradingDashboard
             }
 
             stock.ApplyDisplayPrice(price, sourceIsNxt ? "NXT" : "KRX");
+            ApplySelectedChartDisplayPrice(stock.Code, price, sourceIsNxt ? "NXT" : "KRX", source);
             return true;
         }
 
