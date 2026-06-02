@@ -1899,7 +1899,7 @@ namespace TradingDashboard
                     await LogStockStatusCompareAsync(stockCode, selectionVersion, cancellationToken);
 
                 _currentStatusMetrics = m;
-                ApplySelectedWatchStockPriceInfo(stockCode, m);
+                ApplySelectedWatchStockPriceInfo(stockCode, m, useNxtMarket);
                 UpdateStrategyProgressRows();
                 (string dailyVolumeRatioText, Brush dailyVolumeRatioBrush) = await GetDailyVolumeRatioAsync(stockCode, useNxtMarket, m, cancellationToken);
                 if (selectionVersion != _selectionVersion)
@@ -2152,7 +2152,7 @@ namespace TradingDashboard
                 string cacheKey = BuildClosingSnapshotCacheKey(stockCode, useNxtSnapshot);
                 if (_closingSnapshotMemoryCache.TryGetValue(cacheKey, out ClosingSnapshotCacheEntry? cached))
                 {
-                    ApplyClosingSnapshot(CloneClosingSnapshot(cached.Snapshot), cached.IsNxtSnapshot ? "NXT 20:00 final cache" : "KRX close cache");
+                    ApplyClosingSnapshot(CloneClosingSnapshot(cached.Snapshot), cached.IsNxtSnapshot ? "NXT 20:00 final cache" : "KRX close cache", cached.IsNxtSnapshot);
                     AppendLog($"{(cached.IsNxtSnapshot ? "NXT 20:00 final" : "KRX close")} snapshot cache applied: {stockCode}");
                     return;
                 }
@@ -2170,7 +2170,7 @@ namespace TradingDashboard
                     IsNxtSnapshot = useNxtSnapshot,
                     CachedAt = DateTime.Now
                 };
-                ApplyClosingSnapshot(snapshot, useNxtSnapshot ? "NXT 20:00 final" : "KRX close");
+                ApplyClosingSnapshot(snapshot, useNxtSnapshot ? "NXT 20:00 final" : "KRX close", useNxtSnapshot);
                 AppendLog($"{(useNxtSnapshot ? "NXT 20:00 final" : "KRX close")} snapshot applied: {stockCode}");
             }
             catch (OperationCanceledException)
@@ -2183,9 +2183,12 @@ namespace TradingDashboard
             }
         }
 
-        private void ApplyClosingSnapshot(KrxClosingSnapshot snapshot, string source)
+        private void ApplyClosingSnapshot(KrxClosingSnapshot snapshot, string source, bool sourceIsNxt)
         {
             if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.Code) || snapshot.Code != _selectedStockCode)
+                return;
+
+            if (ShouldBlockKrxPriceUiApply(snapshot.Code, sourceIsNxt, source))
                 return;
 
             if (_watchStockByCode.TryGetValue(snapshot.Code, out WatchStockItem? stock))
@@ -2353,13 +2356,14 @@ namespace TradingDashboard
                  ParseLongAbs(metrics.VolumeText) <= 0);
         }
 
-        private void ApplySelectedWatchStockPriceInfo(string stockCode, StockStatusMetrics metrics)
+        private void ApplySelectedWatchStockPriceInfo(string stockCode, StockStatusMetrics metrics, bool sourceIsNxt)
         {
             if (string.IsNullOrWhiteSpace(stockCode) || !_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? stock))
                 return;
 
+            bool blockKrxUiApply = ShouldBlockKrxPriceUiApply(stockCode, sourceIsNxt, "stock metrics TR");
             long currentPrice = ParseLongAbs(metrics.ClosePriceText);
-            if (currentPrice > 0)
+            if (!blockKrxUiApply && currentPrice > 0)
                 stock.CurrentPrice = currentPrice;
 
             long basePrice = _krxPrevClosePrice;
@@ -2368,28 +2372,45 @@ namespace TradingDashboard
                 ? currentPrice - basePrice
                 : ParseLongSigned(metrics.PrevDiffText);
 
-            stock.ChangeAmount = changeAmount;
-            stock.ChangeRateText = FormatKrxPreviousCloseRate(currentPrice);
-            stock.PriceBrush = currentPrice > 0
-                ? ResolveHogaBrushByKrxPrevClose(currentPrice)
-                : changeAmount > 0 ? _upColorBrush : changeAmount < 0 ? _downColorBrush : _whiteBrush;
-            ApplyMiniDailyCandle(
-                stock,
-                ParseLongAbs(metrics.OpenPriceText),
-                ParseLongAbs(metrics.HighPriceText),
-                ParseLongAbs(metrics.LowPriceText),
-                currentPrice);
+            if (!blockKrxUiApply)
+            {
+                stock.ChangeAmount = changeAmount;
+                stock.ChangeRateText = FormatKrxPreviousCloseRate(currentPrice);
+                stock.PriceBrush = currentPrice > 0
+                    ? ResolveHogaBrushByKrxPrevClose(currentPrice)
+                    : changeAmount > 0 ? _upColorBrush : changeAmount < 0 ? _downColorBrush : _whiteBrush;
+                ApplyMiniDailyCandle(
+                    stock,
+                    ParseLongAbs(metrics.OpenPriceText),
+                    ParseLongAbs(metrics.HighPriceText),
+                    ParseLongAbs(metrics.LowPriceText),
+                    currentPrice,
+                    sourceIsNxt);
+            }
 
+            long displayPrice = blockKrxUiApply ? stock.CurrentPrice : currentPrice;
             string rateText = stock.ChangeRateText;
-            HogaStatusText.Text = $"Price {(currentPrice > 0 ? currentPrice.ToString("N0") : stock.CurrentPrice > 0 ? stock.CurrentPrice.ToString("N0") : "-")} / Rate {rateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
+            HogaStatusText.Text = $"Price {(displayPrice > 0 ? displayPrice.ToString("N0") : stock.CurrentPrice > 0 ? stock.CurrentPrice.ToString("N0") : "-")} / Rate {rateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
         }
 
-        private void ApplyMiniDailyCandle(WatchStockItem stock, long open, long high, long low, long close)
+        private void ApplyMiniDailyCandle(WatchStockItem stock, long open, long high, long low, long close, bool sourceIsNxt = false)
         {
             if (stock == null)
                 return;
 
+            if (ShouldBlockKrxPriceUiApply(stock.Code, sourceIsNxt, "mini daily candle"))
+                return;
+
             stock.SetMiniDailyCandle(open, high, low, close, ResolveMiniDailyBrush(open, close));
+        }
+
+        private bool ShouldBlockKrxPriceUiApply(string stockCode, bool sourceIsNxt, string source)
+        {
+            if (sourceIsNxt || !ShouldUseNxtDataForStock(stockCode))
+                return false;
+
+            AppendLog($"NXT display active: skip KRX price UI apply: {NormalizeStockCode(stockCode)} / {source}");
+            return true;
         }
 
         private Brush ResolveMiniDailyBrush(long open, long close)

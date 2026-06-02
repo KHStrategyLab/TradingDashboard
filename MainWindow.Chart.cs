@@ -203,7 +203,8 @@ namespace TradingDashboard
                     (long)Math.Round(latest.Open),
                     (long)Math.Round(latest.High),
                     (long)Math.Round(latest.Low),
-                    (long)Math.Round(latest.Close));
+                    (long)Math.Round(latest.Close),
+                    reason.Contains("NXT", StringComparison.OrdinalIgnoreCase));
             }
 
             DrawFullChart(reason);
