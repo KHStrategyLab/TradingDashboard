@@ -832,14 +832,14 @@ namespace TradingDashboard
         private List<WatchStockItem> BuildBalanceFirstStrategyPreloadList(IEnumerable<WatchStockItem> candidateStocks)
         {
             var result = new List<WatchStockItem>();
-            var seenCodes = new HashSet<string>(StringComparer.Ordinal);
+            var seenKeys = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (KiwoomHolding holding in _balanceHoldings
                 .Where(item => item.HoldingQuantity > 0 && !string.IsNullOrWhiteSpace(item.StockCode))
                 .OrderByDescending(item => Math.Abs(item.EvaluationAmount)))
             {
                 string code = NormalizeStockCode(holding.StockCode);
-                if (string.IsNullOrWhiteSpace(code) || !seenCodes.Add(code))
+                if (string.IsNullOrWhiteSpace(code))
                     continue;
 
                 WatchStockItem? stock = _watchStockByCode.TryGetValue(code, out WatchStockItem? tracked)
@@ -849,13 +849,18 @@ namespace TradingDashboard
                 if (stock == null)
                     continue;
 
+                string key = BuildWatchStockIdentityKey(stock);
+                if (string.IsNullOrWhiteSpace(key) || !seenKeys.Add(key))
+                    continue;
+
                 result.Add(stock);
             }
 
             foreach (WatchStockItem stock in candidateStocks ?? [])
             {
                 string code = NormalizeStockCode(stock.Code);
-                if (string.IsNullOrWhiteSpace(code) || !seenCodes.Add(code))
+                string key = BuildWatchStockIdentityKey(stock);
+                if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(key) || !seenKeys.Add(key))
                     continue;
 
                 result.Add(stock);

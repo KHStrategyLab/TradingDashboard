@@ -319,11 +319,11 @@ namespace TradingDashboard
 
             List<ChartPreloadStock> snapshot = [.. stocks
                 .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
-                .GroupBy(stock => stock.Code, StringComparer.Ordinal)
+                .GroupBy(stock => BuildWatchStockIdentityKey(stock), StringComparer.Ordinal)
                 .Select(group =>
                 {
                     WatchStockItem stock = group.First();
-                    bool useNxtMarket = stock.SupportsNxt && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow());
+                    bool useNxtMarket = ShouldUseNxtDataForStock(stock);
                     return new ChartPreloadStock(stock.Code, useNxtMarket);
                 })];
 
@@ -341,7 +341,7 @@ namespace TradingDashboard
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-                Dispatcher.Invoke(() => AppendLog($"chart file cache preload started: {stocks.Count}stocks"));
+                Dispatcher.Invoke(() => AppendLog($"chart daily file cache preload started: {stocks.Count}stocks"));
 
                 foreach (ChartPreloadStock stock in stocks)
                 {
@@ -358,51 +358,23 @@ namespace TradingDashboard
                             ResolveChartFileCacheRetainCount(ChartPeriod.Daily));
                         savedSets++;
                     }
-
-                    List<DailyCandle> weekly = await _kiwoomConditionService
-                        .GetWeeklyCandlesAsync(stock.Code, stock.UseNxtMarket, ResolveChartCandleCount(ChartPeriod.Weekly), CancellationToken.None)
-                        .ConfigureAwait(false);
-                    if (weekly.Count > 0)
-                    {
-                        _chartCandleFileCacheStore.Upsert(
-                            stock.Code,
-                            stock.UseNxtMarket,
-                            ChartPeriod.Weekly.ToString(),
-                            weekly,
-                            ResolveChartFileCacheRetainCount(ChartPeriod.Weekly));
-                        savedSets++;
-                    }
-
-                    List<DailyCandle> monthly = await _kiwoomConditionService
-                        .GetMonthlyCandlesAsync(stock.Code, stock.UseNxtMarket, ResolveChartCandleCount(ChartPeriod.Monthly), CancellationToken.None)
-                        .ConfigureAwait(false);
-                    if (monthly.Count > 0)
-                    {
-                        _chartCandleFileCacheStore.Upsert(
-                            stock.Code,
-                            stock.UseNxtMarket,
-                            ChartPeriod.Monthly.ToString(),
-                            monthly,
-                            ResolveChartFileCacheRetainCount(ChartPeriod.Monthly));
-                        savedSets++;
-                    }
                 }
 
                 if (savedSets > 0)
                 {
                     _chartCandleFileCacheStore.Save();
-                    Dispatcher.Invoke(() => AppendLog($"chart file cache saved: {stocks.Count}stocks / {savedSets}sets / {sw.ElapsedMilliseconds:N0}ms"));
-                    Dispatcher.Invoke(() => AppendReadyLog("Download done. READY"));
+                    Dispatcher.Invoke(() => AppendLog($"chart daily file cache saved: {stocks.Count}stocks / {savedSets}sets / {sw.ElapsedMilliseconds:N0}ms"));
+                    Dispatcher.Invoke(() => AppendReadyLog("Daily chart cache READY"));
                 }
                 else
                 {
-                    Dispatcher.Invoke(() => AppendLog($"chart file cache save skipped: {stocks.Count}stocks / no data"));
-                    Dispatcher.Invoke(() => AppendReadyLog("READY"));
+                    Dispatcher.Invoke(() => AppendLog($"chart daily file cache save skipped: {stocks.Count}stocks / no data"));
+                    Dispatcher.Invoke(() => AppendReadyLog("Daily chart cache READY"));
                 }
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => AppendLog($"chart file cache preload skipped: {ex.Message}"));
+                Dispatcher.Invoke(() => AppendLog($"chart daily file cache preload skipped: {ex.Message}"));
             }
         }
 
@@ -453,8 +425,10 @@ namespace TradingDashboard
         {
             int count = ResolveChartCandleCount(period);
             ChartCacheKey key = CreateChartCacheKey(stock.Code, stock.UseNxtMarket, period);
-            if (TryGetChartMemoryCache(key, count, out _))
-                return 0;
+            if (TryGetChartMemoryCache(key, count, out List<ChartCandle> cachedCandles))
+            {
+                return SeedStrategyMinuteFromChartCacheIfNeeded(stock, period, minute, cachedCandles, count) ? 1 : 0;
+            }
 
             if (period == ChartPeriod.Daily &&
                 TryGetChartFileCache(key, count, out List<ChartCandle> fileCachedCandles))
@@ -494,6 +468,26 @@ namespace TradingDashboard
             string market = stock.UseNxtMarket ? "NXT" : "KRX";
             _strategyMinuteCacheService.Seed(stock.Code, market, minute, minuteCandles, Math.Min(count, Math.Max(1, minuteCandles.Count)));
             return 1;
+        }
+
+        private bool SeedStrategyMinuteFromChartCacheIfNeeded(
+            ChartPreloadStock stock,
+            ChartPeriod period,
+            int minute,
+            IReadOnlyList<ChartCandle> cachedCandles,
+            int targetCount)
+        {
+            if (!IsMinuteChartPeriod(period) || minute <= 0 || cachedCandles == null || cachedCandles.Count == 0)
+                return false;
+
+            string market = stock.UseNxtMarket ? "NXT" : "KRX";
+            _strategyMinuteCacheService.Seed(
+                stock.Code,
+                market,
+                minute,
+                ConvertChartCandlesToDailyCandles(cachedCandles),
+                Math.Min(targetCount, cachedCandles.Count));
+            return true;
         }
 
         private static ChartCandle CloneChartCandle(ChartCandle c)
