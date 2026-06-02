@@ -23,6 +23,9 @@ namespace TradingDashboard.Models
         private string _auditInfo = string.Empty;
         private string _stockState = string.Empty;
         private string _sectorName = string.Empty;
+        private string _displayPriceMarket = string.Empty;
+        private long _krxDisplayPrice;
+        private long _nxtDisplayPrice;
         private bool _gateBaseCandleFound;
         private int _gateBaseCandleOffset = -1;
         private string _gateBaseCandleDate = string.Empty;
@@ -35,6 +38,7 @@ namespace TradingDashboard.Models
         private long _miniDailyHigh;
         private long _miniDailyLow;
         private long _miniDailyClose;
+        private string _miniDailyMarket = string.Empty;
         private Brush _priceBrush = Brushes.White;
         private Brush _miniDailyBrush = Brushes.Transparent;
         private bool _supportsNxt;
@@ -97,6 +101,24 @@ namespace TradingDashboard.Models
                     OnPropertyChanged(nameof(IsTodayTradeValueStrong));
                 }
             }
+        }
+
+        public string DisplayPriceMarket
+        {
+            get => _displayPriceMarket;
+            private set => SetField(ref _displayPriceMarket, NormalizeText(value));
+        }
+
+        public long KrxDisplayPrice
+        {
+            get => _krxDisplayPrice;
+            private set => SetField(ref _krxDisplayPrice, value);
+        }
+
+        public long NxtDisplayPrice
+        {
+            get => _nxtDisplayPrice;
+            private set => SetField(ref _nxtDisplayPrice, value);
         }
 
         public string MarketTypeCode
@@ -305,6 +327,12 @@ namespace TradingDashboard.Models
             set => SetField(ref _miniDailyBrush, value);
         }
 
+        public string MiniDailyMarket
+        {
+            get => _miniDailyMarket;
+            private set => SetField(ref _miniDailyMarket, NormalizeText(value));
+        }
+
         public bool SupportsNxt
         {
             get => _supportsNxt;
@@ -373,11 +401,46 @@ namespace TradingDashboard.Models
             }
         }
 
-        public void SetMiniDailyCandle(long open, long high, long low, long close, Brush brush)
+        public void ApplyDisplayPrice(long price, string market)
+        {
+            if (price <= 0)
+                return;
+
+            string normalizedMarket = NormalizeMarketCode(market);
+            StoreMarketPrice(price, normalizedMarket);
+
+            DisplayPriceMarket = normalizedMarket;
+            CurrentPrice = price;
+        }
+
+        public void StoreMarketPrice(long price, string market)
+        {
+            if (price <= 0)
+                return;
+
+            string normalizedMarket = NormalizeMarketCode(market);
+            if (normalizedMarket == "NXT")
+                NxtDisplayPrice = price;
+            else
+                KrxDisplayPrice = price;
+        }
+
+        public bool TryKeepNxtDisplayPrice()
+        {
+            if (NxtDisplayPrice <= 0)
+                return false;
+
+            DisplayPriceMarket = "NXT";
+            CurrentPrice = NxtDisplayPrice;
+            return true;
+        }
+
+        public void SetMiniDailyCandle(long open, long high, long low, long close, Brush brush, string market = "")
         {
             if (open <= 0 && high <= 0 && low <= 0 && close <= 0)
                 return;
 
+            MiniDailyMarket = NormalizeMarketCode(market);
             long safeClose = close > 0 ? close : CurrentPrice;
             if (safeClose <= 0)
                 safeClose = open > 0 ? open : high > 0 ? high : low;
@@ -394,17 +457,21 @@ namespace TradingDashboard.Models
             NotifyMiniDailyChanged();
         }
 
-        public void ApplyMiniDailyRealtimePrice(long price, Brush brush)
+        public void ApplyMiniDailyRealtimePrice(long price, Brush brush, string market = "")
         {
             if (price <= 0)
                 return;
 
-            if (!MiniDailyHasCandle)
+            string normalizedMarket = NormalizeMarketCode(market);
+            if (!MiniDailyHasCandle ||
+                (!string.IsNullOrWhiteSpace(MiniDailyMarket) &&
+                 !string.Equals(MiniDailyMarket, normalizedMarket, StringComparison.OrdinalIgnoreCase)))
             {
-                SetMiniDailyCandle(price, price, price, price, brush);
+                SetMiniDailyCandle(price, price, price, price, brush, normalizedMarket);
                 return;
             }
 
+            MiniDailyMarket = normalizedMarket;
             MiniDailyHigh = Math.Max(MiniDailyHigh, price);
             MiniDailyLow = MiniDailyLow > 0 ? Math.Min(MiniDailyLow, price) : price;
             MiniDailyClose = price;
@@ -446,6 +513,12 @@ namespace TradingDashboard.Models
         private static string NormalizeDash(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        }
+
+        private static string NormalizeMarketCode(string? value)
+        {
+            string text = NormalizeText(value).ToUpperInvariant();
+            return text == "NXT" ? "NXT" : "KRX";
         }
 
         private double CalculateMiniDailyY(long price)

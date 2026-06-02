@@ -684,7 +684,6 @@ namespace TradingDashboard
                     MarketTypeCode = e.MarketTypeCode,
                     MarketName = e.MarketName,
                     ProgramMarketType = e.ProgramMarketType,
-                    CurrentPrice = e.CurrentPrice,
                     ChangeAmount = e.ChangeAmount,
                     ChangeRateText = e.ChangeRateText,
                     VolumeText = e.VolumeText,
@@ -864,7 +863,6 @@ namespace TradingDashboard
                     MarketTypeCode = s.MarketTypeCode,
                     MarketName = s.MarketName,
                     ProgramMarketType = s.ProgramMarketType,
-                    CurrentPrice = s.CurrentPrice,
                     ChangeAmount = s.ChangeAmount,
                     ChangeRateText = s.ChangeRateText,
                     VolumeText = s.VolumeText,
@@ -948,7 +946,7 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(stock.ProgramMarketType))
                 stock.ProgramMarketType = entry.ProgramMarketType;
             if (stock.CurrentPrice <= 0)
-                stock.CurrentPrice = entry.CurrentPrice;
+                ApplyWatchStockDisplayPrice(stock, entry.CurrentPrice, ResolveCachedPriceMarket(stock), "watchlist cache");
             if (stock.ChangeAmount == 0)
                 stock.ChangeAmount = entry.ChangeAmount;
             if (string.IsNullOrWhiteSpace(stock.ChangeRateText) || stock.ChangeRateText == "-")
@@ -2193,8 +2191,7 @@ namespace TradingDashboard
 
             if (_watchStockByCode.TryGetValue(snapshot.Code, out WatchStockItem? stock))
             {
-                if (snapshot.CurrentPrice > 0)
-                    stock.CurrentPrice = snapshot.CurrentPrice;
+                ApplyWatchStockDisplayPrice(stock, snapshot.CurrentPrice, sourceIsNxt ? "NXT" : "KRX", source);
                 stock.ChangeAmount = stock.CurrentPrice > 0 && _krxPrevClosePrice > 0
                     ? stock.CurrentPrice - _krxPrevClosePrice
                     : snapshot.DayChange;
@@ -2361,10 +2358,9 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(stockCode) || !_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? stock))
                 return;
 
-            bool blockKrxUiApply = ShouldBlockKrxPriceUiApply(stockCode, sourceIsNxt, "stock metrics TR");
+            bool blockKrxUiApply = !sourceIsNxt && ShouldUseNxtDataForStock(stockCode);
             long currentPrice = ParseLongAbs(metrics.ClosePriceText);
-            if (!blockKrxUiApply && currentPrice > 0)
-                stock.CurrentPrice = currentPrice;
+            ApplyWatchStockDisplayPrice(stock, currentPrice, sourceIsNxt ? "NXT" : "KRX", "stock metrics TR");
 
             long basePrice = _krxPrevClosePrice;
 
@@ -2401,7 +2397,7 @@ namespace TradingDashboard
             if (ShouldBlockKrxPriceUiApply(stock.Code, sourceIsNxt, "mini daily candle"))
                 return;
 
-            stock.SetMiniDailyCandle(open, high, low, close, ResolveMiniDailyBrush(open, close));
+            stock.SetMiniDailyCandle(open, high, low, close, ResolveMiniDailyBrush(open, close), sourceIsNxt ? "NXT" : "KRX");
         }
 
         private bool ShouldBlockKrxPriceUiApply(string stockCode, bool sourceIsNxt, string source)
@@ -2411,6 +2407,30 @@ namespace TradingDashboard
 
             AppendLog($"NXT display active: skip KRX price UI apply: {NormalizeStockCode(stockCode)} / {source}");
             return true;
+        }
+
+        private bool ApplyWatchStockDisplayPrice(WatchStockItem stock, long price, string market, string source)
+        {
+            if (stock == null || price <= 0)
+                return false;
+
+            bool sourceIsNxt = string.Equals(market, "NXT", StringComparison.OrdinalIgnoreCase);
+            if (ShouldBlockKrxPriceUiApply(stock.Code, sourceIsNxt, source))
+            {
+                stock.StoreMarketPrice(price, "KRX");
+                return stock.TryKeepNxtDisplayPrice();
+            }
+
+            stock.ApplyDisplayPrice(price, sourceIsNxt ? "NXT" : "KRX");
+            return true;
+        }
+
+        private string ResolveCachedPriceMarket(WatchStockItem stock)
+        {
+            if (stock?.SupportsNxt == true && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow()))
+                return "NXT";
+
+            return "KRX";
         }
 
         private Brush ResolveMiniDailyBrush(long open, long close)

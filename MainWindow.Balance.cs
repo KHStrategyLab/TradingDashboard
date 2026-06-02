@@ -398,7 +398,7 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
                     stock.Name = holding.StockName;
                 if (stock.CurrentPrice <= 0 && holding.CurrentPrice > 0)
-                    stock.CurrentPrice = holding.CurrentPrice;
+                    ApplyWatchStockDisplayPrice(stock, holding.CurrentPrice, ResolveCachedPriceMarket(stock), "balance tracking");
 
                 if (await EnsureRealtime0BTrackingAsync(stock, "balance", registerImmediately: false))
                     newlyTracked++;
@@ -438,7 +438,7 @@ namespace TradingDashboard
                     if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
                         existing.Name = holding.StockName;
                     if (existing.CurrentPrice <= 0 && holding.CurrentPrice > 0)
-                        existing.CurrentPrice = holding.CurrentPrice;
+                        ApplyWatchStockDisplayPrice(existing, holding.CurrentPrice, ResolveCachedPriceMarket(existing), "balance tracking map");
                     continue;
                 }
 
@@ -446,7 +446,7 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
                     stock.Name = holding.StockName;
                 if (stock.CurrentPrice <= 0 && holding.CurrentPrice > 0)
-                    stock.CurrentPrice = holding.CurrentPrice;
+                    ApplyWatchStockDisplayPrice(stock, holding.CurrentPrice, ResolveCachedPriceMarket(stock), "balance tracking map");
 
                 _watchStockByCode[code] = stock;
                 added++;

@@ -237,14 +237,13 @@ namespace TradingDashboard
             stock ??= new WatchStockItem
             {
                 Code = code,
-                Name = string.IsNullOrWhiteSpace(holding.StockName) ? code : holding.StockName,
-                CurrentPrice = holding.CurrentPrice
+                Name = string.IsNullOrWhiteSpace(holding.StockName) ? code : holding.StockName
             };
 
             if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
                 stock.Name = holding.StockName;
             if (stock.CurrentPrice <= 0 && holding.CurrentPrice > 0)
-                stock.CurrentPrice = holding.CurrentPrice;
+                ApplyWatchStockDisplayPrice(stock, holding.CurrentPrice, ResolveCachedPriceMarket(stock), "balance holding open");
 
             await EnsureRealtime0BTrackingAsync(stock, "balance");
             AddRecentViewedStock(stock);

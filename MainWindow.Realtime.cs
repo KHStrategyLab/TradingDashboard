@@ -578,7 +578,6 @@ namespace TradingDashboard
                     MarketTypeCode = entry.MarketTypeCode,
                     MarketName = entry.MarketName,
                     ProgramMarketType = entry.ProgramMarketType,
-                    CurrentPrice = entry.CurrentPrice,
                     ChangeAmount = entry.ChangeAmount,
                     ChangeRateText = string.IsNullOrWhiteSpace(entry.ChangeRateText) ? "-" : entry.ChangeRateText,
                     VolumeText = string.IsNullOrWhiteSpace(entry.VolumeText) ? "-" : entry.VolumeText,
@@ -828,7 +827,7 @@ namespace TradingDashboard
             {
                 if (curNum > 0 && _watchStockByCode.TryGetValue(code, out WatchStockItem? stock))
                 {
-                    stock.CurrentPrice = curNum;
+                    ApplyWatchStockDisplayPrice(stock, curNum, ResolveRealtimeItemMarket(rawCode), "0D expected");
                     stock.ChangeRateText = FormatKrxPreviousCloseRate(curNum);
                 }
 
@@ -997,7 +996,8 @@ namespace TradingDashboard
                 if (!_watchStockByCode.TryGetValue(code, out WatchStockItem? stock))
                     return;
 
-                stock.CurrentPrice = price > 0 ? price : stock.CurrentPrice;
+                string realtimeMarket = ResolveRealtimeItemMarket(rawCode);
+                ApplyWatchStockDisplayPrice(stock, price, realtimeMarket, "0B realtime");
                 UpdatePaperPositionsForPrice(code, stock.CurrentPrice);
                 ApplyRealtimePriceToBalanceHolding(code, stock.CurrentPrice, rawCode);
                 if (volume > 0)
@@ -1016,7 +1016,7 @@ namespace TradingDashboard
                 stock.PriceBrush = code == _selectedStockCode && stock.CurrentPrice > 0
                     ? ResolveHogaBrushByKrxPrevClose(stock.CurrentPrice)
                     : change > 0 ? _upColorBrush : change < 0 ? _downColorBrush : _whiteBrush;
-                stock.ApplyMiniDailyRealtimePrice(stock.CurrentPrice, ResolveMiniDailyBrush(stock.MiniDailyOpen, stock.CurrentPrice));
+                stock.ApplyMiniDailyRealtimePrice(stock.CurrentPrice, ResolveMiniDailyBrush(stock.MiniDailyOpen, stock.CurrentPrice), realtimeMarket);
 
                 ProcessStrategyExitAlerts(stock);
                 ProcessStrategySignalAlerts(stock, EvaluateEnabledStrategySlots(stock));
@@ -1259,6 +1259,13 @@ namespace TradingDashboard
                     level.RateBrush = _whiteBrush;
                 }
             }
+        }
+
+        private static string ResolveRealtimeItemMarket(string rawCode)
+        {
+            return (rawCode ?? string.Empty).Contains("_NX", StringComparison.OrdinalIgnoreCase)
+                ? "NXT"
+                : "KRX";
         }
 
         private Brush ResolveHogaBrushByKrxPrevClose(long price)
