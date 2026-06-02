@@ -733,6 +733,7 @@ namespace TradingDashboard
                 stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
                 ApplyWatchlistCacheToStock(stock);
                 ApplyWatchlistTradeValueEstimate(stock);
+                ApplyCachedMiniDailyCandleToStock(stock);
                 _watchStocks.Add(stock);
                 if (!string.IsNullOrWhiteSpace(stock.Code))
                     _watchStockByCode[stock.Code] = stock;
@@ -971,6 +972,35 @@ namespace TradingDashboard
             {
                 ApplyGateCacheToStock(stock, entry);
             }
+        }
+
+        private void ApplyCachedMiniDailyCandleToStock(WatchStockItem stock)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return;
+
+            bool useNxtMarket = string.Equals(ResolveCachedPriceMarket(stock), "NXT", StringComparison.OrdinalIgnoreCase);
+            if (!_chartCandleFileCacheStore.TryGet(stock.Code, useNxtMarket, ChartPeriod.Daily.ToString(), 1, out List<DailyCandle> candles) ||
+                candles.Count == 0)
+            {
+                return;
+            }
+
+            DailyCandle latest = candles[^1];
+            long open = (long)Math.Round(latest.Open);
+            long high = (long)Math.Round(latest.High);
+            long low = (long)Math.Round(latest.Low);
+            long close = (long)Math.Round(latest.Close);
+
+            if (stock.CurrentPrice > 0 &&
+                string.Equals(stock.DisplayPriceMarket, useNxtMarket ? "NXT" : "KRX", StringComparison.OrdinalIgnoreCase))
+            {
+                close = stock.CurrentPrice;
+                high = Math.Max(high, close);
+                low = low > 0 ? Math.Min(low, close) : close;
+            }
+
+            ApplyMiniDailyCandle(stock, open, high, low, close, useNxtMarket);
         }
 
         private WatchlistStockCacheEntry? GetWatchlistMemoryCache(string code)

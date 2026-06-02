@@ -502,6 +502,7 @@ namespace TradingDashboard
                         stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
                         ApplyWatchlistCacheToStock(stock);
                         ApplyWatchlistTradeValueEstimate(stock);
+                        ApplyCachedMiniDailyCandleToStock(stock);
                         _watchStocks.Insert(0, stock);
                         _watchStockByCode[stock.Code] = stock;
                         QueueRuntimeCandidate(stock, "new enter");
@@ -597,6 +598,7 @@ namespace TradingDashboard
 
                 ApplyWatchlistCacheToStock(stock);
                 ApplyWatchlistTradeValueEstimate(stock);
+                ApplyCachedMiniDailyCandleToStock(stock);
                 stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
                 _watchStocks.Insert(0, stock);
                 _watchStockByCode[stock.Code] = stock;
