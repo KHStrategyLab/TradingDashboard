@@ -1462,6 +1462,10 @@ namespace TradingDashboard
                 AddRecentViewedStock(recentStock);
             }
 
+            await PrimeSelectedDisplayPriceBeforeChartAsync(stockCode, selectionVersion, requestToken);
+            if (!IsCurrentSelection(stockCode, selectionVersion))
+                return;
+
             StartSelectedChartRender();
             _ = LoadNewsAsync(stockName, selectionVersion, requestToken);
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
@@ -1476,6 +1480,62 @@ namespace TradingDashboard
             _ = RegisterSelectedRealtime0DIfReadyAsync();
             _ = LoadSelectedStockStatusAsync(stockCode, selectionVersion, requestToken);
             _ = LoadKrxClosingSnapshotIfNeededAsync(stockCode, selectionVersion, requestToken);
+        }
+
+        private async Task PrimeSelectedDisplayPriceBeforeChartAsync(
+            string stockCode,
+            int selectionVersion,
+            CancellationToken cancellationToken)
+        {
+            if (!_config.Kiwoom.UseRestApi ||
+                string.IsNullOrWhiteSpace(stockCode) ||
+                !ShouldUseNxtDataForStock(stockCode) ||
+                !_watchStockByCode.TryGetValue(stockCode, out WatchStockItem? stock))
+            {
+                return;
+            }
+
+            if (stock.CurrentPrice > 0 &&
+                string.Equals(stock.DisplayPriceMarket, "NXT", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            try
+            {
+                using CancellationTokenSource primeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                primeCts.CancelAfter(TimeSpan.FromSeconds(3));
+
+                StockStatusMetrics metrics = await _kiwoomConditionService
+                    .GetStockStatusMetricsByGuideAsync(stockCode, useNxtMarket: true, primeCts.Token)
+                    .ConfigureAwait(true);
+
+                if (!IsCurrentSelection(stockCode, selectionVersion))
+                    return;
+
+                long currentPrice = ParseLongAbs(metrics.ClosePriceText);
+                if (currentPrice <= 0)
+                    return;
+
+                ApplyWatchStockDisplayPrice(stock, currentPrice, "NXT", "NXT price prime");
+                stock.ChangeRateText = _krxPrevClosePrice > 0
+                    ? FormatKrxPreviousCloseRate(currentPrice)
+                    : metrics.ChangeRateText;
+                stock.PriceBrush = ResolveHogaBrushByKrxPrevClose(currentPrice);
+                HogaStatusText.Text = $"Price {currentPrice:N0} / Rate {stock.ChangeRateText} / NXT price prime";
+                AppendLog($"NXT price prime before chart: {stockCode} / {currentPrice:N0}");
+            }
+            catch (OperationCanceledException)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    throw;
+
+                AppendLog($"NXT price prime skipped: {stockCode} / timeout");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"NXT price prime skipped: {stockCode} / {ex.GetType().Name} / {ex.Message}");
+            }
         }
 
         private void AddRecentViewedStock(WatchStockItem stock)
