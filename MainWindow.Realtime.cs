@@ -873,6 +873,8 @@ namespace TradingDashboard
                 return;
             if (!ShouldApplyRealtimeMarketToDisplay(code, rawCode))
                 return;
+            if (ShouldPauseOrderBookUi("0D"))
+                return;
 
             JsonElement values = item;
             if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("values", out JsonElement nestedValues))
@@ -977,13 +979,19 @@ namespace TradingDashboard
                     stock.ChangeRateText = FormatKrxPreviousCloseRate(curNum);
                 }
 
-                HogaStatusText.Text = $"{FormatSelectedHogaPriceStatus(code, curNum)} / Rate {FormatKrxPreviousCloseRate(curNum)} / 0D {(_last0DReceivedAt == DateTime.MinValue ? "-" : _last0DReceivedAt.ToString("HH:mm:ss"))}";
-                HighlightCenterPriceInHoga();
+                if (!ShouldPauseOrderBookUi("0H"))
+                {
+                    HogaStatusText.Text = $"{FormatSelectedHogaPriceStatus(code, curNum)} / Rate {FormatKrxPreviousCloseRate(curNum)} / 0D {(_last0DReceivedAt == DateTime.MinValue ? "-" : _last0DReceivedAt.ToString("HH:mm:ss"))}";
+                    HighlightCenterPriceInHoga();
+                }
             });
         }
 
         private void ApplyHogaRows(List<(long Price, long Qty)> sellRows, List<(long Price, long Qty)> buyRows, string source)
         {
+            if (ShouldPauseOrderBookUi(source))
+                return;
+
             var sellDisplayRows = sellRows.AsEnumerable().Reverse().Take(10).ToList();
             var buyDisplayRows = buyRows.Take(10).ToList();
 
@@ -1053,6 +1061,9 @@ namespace TradingDashboard
 
         private void ResetSelectedHogaRows(string source)
         {
+            if (ShouldPauseOrderBookUi(source))
+                return;
+
             foreach (HogaLevel level in _sellHogaLevels)
                 ResetHogaLevel(level);
             foreach (HogaLevel level in _buyHogaLevels)
@@ -1078,6 +1089,9 @@ namespace TradingDashboard
 
         private bool TryApplyCurrentPriceFallbackHoga(string stockCode, string source)
         {
+            if (ShouldPauseOrderBookUi(source))
+                return false;
+
             long currentPrice = 0;
             string displayMarket = ResolveDisplayMarketForStockCode(stockCode);
             bool displayExpectsNxt = string.Equals(displayMarket, "NXT", StringComparison.Ordinal);
@@ -1422,6 +1436,9 @@ namespace TradingDashboard
 
         private void HighlightCenterPriceInHoga()
         {
+            if (ShouldPauseOrderBookUi("hoga marker"))
+                return;
+
             HogaCurrentPriceMarkers markers = ResolveSelectedCurrentPricesForHogaMarkers();
             UpdateHogaRateMarkers(_sellHogaLevels, markers);
             UpdateHogaRateMarkers(_buyHogaLevels, markers);
@@ -1622,6 +1639,9 @@ namespace TradingDashboard
         private async Task RegisterSelectedRealtime0DAsync(ClientWebSocket ws, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(_selectedStockCode))
+                return;
+
+            if (ShouldPauseOrderBookUi("0D register"))
                 return;
 
             string requestCode = string.Equals(ResolveDisplayMarketForStockCode(_selectedStockCode), "NXT", StringComparison.Ordinal)

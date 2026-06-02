@@ -2061,8 +2061,10 @@
 
             <Border Grid.Column="2"
                     Background="{StaticResource BgPanelBrush}">
-                <TabControl Style="{StaticResource RightPanelTabControlStyle}"
-                            ItemContainerStyle="{StaticResource RightPanelTabItemStyle}">
+                <TabControl x:Name="RightDetailTabControl"
+                            Style="{StaticResource RightPanelTabControlStyle}"
+                            ItemContainerStyle="{StaticResource RightPanelTabItemStyle}"
+                            SelectionChanged="RightDetailTabControl_SelectionChanged">
                     <TabItem Header="Strategy">
                         <Grid Background="{StaticResource BgPanelBrush}"
                               Margin="10">
@@ -3594,6 +3596,7 @@
                                               AlternatingRowBackground="#181818"
                                               HorizontalGridLinesBrush="{StaticResource LineSoftBrush}"
                                               RowHeaderWidth="0"
+                                              RowHeight="44"
                                               FontSize="11"
                                               SelectionChanged="BalanceHoldingsDataGrid_SelectionChanged">
                                         <DataGrid.ColumnHeaderStyle>
@@ -3611,8 +3614,14 @@
                                                 <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
                                                 <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
                                                 <Setter Property="Padding" Value="6,4"/>
+                                                <Setter Property="VerticalContentAlignment" Value="Center"/>
                                             </Style>
                                         </DataGrid.CellStyle>
+                                        <DataGrid.Resources>
+                                            <Style TargetType="{x:Type TextBlock}">
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGrid.Resources>
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Name" Binding="{Binding StockName}" Width="150"/>
                                         </DataGrid.Columns>
@@ -3644,6 +3653,7 @@
                                                   AlternatingRowBackground="#181818"
                                                   HorizontalGridLinesBrush="{StaticResource LineSoftBrush}"
                                                   RowHeaderWidth="0"
+                                                  RowHeight="44"
                                                   FontSize="11"
                                                   SelectionChanged="BalanceHoldingsDataGrid_SelectionChanged">
                                             <DataGrid.ColumnHeaderStyle>
@@ -3661,8 +3671,14 @@
                                                     <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
                                                     <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}"/>
                                                     <Setter Property="Padding" Value="6,4"/>
+                                                    <Setter Property="VerticalContentAlignment" Value="Center"/>
                                                 </Style>
                                             </DataGrid.CellStyle>
+                                            <DataGrid.Resources>
+                                                <Style TargetType="{x:Type TextBlock}">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                </Style>
+                                            </DataGrid.Resources>
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Qty" Binding="{Binding HoldingQuantity, StringFormat={}{0:N0}}" Width="86"/>
                                                 <DataGridTextColumn Header="Able" Binding="{Binding OrderableQuantity, StringFormat={}{0:N0}}" Width="86"/>
@@ -3807,7 +3823,8 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="Order Book"
+                    <TabItem x:Name="OrderBookTab"
+                             Header="Order Book"
                              IsSelected="True">
                 <Grid>
                     <Grid.RowDefinitions>

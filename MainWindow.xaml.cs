@@ -137,6 +137,8 @@ namespace TradingDashboard
         private int _chartRenderVersion;
         private bool _initialChartFileCachePreloadStarted;
         private bool _strategyMinuteAutoPreloadStarted;
+        private volatile bool _isOrderBookUiActive;
+        private volatile bool _orderBookUiDirty;
         private string _lastAcceptedWatchSelectionKey = string.Empty;
         private DateTime _lastAcceptedWatchSelectionAt = DateTime.MinValue;
         private CancellationTokenSource? _stockSearchSuggestionCts;
@@ -256,8 +258,69 @@ namespace TradingDashboard
             Closed += MainWindow_Closed;
         }
 
+        private async void RightDetailTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!ReferenceEquals(sender, RightDetailTabControl) ||
+                !ReferenceEquals(e.OriginalSource, RightDetailTabControl))
+                return;
+
+            UpdateOrderBookUiActiveSnapshot();
+            if (_isOrderBookUiActive)
+                await RefreshOrderBookUiWhenVisibleAsync("tab selected");
+            else
+                MarkOrderBookUiDirty("tab hidden");
+        }
+
+        private bool IsOrderBookUiActive()
+        {
+            if (!Dispatcher.CheckAccess())
+                return _isOrderBookUiActive;
+
+            return UpdateOrderBookUiActiveSnapshot();
+        }
+
+        private bool UpdateOrderBookUiActiveSnapshot()
+        {
+            if (!Dispatcher.CheckAccess())
+                return _isOrderBookUiActive;
+
+            _isOrderBookUiActive = OrderBookTab?.IsSelected == true;
+            return _isOrderBookUiActive;
+        }
+
+        private bool ShouldPauseOrderBookUi(string reason)
+        {
+            if (IsOrderBookUiActive())
+                return false;
+
+            MarkOrderBookUiDirty(reason);
+            return true;
+        }
+
+        private void MarkOrderBookUiDirty(string reason)
+        {
+            _orderBookUiDirty = true;
+        }
+
+        private async Task RefreshOrderBookUiWhenVisibleAsync(string reason)
+        {
+            if (!IsOrderBookUiActive() || string.IsNullOrWhiteSpace(_selectedStockCode))
+                return;
+
+            bool wasDirty = _orderBookUiDirty;
+            _orderBookUiDirty = false;
+            int selectionVersion = _selectionVersion;
+            ResetSelectedHogaRows(reason);
+            if (wasDirty)
+                AppendLog($"order book UI resumed: {_selectedStockCode}");
+
+            await RegisterSelectedRealtime0DIfReadyAsync();
+            await LoadSelectedOrderBookSnapshotAsync(_selectedStockCode, selectionVersion);
+        }
+
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            UpdateOrderBookUiActiveSnapshot();
             AppendLog("App started");
             try
             {
@@ -1799,9 +1862,16 @@ namespace TradingDashboard
             _ = LoadDisclosuresAsync(stockCode, selectionVersion, requestToken);
             _ = LoadSelectedBasePriceAsync(stockCode, selectionVersion, requestToken);
 
-            await LoadSelectedOrderBookSnapshotAsync(stockCode, selectionVersion, requestToken);
-            if (!IsCurrentSelection(stockCode, selectionVersion))
-                return;
+            if (IsOrderBookUiActive())
+            {
+                await LoadSelectedOrderBookSnapshotAsync(stockCode, selectionVersion, requestToken);
+                if (!IsCurrentSelection(stockCode, selectionVersion))
+                    return;
+            }
+            else
+            {
+                MarkOrderBookUiDirty("select");
+            }
 
             _ = RegisterSelectedRealtime0DIfReadyAsync();
             _ = LoadSelectedStockStatusAsync(stockCode, selectionVersion, requestToken);
@@ -2274,6 +2344,9 @@ namespace TradingDashboard
             try
             {
                 if (selectionVersion != _selectionVersion || !_config.Kiwoom.UseRestApi || string.IsNullOrWhiteSpace(stockCode))
+                    return;
+
+                if (ShouldPauseOrderBookUi("order book REST"))
                     return;
 
                 bool useNxtMarket = string.Equals(ResolveDisplayMarketForStockCode(stockCode), "NXT", StringComparison.Ordinal);
