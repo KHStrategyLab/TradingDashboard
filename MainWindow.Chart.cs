@@ -192,6 +192,7 @@ namespace TradingDashboard
             _currentChartDataPeriod = period;
             _lastRealtimeChartDrawAt = DateTime.MinValue;
             ResetChartViewport();
+            ApplySelectedDisplayPriceToLoadedChart(selectedStockCode, reason);
 
             if (period == ChartPeriod.Daily &&
                 candles.Count > 0 &&
@@ -209,6 +210,24 @@ namespace TradingDashboard
 
             DrawFullChart(reason);
             UpdateStrategyProgressRows();
+        }
+
+        private void ApplySelectedDisplayPriceToLoadedChart(string selectedStockCode, string reason)
+        {
+            if (_currentChartCandles.Count == 0 ||
+                string.IsNullOrWhiteSpace(selectedStockCode) ||
+                !_watchStockByCode.TryGetValue(NormalizeStockCode(selectedStockCode), out WatchStockItem? stock) ||
+                stock.CurrentPrice <= 0)
+            {
+                return;
+            }
+
+            bool chartIsNxt = reason.Contains("NXT", StringComparison.OrdinalIgnoreCase);
+            bool displayIsNxt = string.Equals(stock.DisplayPriceMarket, "NXT", StringComparison.OrdinalIgnoreCase);
+            if (chartIsNxt != displayIsNxt)
+                return;
+
+            ApplyDisplayPriceToLastChartCandle(stock.CurrentPrice);
         }
 
         private ChartCacheKey CreateChartCacheKey(string stockCode, bool useNxtMarket, ChartPeriod period)
@@ -712,17 +731,26 @@ namespace TradingDashboard
             if (sourceIsNxt != chartIsNxt)
                 return;
 
+            ApplyDisplayPriceToLastChartCandle(price);
+            ChartCandle last = _currentChartCandles[^1];
+
+            if (TryUpdateLastChartVisual(last))
+                return;
+
+            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} display price {source}");
+        }
+
+        private void ApplyDisplayPriceToLastChartCandle(long price)
+        {
+            if (price <= 0 || _currentChartCandles.Count == 0)
+                return;
+
             ChartCandle last = _currentChartCandles[^1];
             if (last.Open <= 0)
                 last.Open = price;
             last.Close = price;
             last.High = Math.Max(last.High > 0 ? last.High : price, price);
             last.Low = Math.Min(last.Low > 0 ? last.Low : price, price);
-
-            if (TryUpdateLastChartVisual(last))
-                return;
-
-            DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} display price {source}");
         }
 
         private void ApplyRealtimeMinuteChartTick(string code, long price, long tradeVolume, string tradeTimeText, int minute)
