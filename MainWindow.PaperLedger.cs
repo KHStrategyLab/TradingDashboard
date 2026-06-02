@@ -36,6 +36,9 @@ namespace TradingDashboard
                 return null;
 
             string now = DateTime.Now.ToString("yyyyMMddHHmmss");
+            if (!TryResolveStrategyEntry5MinuteLow(stock, out long entry5MinuteLow, out DateTime entry5MinuteTime))
+                return null;
+
             string exitStrategyCode = ResolveStrategySlotExitStrategyCode(result.SlotId);
             var entry = new PaperPositionLedgerEntry
             {
@@ -50,9 +53,11 @@ namespace TradingDashboard
                 Quantity = quantity,
                 EntryPrice = price,
                 CurrentPrice = price,
+                Entry5MinuteLow = entry5MinuteLow,
                 ProfitLoss = 0,
                 ProfitRate = 0,
                 EntryTime = now,
+                Entry5MinuteTime = entry5MinuteTime == DateTime.MinValue ? string.Empty : entry5MinuteTime.ToString("yyyyMMddHHmmss"),
                 Reason = result.Name,
                 UpdatedAt = now
             };
@@ -111,14 +116,7 @@ namespace TradingDashboard
             if (!string.Equals(entry.Status, "OPEN", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            StrategyExitCheck decision = EvaluateExitDecision(
-                entry.CurrentPrice,
-                entry.EntryPrice,
-                entry.Quantity,
-                entry.Key,
-                entry.SlotTag,
-                entry.ExitStrategyCode,
-                ParseLedgerTime(entry.EntryTime));
+            StrategyExitCheck decision = EvaluatePaperExitCheck(entry);
             if (!decision.HasExitSignal)
                 return;
 
@@ -155,6 +153,7 @@ namespace TradingDashboard
                 Price = price,
                 Amount = price * entry.Quantity,
                 EntryPrice = entry.EntryPrice,
+                Entry5MinuteLow = entry.Entry5MinuteLow,
                 ProfitLoss = string.Equals(eventName, "BUY", StringComparison.OrdinalIgnoreCase) ? 0 : entry.ProfitLoss,
                 ProfitRate = string.Equals(eventName, "BUY", StringComparison.OrdinalIgnoreCase) ? 0 : entry.ProfitRate,
                 Reason = reason,
@@ -174,5 +173,30 @@ namespace TradingDashboard
 
         private string BuildPaperPositionKey(string code, StrategySlotId slotId) =>
             $"{NormalizeStockCode(code)}|{slotId}|PAPER|{DateTime.Today:yyyyMMdd}";
+
+        private static StrategyExitCheck EvaluatePaperExitCheck(PaperPositionLedgerEntry entry)
+        {
+            if (entry.CurrentPrice > 0 && entry.EntryPrice > 0 && entry.Entry5MinuteLow > 0 && entry.CurrentPrice <= entry.Entry5MinuteLow)
+            {
+                return StrategyExitCheck.Signal(
+                    "ENTRY_5M_LOW_STOP",
+                    entry.CurrentPrice,
+                    entry.EntryPrice,
+                    CalculateProfitRate(entry.CurrentPrice, entry.EntryPrice),
+                    entry.Key,
+                    entry.SlotTag,
+                    entry.Quantity,
+                    entry.ExitStrategyCode);
+            }
+
+            return EvaluateExitDecision(
+                entry.CurrentPrice,
+                entry.EntryPrice,
+                entry.Quantity,
+                entry.Key,
+                entry.SlotTag,
+                entry.ExitStrategyCode,
+                ParseLedgerTime(entry.EntryTime));
+        }
     }
 }

@@ -116,7 +116,7 @@ namespace TradingDashboard
                 return;
             }
 
-            if (!ReserveStrategyLiveSellOrderKey(key))
+            if (!ReserveStrategyLiveSellOrderKey(key, guard.Quantity))
                 return;
 
             try
@@ -182,8 +182,11 @@ namespace TradingDashboard
                     .GetFillsAsync(stock.Code, orderResult.OrderNo, exchangeType: KiwoomTradingConstants.IntegratedExchangeType, cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
 
-                long unfilled = openOrders.Sum(order => Math.Max(0, order.UnfilledQuantity));
+                long unfilled = openOrders
+                    .Where(order => string.Equals(order.OrderNo, orderResult.OrderNo, StringComparison.Ordinal))
+                    .Sum(order => Math.Max(0, order.UnfilledQuantity));
                 long filled = fills.Sum(fill => Math.Max(0, fill.FilledQuantity));
+                UpdateStrategyLiveSellReservation(BuildStrategyLiveSellOrderKey(stock, check), unfilled);
 
                 Dispatcher.Invoke(() =>
                 {
@@ -235,12 +238,17 @@ namespace TradingDashboard
             long orderableQuantity = holding.OrderableQuantity > 0
                 ? holding.OrderableQuantity
                 : holding.HoldingQuantity;
+            long reservedQuantity = GetStrategyLiveSellReservedQuantity(stock.Code);
+            long availableQuantity = Math.Max(0, orderableQuantity - reservedQuantity);
+            if (availableQuantity <= 0)
+                return StrategyLiveSellGuardResult.Blocked($"sellable quantity missing: orderable {orderableQuantity:N0} / reserved {reservedQuantity:N0}");
+
             long decisionQuantity = check.Quantity > 0 ? check.Quantity : orderableQuantity;
             long quantity = string.Equals(check.Reason, "TARGET1", StringComparison.OrdinalIgnoreCase)
-                ? Math.Max(1, Math.Min(decisionQuantity, orderableQuantity))
-                : Math.Min(decisionQuantity, orderableQuantity);
+                ? Math.Max(1, Math.Min(decisionQuantity, availableQuantity))
+                : Math.Min(decisionQuantity, availableQuantity);
             if (quantity <= 0)
-                return StrategyLiveSellGuardResult.Blocked("sellable quantity missing");
+                return StrategyLiveSellGuardResult.Blocked($"sellable quantity missing: orderable {orderableQuantity:N0} / reserved {reservedQuantity:N0}");
             if (check.CurrentPrice <= 0)
                 return StrategyLiveSellGuardResult.Blocked("reference price missing");
 
@@ -714,16 +722,50 @@ namespace TradingDashboard
                 return _strategyLiveSellOrderKeys.Contains(BuildStrategyLiveSellOrderKey(stock, check));
         }
 
-        private bool ReserveStrategyLiveSellOrderKey(string key)
+        private bool ReserveStrategyLiveSellOrderKey(string key, long quantity)
         {
             lock (_strategyLiveOrderLock)
-                return _strategyLiveSellOrderKeys.Add(key);
+            {
+                if (!_strategyLiveSellOrderKeys.Add(key))
+                    return false;
+
+                if (quantity > 0)
+                    _strategyLiveSellReservedQuantityByKey[key] = quantity;
+
+                return true;
+            }
         }
 
         private void ReleaseStrategyLiveSellOrderKey(string key)
         {
             lock (_strategyLiveOrderLock)
+            {
                 _strategyLiveSellOrderKeys.Remove(key);
+                _strategyLiveSellReservedQuantityByKey.Remove(key);
+            }
+        }
+
+        private long GetStrategyLiveSellReservedQuantity(string code)
+        {
+            string normalizedCode = NormalizeStockCode(code);
+            string prefix = $"{normalizedCode}|LIVE_SELL|";
+            lock (_strategyLiveOrderLock)
+            {
+                return _strategyLiveSellReservedQuantityByKey
+                    .Where(item => item.Key.StartsWith(prefix, StringComparison.Ordinal))
+                    .Sum(item => Math.Max(0, item.Value));
+            }
+        }
+
+        private void UpdateStrategyLiveSellReservation(string key, long unfilledQuantity)
+        {
+            lock (_strategyLiveOrderLock)
+            {
+                if (unfilledQuantity > 0)
+                    _strategyLiveSellReservedQuantityByKey[key] = unfilledQuantity;
+                else
+                    _strategyLiveSellReservedQuantityByKey.Remove(key);
+            }
         }
 
         private static string BuildStrategyExitAlertMessage(

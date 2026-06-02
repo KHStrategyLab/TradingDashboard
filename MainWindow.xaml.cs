@@ -88,6 +88,7 @@ namespace TradingDashboard
         private readonly HashSet<string> _strategyLiveBuyOrderKeys = new(StringComparer.Ordinal);
         private readonly HashSet<string> _strategyExitAlertLoggedKeys = new(StringComparer.Ordinal);
         private readonly HashSet<string> _strategyLiveSellOrderKeys = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _strategyLiveSellReservedQuantityByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DateTime> _strategyLiveOrderRetryAfterByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DateTime> _strategyLiveOrderBlockedLogAfterByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, StrategyPositionLedgerEntry> _strategyPositionLedgerByKey = new(StringComparer.Ordinal);

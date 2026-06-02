@@ -16,6 +16,7 @@ namespace TradingDashboard.Models
         public long Price { get; set; }
         public long Amount { get; set; }
         public long EntryPrice { get; set; }
+        public long Entry5MinuteLow { get; set; }
         public long ProfitLoss { get; set; }
         public decimal ProfitRate { get; set; }
         public string Reason { get; set; } = string.Empty;
