@@ -97,6 +97,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--leader-history-promote-candidates", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunLeaderHistoryCandidatePromotion();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             if (e.Args.Any(arg => string.Equals(arg, "--candidate-ledger-rebuild", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunCandidateLedgerRebuild();
@@ -263,6 +271,27 @@ namespace TradingDashboard
                     Logs = [$"leader history rebuild failed: {ex.GetType().Name}: {ex.Message}"]
                 };
                 WriteBacktestJobSummary(summary, "last_leader_history_rebuild_summary.json", $"leader_history_rebuild_summary_{summary.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunLeaderHistoryCandidatePromotion()
+        {
+            try
+            {
+                var job = new LeaderHistoryCandidatePromotionJob();
+                LeaderHistoryRebuildSummary summary = job.Promote(lookbackTradingDays: 6);
+                WriteBacktestJobSummary(summary, "last_leader_history_promotion_summary.json", $"leader_history_promotion_summary_{summary.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var summary = new LeaderHistoryRebuildSummary
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Logs = [$"leader history candidate promotion failed: {ex.GetType().Name}: {ex.Message}"]
+                };
+                WriteBacktestJobSummary(summary, "last_leader_history_promotion_summary.json", $"leader_history_promotion_summary_{summary.RunId}.json");
                 return 1;
             }
         }

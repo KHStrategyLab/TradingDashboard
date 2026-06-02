@@ -33,6 +33,14 @@ Manual rebuild command:
 dotnet run -- --leader-history-rebuild
 ```
 
+CandidateLedger promotion command:
+
+```text
+dotnet run -- --leader-history-promote-candidates
+```
+
+The promotion command reads `Storage/CandidateLedger/active_candidates.json` and writes `Storage/LeaderHistory/active_leaders.json/csv`. It keeps the older DataStore direct rebuild command as a fallback/recovery path.
+
 ## Archive Storage
 
 Historical leader records are stored separately:

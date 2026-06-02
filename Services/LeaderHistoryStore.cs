@@ -87,7 +87,7 @@ namespace TradingDashboard.Services
                 Directory.CreateDirectory(directory);
 
             var builder = new StringBuilder();
-            builder.AppendLine("PriorityRank,DailyRank,Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,TradingValue,ChangeRate,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,ValueToMarketCapPercent,TurnoverRate,KrxClose,NxtClose,QualityReason");
+            builder.AppendLine("PriorityRank,DailyRank,Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,Source,Status,TradingValue,ChangeRate,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,ValueToMarketCapPercent,TurnoverRate,KrxClose,NxtClose,QualityReason");
             foreach (LeaderHistoryEntry row in rows)
             {
                 builder.AppendLine(string.Join(",", new[]
@@ -101,6 +101,8 @@ namespace TradingDashboard.Services
                     Escape(row.QualityGrade),
                     row.QualityScore.ToString("0.##", CultureInfo.InvariantCulture),
                     Escape(row.LeaderType),
+                    Escape(row.Source),
+                    Escape(row.Status),
                     row.TradingValue.ToString(CultureInfo.InvariantCulture),
                     row.ChangeRate.ToString("0.####", CultureInfo.InvariantCulture),
                     row.CloseLocationPercent.ToString("0.##", CultureInfo.InvariantCulture),
