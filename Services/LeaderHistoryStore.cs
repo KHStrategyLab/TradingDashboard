@@ -52,6 +52,7 @@ namespace TradingDashboard.Services
                 .OrderByDescending(item => item.QualityScore)
                 .ThenByDescending(item => item.TradingValue)
                 .ThenBy(item => item.Code)];
+            ApplyRanks(rows);
 
             SaveJson(ActivePath, rows);
             SaveActiveCsv(Path.Combine(_rootPath, "active_leaders.csv"), rows);
@@ -86,11 +87,13 @@ namespace TradingDashboard.Services
                 Directory.CreateDirectory(directory);
 
             var builder = new StringBuilder();
-            builder.AppendLine("Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,TradingValue,ChangeRate,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,ValueToMarketCapPercent,TurnoverRate,KrxClose,NxtClose,QualityReason");
+            builder.AppendLine("PriorityRank,DailyRank,Code,Name,Market,BaseDate,QualityGrade,QualityScore,LeaderType,TradingValue,ChangeRate,CloseLocationPercent,UpperTailPercent,BollingerUpperBreak,PrevHighPlus10,MarketCap,ValueToMarketCapPercent,TurnoverRate,KrxClose,NxtClose,QualityReason");
             foreach (LeaderHistoryEntry row in rows)
             {
                 builder.AppendLine(string.Join(",", new[]
                 {
+                    row.PriorityRank.ToString(CultureInfo.InvariantCulture),
+                    row.DailyRank.ToString(CultureInfo.InvariantCulture),
                     Escape(row.Code),
                     Escape(row.Name),
                     Escape(row.Market),
@@ -114,6 +117,25 @@ namespace TradingDashboard.Services
             }
 
             File.WriteAllText(path, builder.ToString(), Encoding.UTF8);
+        }
+
+        private static void ApplyRanks(IReadOnlyList<LeaderHistoryEntry> rows)
+        {
+            for (int i = 0; i < rows.Count; i++)
+                rows[i].PriorityRank = i + 1;
+
+            foreach (IGrouping<string, LeaderHistoryEntry> group in rows
+                .GroupBy(item => item.BaseDate, StringComparer.Ordinal))
+            {
+                int dailyRank = 1;
+                foreach (LeaderHistoryEntry row in group
+                    .OrderByDescending(item => item.QualityScore)
+                    .ThenByDescending(item => item.TradingValue)
+                    .ThenBy(item => item.Code))
+                {
+                    row.DailyRank = dailyRank++;
+                }
+            }
         }
 
         private static string Escape(string value)
