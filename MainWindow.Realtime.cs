@@ -847,7 +847,7 @@ namespace TradingDashboard
                             _recentTrades.Clear();
                             _buyTradeVolume = 0;
                             _sellTradeVolume = 0;
-                            _lastTickPriceByCode.Remove(selectedCode);
+                            _lastTickPriceByCode.Remove(BuildMarketIdentityKey(selectedCode, selectedUsesNxt ? "NXT" : "KRX"));
                             ClearSelectedChartVisuals();
                             ResetSelectedHogaRows(selectedUsesNxt ? "NXT market switch" : "KRX market switch");
                             ClearSelectedMarketMetrics(selectedUsesNxt ? "NXT metrics waiting" : "KRX metrics waiting");
@@ -948,7 +948,7 @@ namespace TradingDashboard
                 long totalSell = sellDisplayRows.Sum(r => r.Qty);
                 long totalBuy = buyDisplayRows.Sum(r => r.Qty);
                 UpdateHogaSummary(totalSell, totalBuy);
-                string selectedMarket = TryNormalizeCandidateMarket(_selectedStockMarket, out string market) ? market : ShouldUseNxtDataForStock(_selectedStockCode) ? "NXT" : "KRX";
+                string selectedMarket = ResolveDisplayMarketForStockCode(_selectedStockCode);
                 string selectedRateText = TryGetWatchStockForMarket(_selectedStockCode, selectedMarket, out WatchStockItem? s2) && s2 != null ? s2.ChangeRateText : "-";
                 HogaStatusText.Text = $"{FormatSelectedHogaPriceStatus()} / Rate {selectedRateText} / 0D {_last0DReceivedAt:HH:mm:ss}";
 
@@ -1045,7 +1045,7 @@ namespace TradingDashboard
             long totalSell = sellDisplayRows.Sum(r => r.Qty);
             long totalBuy = buyDisplayRows.Sum(r => r.Qty);
             UpdateHogaSummary(totalSell, totalBuy);
-            string selectedMarket = TryNormalizeCandidateMarket(_selectedStockMarket, out string market) ? market : ShouldUseNxtDataForStock(_selectedStockCode) ? "NXT" : "KRX";
+            string selectedMarket = ResolveDisplayMarketForStockCode(_selectedStockCode);
             string selectedRateText = TryGetWatchStockForMarket(_selectedStockCode, selectedMarket, out WatchStockItem? s2) && s2 != null ? s2.ChangeRateText : "-";
             HogaStatusText.Text = $"{FormatSelectedHogaPriceStatus()} / Rate {selectedRateText} / {source} {_last0DReceivedAt:HH:mm:ss}";
             HighlightCenterPriceInHoga();
@@ -1079,8 +1079,8 @@ namespace TradingDashboard
         private bool TryApplyCurrentPriceFallbackHoga(string stockCode, string source)
         {
             long currentPrice = 0;
-            bool displayExpectsNxt = ShouldUseNxtDataForStock(stockCode);
-            string displayMarket = displayExpectsNxt ? "NXT" : "KRX";
+            string displayMarket = ResolveDisplayMarketForStockCode(stockCode);
+            bool displayExpectsNxt = string.Equals(displayMarket, "NXT", StringComparison.Ordinal);
             if (TryGetWatchStockForMarket(stockCode, displayMarket, out WatchStockItem? stock) && stock != null)
             {
                 if (displayExpectsNxt)
@@ -1219,15 +1219,16 @@ namespace TradingDashboard
                 {
                     bool hasSideByRealtimeKey = buyExecQty > 0 || sellExecQty > 0;
                     bool hasSideBySingleKey = buyExecSingleQty > 0 || sellExecSingleQty > 0;
-                    bool hasPrevBuy = _lastBuyExecCumByCode.TryGetValue(code, out long prevBuyCum);
-                    bool hasPrevSell = _lastSellExecCumByCode.TryGetValue(code, out long prevSellCum);
+                    string realtimeStateKey = BuildMarketIdentityKey(code, realtimeMarket);
+                    bool hasPrevBuy = _lastBuyExecCumByCode.TryGetValue(realtimeStateKey, out long prevBuyCum);
+                    bool hasPrevSell = _lastSellExecCumByCode.TryGetValue(realtimeStateKey, out long prevSellCum);
                     long buyDelta = hasPrevBuy ? Math.Max(0, buyExecQty - prevBuyCum) : 0;
                     long sellDelta = hasPrevSell ? Math.Max(0, sellExecQty - prevSellCum) : 0;
                     bool isBuyAggressive = realtimeSide > 0
                         || (realtimeSide == 0 && hasSideBySingleKey && buyExecSingleQty >= sellExecSingleQty)
                         || (realtimeSide == 0 && hasSideByRealtimeKey && buyDelta >= sellDelta);
 
-                    long lastTick = _lastTickPriceByCode.TryGetValue(code, out long prevTick) ? prevTick : 0;
+                    long lastTick = _lastTickPriceByCode.TryGetValue(realtimeStateKey, out long prevTick) ? prevTick : 0;
                     if (realtimeSide == 0 && !hasSideByRealtimeKey && !hasSideBySingleKey && lastTick > 0)
                         isBuyAggressive = stock.CurrentPrice >= lastTick;
 
@@ -1256,8 +1257,8 @@ namespace TradingDashboard
 
                     if (hasSideByRealtimeKey)
                     {
-                        _lastBuyExecCumByCode[code] = buyExecQty;
-                        _lastSellExecCumByCode[code] = sellExecQty;
+                        _lastBuyExecCumByCode[realtimeStateKey] = buyExecQty;
+                        _lastSellExecCumByCode[realtimeStateKey] = sellExecQty;
 
                         _buyTradeVolume = buyExecQty;
                         _sellTradeVolume = sellExecQty;
@@ -1275,7 +1276,7 @@ namespace TradingDashboard
                             _sellTradeVolume += effectiveTradeQty;
                     }
 
-                    _lastTickPriceByCode[code] = stock.CurrentPrice;
+                    _lastTickPriceByCode[realtimeStateKey] = stock.CurrentPrice;
                     HighlightCenterPriceInHoga();
 
                     long total = _buyTradeVolume + _sellTradeVolume;
@@ -1304,7 +1305,7 @@ namespace TradingDashboard
                     SetSelectedStockSubInfo(_currentStatusMetrics, dailyVolumeRatioText, dailyVolumeRatioBrush);
                     InfoTurnoverRateText.Text = _currentStatusMetrics.TurnoverRateText;
                     InfoTradingValueText.Text = _currentStatusMetrics.TradingValueText;
-                    ApplyRealtimeChartTick(code, stock.CurrentPrice, volume > 0 ? currentVolume : 0, effectiveTradeQty, tradeTimeText);
+                    ApplyRealtimeChartTick(code, realtimeMarket, stock.CurrentPrice, volume > 0 ? currentVolume : 0, effectiveTradeQty, tradeTimeText);
                     UpdateStrategyProgressRows();
 
                 }
@@ -1365,12 +1366,30 @@ namespace TradingDashboard
         private bool ShouldApplyRealtimeMarketToDisplay(string code, string rawCode)
         {
             string realtimeMarket = ResolveRealtimeItemMarket(rawCode);
+            if (string.Equals(NormalizeStockCode(code), _selectedStockCode, StringComparison.Ordinal))
+                return string.Equals(realtimeMarket, ResolveDisplayMarketForStockCode(code), StringComparison.Ordinal);
+
             if (TryGetWatchStockForMarket(code, realtimeMarket, out _))
                 return true;
 
             bool realtimeIsNxt = string.Equals(realtimeMarket, "NXT", StringComparison.Ordinal);
-            bool displayUsesNxt = ShouldUseNxtDataForStock(code);
-            return realtimeIsNxt == displayUsesNxt;
+            return realtimeIsNxt == string.Equals(ResolveDisplayMarketForStockCode(code), "NXT", StringComparison.Ordinal);
+        }
+
+        private string ResolveDisplayMarketForStockCode(string stockCode)
+        {
+            string code = NormalizeStockCode(stockCode);
+            if (!string.IsNullOrWhiteSpace(code) &&
+                string.Equals(code, _selectedStockCode, StringComparison.Ordinal) &&
+                TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket))
+            {
+                return selectedMarket;
+            }
+
+            if (TryResolveCandidateMarketForStock(code, out string candidateMarket))
+                return candidateMarket;
+
+            return ShouldUseNxtDataForStock(code) ? "NXT" : "KRX";
         }
 
         private static DateTime ParseRealtimeTradeTime(string tradeTimeText)
@@ -1413,10 +1432,7 @@ namespace TradingDashboard
             string code = string.IsNullOrWhiteSpace(stockCode)
                 ? _selectedStockCode
                 : NormalizeStockCode(stockCode);
-            string market = string.Equals(code, _selectedStockCode, StringComparison.Ordinal) &&
-                TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket)
-                    ? selectedMarket
-                    : ShouldUseNxtDataForStock(code) ? "NXT" : "KRX";
+            string market = ResolveDisplayMarketForStockCode(code);
             if (!string.IsNullOrWhiteSpace(code) &&
                 TryGetWatchStockForMarket(code, market, out WatchStockItem? stock) &&
                 stock != null)
@@ -1429,7 +1445,7 @@ namespace TradingDashboard
 
         private string FormatHogaPriceStatus(WatchStockItem stock, long fallbackPrice = 0)
         {
-            bool displayExpectsNxt = ShouldUseNxtDataForStock(stock.Code);
+            bool displayExpectsNxt = ShouldUseNxtDataForStock(stock);
             bool isNxtStock = IsNxtSupportedStock(stock.Code) ||
                 stock.NxtDisplayPrice > 0 ||
                 string.Equals(stock.DisplayPriceMarket, "NXT", StringComparison.OrdinalIgnoreCase) ||
@@ -1490,14 +1506,14 @@ namespace TradingDashboard
             if (!string.IsNullOrWhiteSpace(_selectedStockCode)
                 && TryGetWatchStockForMarket(
                     _selectedStockCode,
-                    TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket) ? selectedMarket : ShouldUseNxtDataForStock(_selectedStockCode) ? "NXT" : "KRX",
+                    ResolveDisplayMarketForStockCode(_selectedStockCode),
                     out WatchStockItem? stock)
                 && stock != null)
             {
                 long krxPrice = stock.KrxDisplayPrice;
                 long nxtPrice = stock.NxtDisplayPrice;
                 string displayMarket = stock.DisplayPriceMarket;
-                bool displayExpectsNxt = ShouldUseNxtDataForStock(stock.Code);
+                bool displayExpectsNxt = ShouldUseNxtDataForStock(stock);
 
                 if (string.Equals(displayMarket, "KRX", StringComparison.OrdinalIgnoreCase) && krxPrice <= 0)
                     krxPrice = stock.CurrentPrice;
@@ -1608,7 +1624,7 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(_selectedStockCode))
                 return;
 
-            string requestCode = ShouldUseNxtDataForStock(_selectedStockCode)
+            string requestCode = string.Equals(ResolveDisplayMarketForStockCode(_selectedStockCode), "NXT", StringComparison.Ordinal)
                 ? $"{_selectedStockCode}_NX"
                 : _selectedStockCode;
 

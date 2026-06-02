@@ -143,6 +143,7 @@ namespace TradingDashboard
         private ChartPeriod _currentChartPeriod = ChartPeriod.Daily;
         private ChartPeriod _currentChartDataPeriod = ChartPeriod.Daily;
         private string _currentChartCode = string.Empty;
+        private string _currentChartMarket = string.Empty;
         private DateTime _lastRealtimeChartDrawAt = DateTime.MinValue;
         private ChartRenderState? _priceChartRenderState;
         private ChartRenderState? _volumeChartRenderState;
@@ -1771,6 +1772,7 @@ namespace TradingDashboard
             _lastTickPriceByCode.Clear();
             _currentChartCandles.Clear();
             _currentChartCode = string.Empty;
+            _currentChartMarket = string.Empty;
             _lastRealtimeChartDrawAt = DateTime.MinValue;
             ResetChartLoadMoreCount();
             ClearSelectedChartVisuals();
@@ -1808,7 +1810,7 @@ namespace TradingDashboard
         {
             if (!_config.Kiwoom.UseRestApi ||
                 string.IsNullOrWhiteSpace(stockCode) ||
-                !ShouldUseNxtDataForStock(stockCode) ||
+                !string.Equals(ResolveDisplayMarketForStockCode(stockCode), "NXT", StringComparison.Ordinal) ||
                 !TryGetWatchStockForMarket(stockCode, "NXT", out WatchStockItem? stock) ||
                 stock == null)
             {
@@ -1973,9 +1975,7 @@ namespace TradingDashboard
                 if (selectionVersion != _selectionVersion)
                     return;
 
-                string selectedDisplayMarket = TryNormalizeCandidateMarket(_selectedStockMarket, out string resolvedSelectedMarket)
-                    ? resolvedSelectedMarket
-                    : ShouldUseNxtDataForStock(stockCode) ? "NXT" : "KRX";
+                string selectedDisplayMarket = ResolveDisplayMarketForStockCode(stockCode);
 
                 if (basePrice > 0)
                 {
@@ -2271,7 +2271,7 @@ namespace TradingDashboard
                 if (selectionVersion != _selectionVersion || !_config.Kiwoom.UseRestApi || string.IsNullOrWhiteSpace(stockCode))
                     return;
 
-                bool useNxtMarket = ShouldUseNxtDataForStock(stockCode);
+                bool useNxtMarket = string.Equals(ResolveDisplayMarketForStockCode(stockCode), "NXT", StringComparison.Ordinal);
 
                 KrxClosingSnapshot snapshot = await _kiwoomConditionService.GetOrderBookSnapshotAsync(stockCode, useNxtMarket, cancellationToken);
                 if (selectionVersion != _selectionVersion || stockCode != _selectedStockCode)
@@ -2331,7 +2331,7 @@ namespace TradingDashboard
 
                 // MTS rule: base price always uses KRX previous close,
                 // while NXT-enabled stocks show NXT OHLC/current price during NXT windows.
-                bool useNxtMarket = ShouldUseNxtDataForStock(stockCode);
+                bool useNxtMarket = string.Equals(ResolveDisplayMarketForStockCode(stockCode), "NXT", StringComparison.Ordinal);
                 StockStatusMetrics m = await _kiwoomConditionService.GetStockStatusMetricsByGuideAsync(stockCode, useNxtMarket, cancellationToken);
                 if (useNxtMarket && IsEmptyStockStatus(m) && !IsNxtFrozenWindow())
                 {
@@ -2391,8 +2391,9 @@ namespace TradingDashboard
                 {
                     _buyTradeVolume = Math.Max(0, exec.BuyExecCum);
                     _sellTradeVolume = Math.Max(0, exec.SellExecCum);
-                    _lastBuyExecCumByCode[stockCode] = _buyTradeVolume;
-                    _lastSellExecCumByCode[stockCode] = _sellTradeVolume;
+                    string executionStateKey = BuildMarketIdentityKey(stockCode, useNxtMarket ? "NXT" : "KRX");
+                    _lastBuyExecCumByCode[executionStateKey] = _buyTradeVolume;
+                    _lastSellExecCumByCode[executionStateKey] = _sellTradeVolume;
                     UpdateTradeSummaryInfo();
                 }
                 else
@@ -2580,7 +2581,7 @@ namespace TradingDashboard
             if (!string.IsNullOrWhiteSpace(_selectedStockCode)
                 && TryGetWatchStockForMarket(
                     _selectedStockCode,
-                    TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket) ? selectedMarket : ShouldUseNxtDataForStock(_selectedStockCode) ? "NXT" : "KRX",
+                    ResolveDisplayMarketForStockCode(_selectedStockCode),
                     out WatchStockItem? stock)
                 && stock != null
                 && stock.MetaBadgeText != "-")
@@ -2604,7 +2605,7 @@ namespace TradingDashboard
 
                 bool supportsNxt = TryGetWatchStockForMarket(
                         stockCode,
-                        TryNormalizeCandidateMarket(_selectedStockMarket, out string selectedMarket) ? selectedMarket : ShouldUseNxtDataForStock(stockCode) ? "NXT" : "KRX",
+                        ResolveDisplayMarketForStockCode(stockCode),
                         out WatchStockItem? selected) &&
                     selected?.SupportsNxt == true;
                 bool useNxtSnapshot = supportsNxt && IsNxtFrozenWindow();
@@ -2661,12 +2662,13 @@ namespace TradingDashboard
             if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.Code) || snapshot.Code != _selectedStockCode)
                 return;
 
-            if (ShouldBlockKrxPriceUiApply(snapshot.Code, sourceIsNxt, source))
+            string sourceMarket = sourceIsNxt ? "NXT" : "KRX";
+            if (!string.Equals(sourceMarket, ResolveDisplayMarketForStockCode(snapshot.Code), StringComparison.Ordinal))
                 return;
 
-            if (TryGetWatchStockForMarket(snapshot.Code, sourceIsNxt ? "NXT" : "KRX", out WatchStockItem? stock) && stock != null)
+            if (TryGetWatchStockForMarket(snapshot.Code, sourceMarket, out WatchStockItem? stock) && stock != null)
             {
-                ApplyWatchStockDisplayPrice(stock, snapshot.CurrentPrice, sourceIsNxt ? "NXT" : "KRX", source);
+                ApplyWatchStockDisplayPrice(stock, snapshot.CurrentPrice, sourceMarket, source);
                 stock.ChangeAmount = stock.CurrentPrice > 0 && _krxPrevClosePrice > 0
                     ? stock.CurrentPrice - _krxPrevClosePrice
                     : snapshot.DayChange;
@@ -2857,7 +2859,7 @@ namespace TradingDashboard
                 return;
             }
 
-            bool blockKrxUiApply = !sourceIsNxt && ShouldUseNxtDataForStock(stockCode);
+            bool blockMarketUiApply = ShouldBlockPriceUiApply(stock, sourceIsNxt, "stock metrics TR");
             long currentPrice = ParseLongAbs(metrics.ClosePriceText);
             ApplyWatchStockDisplayPrice(stock, currentPrice, sourceIsNxt ? "NXT" : "KRX", "stock metrics TR");
 
@@ -2867,7 +2869,7 @@ namespace TradingDashboard
                 ? currentPrice - basePrice
                 : ParseLongSigned(metrics.PrevDiffText);
 
-            if (!blockKrxUiApply)
+            if (!blockMarketUiApply)
             {
                 stock.ChangeAmount = changeAmount;
                 stock.ChangeRateText = FormatKrxPreviousCloseRate(currentPrice);
@@ -2883,7 +2885,7 @@ namespace TradingDashboard
                     sourceIsNxt);
             }
 
-            long displayPrice = blockKrxUiApply ? stock.CurrentPrice : currentPrice;
+            long displayPrice = blockMarketUiApply ? stock.CurrentPrice : currentPrice;
             string rateText = stock.ChangeRateText;
             HogaStatusText.Text = $"{FormatHogaPriceStatus(stock, displayPrice > 0 ? displayPrice : stock.CurrentPrice)} / Rate {rateText} / Base {(basePrice > 0 ? basePrice.ToString("N0") : "-")}";
         }
@@ -2893,18 +2895,20 @@ namespace TradingDashboard
             if (stock == null)
                 return;
 
-            if (ShouldBlockKrxPriceUiApply(stock.Code, sourceIsNxt, "mini daily candle"))
+            if (ShouldBlockPriceUiApply(stock, sourceIsNxt, "mini daily candle"))
                 return;
 
             stock.SetMiniDailyCandle(open, high, low, close, ResolveMiniDailyBrush(open, close), sourceIsNxt ? "NXT" : "KRX");
         }
 
-        private bool ShouldBlockKrxPriceUiApply(string stockCode, bool sourceIsNxt, string source)
+        private bool ShouldBlockPriceUiApply(WatchStockItem stock, bool sourceIsNxt, string source)
         {
-            if (sourceIsNxt || !ShouldUseNxtDataForStock(stockCode))
+            string sourceMarket = sourceIsNxt ? "NXT" : "KRX";
+            string expectedMarket = ResolveWatchStockIdentityMarket(stock);
+            if (string.Equals(sourceMarket, expectedMarket, StringComparison.Ordinal))
                 return false;
 
-            AppendLog($"NXT display active: skip KRX price UI apply: {NormalizeStockCode(stockCode)} / {source}");
+            AppendLog($"market display split: skip {sourceMarket} price UI apply to {expectedMarket} row: {NormalizeStockCode(stock.Code)} / {source}");
             return true;
         }
 
@@ -2914,13 +2918,21 @@ namespace TradingDashboard
                 return false;
 
             bool sourceIsNxt = string.Equals(market, "NXT", StringComparison.OrdinalIgnoreCase);
-            if (ShouldBlockKrxPriceUiApply(stock.Code, sourceIsNxt, source))
+            if (ShouldBlockPriceUiApply(stock, sourceIsNxt, source))
             {
-                stock.StoreMarketPrice(price, "KRX");
-                if (stock.TryKeepNxtDisplayPrice())
+                string sourceMarket = sourceIsNxt ? "NXT" : "KRX";
+                string expectedMarket = ResolveWatchStockIdentityMarket(stock);
+                stock.StoreMarketPrice(price, sourceMarket);
+                if (string.Equals(expectedMarket, "NXT", StringComparison.Ordinal) && stock.TryKeepNxtDisplayPrice())
                     return true;
 
-                stock.WaitForDisplayPrice("NXT");
+                if (string.Equals(expectedMarket, "KRX", StringComparison.Ordinal) && stock.KrxDisplayPrice > 0)
+                {
+                    stock.ApplyDisplayPrice(stock.KrxDisplayPrice, "KRX");
+                    return true;
+                }
+
+                stock.WaitForDisplayPrice(expectedMarket);
                 return false;
             }
 

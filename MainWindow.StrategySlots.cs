@@ -662,7 +662,7 @@ namespace TradingDashboard
                 ChartCandleCount = _currentChartCandles.Count,
                 MinuteData = BuildStrategyMinuteDataStatus(stock),
                 MinuteSnapshots = BuildStrategyMinuteSnapshotSet(stock),
-                Market = _isNxtMarketMode ? "NXT" : "KRX",
+                Market = stock != null && ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX",
                 IsOwned = IsStockOwned(stock) && !GetStrategyDuplicatePolicy().AllowAdditionalBuy
             };
 
@@ -672,7 +672,7 @@ namespace TradingDashboard
         private async Task<int> LoadStrategyMinuteDataAsync(WatchStockItem stock)
         {
             int totalLoaded = 0;
-            bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock);
             string market = useNxtMarket ? "NXT" : "KRX";
             bool saveSeedFiles = IsStrategyMinuteSeedFileSaveEnabled();
 
@@ -785,7 +785,7 @@ namespace TradingDashboard
             if (touches.Count == 0)
                 return;
 
-            WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stock.Code);
+            WatchlistStockCacheEntry? cache = GetWatchlistMemoryCache(stock.Code, market);
             var document = new StrategyAnchorDocument
             {
                 Code = NormalizeStockCode(stock.Code),
@@ -938,7 +938,7 @@ namespace TradingDashboard
             if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
                 return new StrategyMinuteDataStatus();
 
-            bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock);
             string market = useNxtMarket ? "NXT" : "KRX";
             StrategyMinuteDataStatus status = _strategyMinuteCacheService.BuildStatus(stock.Code, market);
 
@@ -956,7 +956,7 @@ namespace TradingDashboard
             if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
                 return null;
 
-            bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock);
             string market = useNxtMarket ? "NXT" : "KRX";
             return _strategyMinuteCacheService.GetSnapshotSet(stock.Code, market, 1, 3, 5, 10, 15, 30);
         }
@@ -1059,7 +1059,7 @@ namespace TradingDashboard
         {
             List<WatchStockItem> stocks = [.. (_watchStocks ?? [])
                 .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
-                .GroupBy(stock => NormalizeStockCode(stock.Code), StringComparer.Ordinal)
+                .GroupBy(stock => BuildWatchStockIdentityKey(stock), StringComparer.Ordinal)
                 .Select(group => group.First())];
 
             int ready = stocks.Count(IsStrategyMinuteDataReady);
@@ -1188,7 +1188,7 @@ namespace TradingDashboard
             if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
                 return;
 
-            string market = ShouldUseNxtDataForStock(stock.Code) ? "NXT" : "KRX";
+            string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
             string key = $"{NormalizeStockCode(stock.Code)}|{market}";
             if (_strategyMinutePreloadCompletedKeys.Contains(key) ||
                 _strategyMinutePreloadRunningKeys.Contains(key))
@@ -1381,15 +1381,15 @@ namespace TradingDashboard
 
             List<WatchStockItem> snapshot = [.. (stocks ?? [])
                 .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
-                .GroupBy(stock => NormalizeStockCode(stock.Code), StringComparer.Ordinal)
+                .GroupBy(stock => BuildWatchStockIdentityKey(stock), StringComparer.Ordinal)
                 .Select(group => group.First())];
 
             if (snapshot.Count == 0)
                 return;
 
             string batchKey = string.Join("|", snapshot
-                .Select(stock => NormalizeStockCode(stock.Code))
-                .OrderBy(code => code, StringComparer.Ordinal));
+                .Select(BuildWatchStockIdentityKey)
+                .OrderBy(key => key, StringComparer.Ordinal));
             if (string.IsNullOrWhiteSpace(batchKey) ||
                 (!force && _strategyMinuteAutoPreloadBatchKeys.Contains(batchKey) && !_strategyMinuteAutoPreloadStarted))
                 return;
@@ -1486,7 +1486,7 @@ namespace TradingDashboard
                     return;
                 }
 
-                string market = ShouldUseNxtDataForStock(stock.Code) ? "NXT" : "KRX";
+                string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
                 string key = $"{NormalizeStockCode(stock.Code)}|{market}";
                 if (_strategyMinutePreloadCompletedKeys.Contains(key))
                 {
@@ -1600,7 +1600,8 @@ namespace TradingDashboard
                 ResolveStrategySignalPrice(stock) <= 0)
                 return;
 
-            string armedKey = $"{NormalizeStockCode(stock.Code)}|PAPER_ARMED|{DateTime.Today:yyyyMMdd}";
+            string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
+            string armedKey = $"{NormalizeStockCode(stock.Code)}|{market}|PAPER_ARMED|{DateTime.Today:yyyyMMdd}";
             if (_paperTradingPreviewLoggedKeys.Add(armedKey))
             {
                 AppendLog(
@@ -1610,7 +1611,7 @@ namespace TradingDashboard
 
             foreach (StrategyEvaluationResult result in results.Where(x => x.HasSignal))
             {
-                string key = $"{NormalizeStockCode(stock.Code)}|{result.SlotId}|{DateTime.Today:yyyyMMdd}";
+                string key = $"{NormalizeStockCode(stock.Code)}|{market}|{result.SlotId}|{DateTime.Today:yyyyMMdd}";
                 if (!_paperTradingPreviewLoggedKeys.Add(key))
                     continue;
 
@@ -1629,12 +1630,19 @@ namespace TradingDashboard
 
         private WatchStockItem? ResolveSelectedProgressStock()
         {
-            if (!string.IsNullOrWhiteSpace(_selectedStockCode) &&
-                _watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? stock))
-                return stock;
+            if (WatchListBox?.SelectedItem is WatchStockItem watchStock)
+                return watchStock;
 
-            return RecentWatchListBox?.SelectedItem as WatchStockItem
-                ?? WatchListBox?.SelectedItem as WatchStockItem;
+            if (RecentWatchListBox?.SelectedItem is WatchStockItem recentStock)
+                return recentStock;
+
+            if (!string.IsNullOrWhiteSpace(_selectedStockCode) &&
+                TryGetWatchStockForMarket(_selectedStockCode, ResolveDisplayMarketForStockCode(_selectedStockCode), out WatchStockItem? stock))
+            {
+                return stock;
+            }
+
+            return null;
         }
 
         private bool ShouldShowStrategyProgressResult(StrategyEvaluationResult result)

@@ -122,8 +122,8 @@ namespace TradingDashboard
             try
             {
                 ChartPeriod requestedPeriod = _currentChartPeriod;
-                bool useNxtMarket = ShouldUseNxtDataForStock(selectedStockCode);
-                string marketLabel = useNxtMarket ? "NXT" : "KRX";
+                string marketLabel = ResolveDisplayMarketForStockCode(selectedStockCode);
+                bool useNxtMarket = string.Equals(marketLabel, "NXT", StringComparison.Ordinal);
                 ChartCacheKey cacheKey = CreateChartCacheKey(selectedStockCode, useNxtMarket, requestedPeriod);
                 bool showedCachedChart = false;
                 if (TryGetChartMemoryCache(cacheKey, count, out List<ChartCandle> cachedCandles))
@@ -131,7 +131,7 @@ namespace TradingDashboard
                     if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
                         return;
 
-                    ApplyChartCandles(cachedCandles, selectedStockCode, requestedPeriod, $"{marketLabel} cache");
+                    ApplyChartCandles(cachedCandles, selectedStockCode, marketLabel, requestedPeriod, $"{marketLabel} cache");
                     showedCachedChart = true;
                 }
                 else if (TryGetChartFileCache(cacheKey, count, out List<ChartCandle> fileCachedCandles))
@@ -140,7 +140,7 @@ namespace TradingDashboard
                         return;
 
                     SetChartMemoryCache(cacheKey, fileCachedCandles);
-                    ApplyChartCandles(fileCachedCandles, selectedStockCode, requestedPeriod, $"{marketLabel} file cache");
+                    ApplyChartCandles(fileCachedCandles, selectedStockCode, marketLabel, requestedPeriod, $"{marketLabel} file cache");
                     showedCachedChart = true;
                 }
 
@@ -172,7 +172,7 @@ namespace TradingDashboard
                     return;
 
                 SetChartMemoryCache(cacheKey, candles, count);
-                ApplyChartCandles(candles, selectedStockCode, requestedPeriod, showedCachedChart ? $"{marketLabel} refresh" : $"{marketLabel} initial");
+                ApplyChartCandles(candles, selectedStockCode, marketLabel, requestedPeriod, showedCachedChart ? $"{marketLabel} refresh" : $"{marketLabel} initial");
             }
             catch (OperationCanceledException)
             {
@@ -184,11 +184,13 @@ namespace TradingDashboard
             }
         }
 
-        private void ApplyChartCandles(List<ChartCandle> candles, string selectedStockCode, ChartPeriod period, string reason)
+        private void ApplyChartCandles(List<ChartCandle> candles, string selectedStockCode, string market, ChartPeriod period, string reason)
         {
+            string normalizedMarket = NormalizeIdentityMarket(market);
             _currentChartCandles.Clear();
             _currentChartCandles.AddRange(CloneChartCandles(candles));
             _currentChartCode = selectedStockCode;
+            _currentChartMarket = normalizedMarket;
             _currentChartDataPeriod = period;
             _lastRealtimeChartDrawAt = DateTime.MinValue;
             ResetChartViewport();
@@ -196,7 +198,8 @@ namespace TradingDashboard
 
             if (period == ChartPeriod.Daily &&
                 candles.Count > 0 &&
-                _watchStockByCode.TryGetValue(selectedStockCode, out WatchStockItem? stock))
+                TryGetWatchStockForMarket(selectedStockCode, normalizedMarket, out WatchStockItem? stock) &&
+                stock != null)
             {
                 ChartCandle latest = candles[^1];
                 ApplyMiniDailyCandle(
@@ -205,7 +208,7 @@ namespace TradingDashboard
                     (long)Math.Round(latest.High),
                     (long)Math.Round(latest.Low),
                     (long)Math.Round(latest.Close),
-                    reason.Contains("NXT", StringComparison.OrdinalIgnoreCase));
+                    string.Equals(normalizedMarket, "NXT", StringComparison.Ordinal));
             }
 
             DrawFullChart(reason);
@@ -216,13 +219,14 @@ namespace TradingDashboard
         {
             if (_currentChartCandles.Count == 0 ||
                 string.IsNullOrWhiteSpace(selectedStockCode) ||
-                !_watchStockByCode.TryGetValue(NormalizeStockCode(selectedStockCode), out WatchStockItem? stock) ||
+                !TryGetWatchStockForMarket(selectedStockCode, _currentChartMarket, out WatchStockItem? stock) ||
+                stock == null ||
                 stock.CurrentPrice <= 0)
             {
                 return;
             }
 
-            bool chartIsNxt = reason.Contains("NXT", StringComparison.OrdinalIgnoreCase);
+            bool chartIsNxt = string.Equals(_currentChartMarket, "NXT", StringComparison.Ordinal);
             bool displayIsNxt = string.Equals(stock.DisplayPriceMarket, "NXT", StringComparison.OrdinalIgnoreCase);
             if (chartIsNxt != displayIsNxt)
                 return;
@@ -406,11 +410,11 @@ namespace TradingDashboard
         {
             List<ChartPreloadStock> snapshot = [.. (stocks ?? [])
                 .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
-                .GroupBy(stock => NormalizeStockCode(stock.Code), StringComparer.Ordinal)
+                .GroupBy(stock => BuildWatchStockIdentityKey(stock), StringComparer.Ordinal)
                 .Select(group =>
                 {
                     WatchStockItem stock = group.First();
-                    bool useNxtMarket = ShouldUseNxtDataForStock(stock.Code);
+                    bool useNxtMarket = ShouldUseNxtDataForStock(stock);
                     return new ChartPreloadStock(stock.Code, useNxtMarket);
                 })];
 
@@ -532,7 +536,7 @@ namespace TradingDashboard
             canvas.Height = h;
             const double axisWidth = 68;
             double chartW = Math.Max(40, w - axisWidth - ChartRightPadding);
-            double currentPrice = ResolveSelectedCurrentPrice(candles.Last().Close);
+            double currentPrice = ResolveSelectedCurrentPrice();
 
             double max = candles.Max(c => c.High);
             double min = candles.Min(c => c.Low);
@@ -611,24 +615,28 @@ namespace TradingDashboard
             _priceChartRenderState = new ChartRenderState(candles.Count, GetVisibleChartStartIndex(), chartW, h, min, max, gap, candleW, 0, 0);
         }
 
-        private double ResolveSelectedCurrentPrice(double fallback)
+        private double ResolveSelectedCurrentPrice()
         {
+            string chartMarket = NormalizeIdentityMarket(_currentChartMarket);
             if (!string.IsNullOrWhiteSpace(_selectedStockCode) &&
-                _watchStockByCode.TryGetValue(_selectedStockCode, out WatchStockItem? selected) &&
+                TryGetWatchStockForMarket(_selectedStockCode, chartMarket, out WatchStockItem? selected) &&
+                selected != null &&
+                string.Equals(NormalizeIdentityMarket(selected.DisplayPriceMarket), chartMarket, StringComparison.Ordinal) &&
                 selected.CurrentPrice > 0)
             {
                 return selected.CurrentPrice;
             }
 
-            return fallback;
+            return 0;
         }
 
-        private void ApplyRealtimeCalendarChartTick(string code, long price, long cumulativeVolume, long tradeVolume)
+        private void ApplyRealtimeCalendarChartTick(string code, string market, long price, long cumulativeVolume, long tradeVolume)
         {
             ChartPeriod period = _currentChartDataPeriod;
             if (!IsCalendarChartPeriod(period) ||
                 string.IsNullOrWhiteSpace(code) ||
                 !string.Equals(code, _currentChartCode, StringComparison.Ordinal) ||
+                !string.Equals(NormalizeIdentityMarket(market), _currentChartMarket, StringComparison.Ordinal) ||
                 price <= 0 ||
                 _currentChartCandles.Count == 0)
             {
@@ -705,15 +713,15 @@ namespace TradingDashboard
             DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(period)} realtime");
         }
 
-        private void ApplyRealtimeChartTick(string code, long price, long cumulativeVolume, long tradeVolume, string tradeTimeText)
+        private void ApplyRealtimeChartTick(string code, string market, long price, long cumulativeVolume, long tradeVolume, string tradeTimeText)
         {
             if (IsMinuteChartPeriod(_currentChartPeriod))
             {
-                ApplyRealtimeMinuteChartTick(code, price, tradeVolume, tradeTimeText, ResolveMinuteChartInterval(_currentChartPeriod));
+                ApplyRealtimeMinuteChartTick(code, market, price, tradeVolume, tradeTimeText, ResolveMinuteChartInterval(_currentChartPeriod));
                 return;
             }
 
-            ApplyRealtimeCalendarChartTick(code, price, cumulativeVolume, tradeVolume);
+            ApplyRealtimeCalendarChartTick(code, market, price, cumulativeVolume, tradeVolume);
         }
 
         private void ApplySelectedChartDisplayPrice(string code, long price, string market, string source)
@@ -726,9 +734,8 @@ namespace TradingDashboard
                 return;
             }
 
-            bool sourceIsNxt = string.Equals(market, "NXT", StringComparison.OrdinalIgnoreCase);
-            bool chartIsNxt = ShouldUseNxtDataForStock(code);
-            if (sourceIsNxt != chartIsNxt)
+            string sourceMarket = NormalizeIdentityMarket(market);
+            if (!string.Equals(sourceMarket, _currentChartMarket, StringComparison.Ordinal))
                 return;
 
             ApplyDisplayPriceToLastChartCandle(price);
@@ -753,11 +760,12 @@ namespace TradingDashboard
             last.Low = Math.Min(last.Low > 0 ? last.Low : price, price);
         }
 
-        private void ApplyRealtimeMinuteChartTick(string code, long price, long tradeVolume, string tradeTimeText, int minute)
+        private void ApplyRealtimeMinuteChartTick(string code, string market, long price, long tradeVolume, string tradeTimeText, int minute)
         {
             if (!IsMinuteChartPeriod(_currentChartDataPeriod) ||
                 string.IsNullOrWhiteSpace(code) ||
                 !string.Equals(code, _currentChartCode, StringComparison.Ordinal) ||
+                !string.Equals(NormalizeIdentityMarket(market), _currentChartMarket, StringComparison.Ordinal) ||
                 price <= 0 ||
                 _currentChartCandles.Count == 0)
             {
@@ -997,6 +1005,12 @@ namespace TradingDashboard
             {
                 return false;
             }
+
+            bool markerMissing = _currentPriceMarkerLine == null ||
+                _currentPriceMarkerLabel == null ||
+                _currentPriceMarkerText == null;
+            if (markerMissing && ResolveSelectedCurrentPrice() > 0)
+                return false;
 
             ChartRenderState priceState = _priceChartRenderState;
             int renderedLastIndex = priceState.SourceStartIndex + priceState.CandleCount - 1;
@@ -1299,7 +1313,7 @@ namespace TradingDashboard
 
         private void DrawCurrentPriceMarker(Canvas canvas, double chartW, double rightPadding, double axisWidth, double h, double min, double max, double currentPrice)
         {
-            if (currentPrice <= 0)
+            if (currentPrice <= 0 || double.IsNaN(currentPrice) || double.IsInfinity(currentPrice))
                 return;
 
             double range = Math.Max(1, max - min);
