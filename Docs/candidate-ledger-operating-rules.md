@@ -36,6 +36,14 @@ The current rebuild path uses existing KRX daily DataStore files and fills the l
 dotnet run -- --candidate-ledger-rebuild
 ```
 
+Manual fundamental enrich command:
+
+```text
+dotnet run -- --candidate-ledger-enrich-fundamentals
+```
+
+This command is for manual/after-close use. It does not run on realtime condition-enter events.
+
 Current rebuild gate:
 
 ```text
@@ -92,6 +100,30 @@ TradingValueRankInMarket
 ChangeRateRankInMarket
 TurnoverRankInMarket
 ```
+
+Current fundamental source candidates:
+
+```text
+MarketCap:
+  ka10095.atn_stk_infr.mac or calculated CurrentPrice * ListedShares
+
+ListedShares:
+  ka10100.listCount
+  fallback: stkcnt, lst_stk_cnt, list_stkcnt
+
+FloatingShares:
+  ka10007.flo_stkcnt
+  fallback: float_stkcnt, floating_shares, distb_stkcnt
+```
+
+Share unit normalization:
+
+```text
+raw value < 1,000,000  => treat as 1,000-share unit and multiply by 1000
+raw value >= 1,000,000 => treat as 1-share unit
+```
+
+Market cap uses listed shares. Turnover prefers floating shares, then listed shares if floating shares are missing.
 
 Score fields remain pending:
 

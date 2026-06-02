@@ -16,6 +16,18 @@ namespace TradingDashboard.Models
         public string ChangeRateText { get; set; } = "-";
         public string PrevDiffText { get; set; } = "-";
         public string VolumeRatioText { get; set; } = "-";
+        public long OpenPrice { get; set; }
+        public long HighPrice { get; set; }
+        public long LowPrice { get; set; }
+        public long ClosePrice { get; set; }
+        public long BasePrice { get; set; }
+        public long Volume { get; set; }
+        public long TradingValue { get; set; }
+        public long MarketCap { get; set; }
+        public long ListedShares { get; set; }
+        public long FloatingShares { get; set; }
+        public bool TradingValueFromApi { get; set; }
+        public bool MarketCapFromApi { get; set; }
         public long BuyExecCum { get; set; }
         public long SellExecCum { get; set; }
         public long DailyTradeQty { get; set; }

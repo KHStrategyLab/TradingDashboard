@@ -69,6 +69,12 @@ namespace TradingDashboard.Services
             SaveJson(Path.Combine(_rootPath, "metadata", $"rebuild_summary_{summary.RunId}.json"), summary);
         }
 
+        public void SaveEnrichSummary(CandidateLedgerEnrichSummary summary)
+        {
+            SaveJson(Path.Combine(_rootPath, "last_enrich_summary.json"), summary);
+            SaveJson(Path.Combine(_rootPath, "metadata", $"enrich_summary_{summary.RunId}.json"), summary);
+        }
+
         private static void SaveJson<T>(string path, T value)
         {
             string? directory = Path.GetDirectoryName(path);

@@ -486,6 +486,17 @@ namespace TradingDashboard.Services
 
                 return new StockStatusMetrics
                 {
+                    OpenPrice = open,
+                    HighPrice = high,
+                    LowPrice = low,
+                    ClosePrice = price,
+                    BasePrice = (price - dayDiff) > 0 ? price - dayDiff : 0,
+                    Volume = volume,
+                    TradingValue = tradingValue,
+                    MarketCap = marketCap,
+                    ListedShares = totalShares,
+                    FloatingShares = floatShares,
+                    TradingValueFromApi = tradingValueFromApi,
                     OpenPriceText = open > 0 ? open.ToString("N0") : "-",
                     HighPriceText = high > 0 ? high.ToString("N0") : "-",
                     LowPriceText = low > 0 ? low.ToString("N0") : "-",
@@ -563,8 +574,9 @@ namespace TradingDashboard.Services
             if (tradingValue <= 0)
                 tradingValue = ParseLongSafe(ReadAnyDeep(atn, "trde_prica", "trde_amt", "acc_trde_prica", "acc_trde_amt", "acml_tr_pbmn", "14"));
             bool tradingValueFromApi = tradingValue > 0;
-            long marketCap = ParseLongSafe(ReadAnyDeep(atn, "mac", "market_cap"));
-            bool marketCapFromApi = marketCap > 0;
+            long marketCapRaw = ParseLongSafe(ReadAnyDeep(atn, "mac", "market_cap"));
+            bool marketCapFromApi = marketCapRaw > 0;
+            long marketCap = marketCapFromApi ? NormalizeHundredMillionWonToWon(marketCapRaw) : 0;
             long totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root10100, "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
             if (totalShares <= 0)
                 totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(atn, "stkcnt", "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
@@ -590,6 +602,18 @@ namespace TradingDashboard.Services
 
             return new StockStatusMetrics
             {
+                OpenPrice = open,
+                HighPrice = high,
+                LowPrice = low,
+                ClosePrice = price,
+                BasePrice = basePrice,
+                Volume = volume,
+                TradingValue = tradingValue,
+                MarketCap = marketCap,
+                ListedShares = totalShares,
+                FloatingShares = floatShares,
+                TradingValueFromApi = tradingValueFromApi,
+                MarketCapFromApi = marketCapFromApi,
                 OpenPriceText = open > 0 ? open.ToString("N0") : "-",
                 HighPriceText = high > 0 ? high.ToString("N0") : "-",
                 LowPriceText = low > 0 ? low.ToString("N0") : "-",
@@ -597,7 +621,7 @@ namespace TradingDashboard.Services
                 BasePriceText = basePrice > 0 ? basePrice.ToString("N0") : "-",
                 VolumeText = volume > 0 ? volume.ToString("N0") : "-",
                 TradingValueText = tradingValueFromApi ? FormatMillionWonUnit(tradingValue) : FormatKoreanMoney(tradingValue),
-                MarketCapText = marketCapFromApi ? FormatHundredMillionWonUnit(marketCap) : FormatKoreanMoney(marketCap),
+                MarketCapText = marketCapFromApi ? FormatHundredMillionWonUnit(marketCapRaw) : FormatKoreanMoney(marketCap),
                 ListedSharesText = displayShares > 0 ? displayShares.ToString("N0") : "-",
                 TurnoverRateText = string.IsNullOrWhiteSpace(turnoverRate) ? "-" : turnoverRate,
                 ChangeRateText = string.IsNullOrWhiteSpace(changeRate) ? "-" : changeRate,
@@ -685,8 +709,9 @@ namespace TradingDashboard.Services
             if (tradingValue <= 0)
                 tradingValue = ParseLongSafe(ReadAnyDeep(atn, "trde_prica", "trde_amt", "acc_trde_prica", "acc_trde_amt", "acml_tr_pbmn", "14"));
             bool tradingValueFromApi = tradingValue > 0;
-            long marketCap = ParseLongSafe(ReadAnyDeep(atn, "mac", "market_cap"));
-            bool marketCapFromApi = marketCap > 0;
+            long marketCapRaw = ParseLongSafe(ReadAnyDeep(atn, "mac", "market_cap"));
+            bool marketCapFromApi = marketCapRaw > 0;
+            long marketCap = marketCapFromApi ? NormalizeHundredMillionWonToWon(marketCapRaw) : 0;
             long totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(root10100, "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
             if (totalShares <= 0)
                 totalShares = NormalizeListedShares(ParseLongSafe(ReadAnyDeep(atn, "stkcnt", "listCount", "lst_stk_cnt", "list_stkcnt", "listed_shares")));
@@ -719,7 +744,7 @@ namespace TradingDashboard.Services
                 BasePriceText = basePrice > 0 ? basePrice.ToString("N0") : "-",
                 VolumeText = volume > 0 ? volume.ToString("N0") : "-",
                 TradingValueText = tradingValueFromApi ? FormatMillionWonUnit(tradingValue) : FormatKoreanMoney(tradingValue),
-                MarketCapText = marketCapFromApi ? FormatHundredMillionWonUnit(marketCap) : FormatKoreanMoney(marketCap),
+                MarketCapText = marketCapFromApi ? FormatHundredMillionWonUnit(marketCapRaw) : FormatKoreanMoney(marketCap),
                 ListedSharesText = displayShares > 0 ? displayShares.ToString("N0") : "-",
                 TurnoverRateText = string.IsNullOrWhiteSpace(turnoverRate) ? "-" : turnoverRate,
                 ChangeRateText = string.IsNullOrWhiteSpace(changeRate) ? "-" : changeRate,
@@ -1251,6 +1276,14 @@ namespace TradingDashboard.Services
                 return 0;
 
             return value > long.MaxValue / 1_000_000 ? long.MaxValue : value * 1_000_000;
+        }
+
+        private static long NormalizeHundredMillionWonToWon(long value)
+        {
+            if (value <= 0)
+                return 0;
+
+            return value > long.MaxValue / 100_000_000 ? long.MaxValue : value * 100_000_000;
         }
 
         private static long EstimateTradeValueWon(long price, long volume)
