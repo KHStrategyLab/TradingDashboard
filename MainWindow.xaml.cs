@@ -220,7 +220,6 @@ namespace TradingDashboard
             LoadStrategyPositionLedger();
             LoadManualPositionLedger();
             LoadPaperPositionLedger();
-            LoadWatchlistCache();
             WatchListBox.ItemsSource = _watchStocks;
             RecentWatchListBox.ItemsSource = _recentViewedStocks;
             StockSearchSuggestionListBox.ItemsSource = _stockSearchSuggestions;
@@ -252,7 +251,7 @@ namespace TradingDashboard
                 SetStartupLoading(
                     true,
                     "Starting TradingDashboard...",
-                    $"Watchlist cache ready: {_watchlistMemoryCache.Count} items",
+                    "Balance and open positions will be loaded first",
                     "Preparing Kiwoom/DART/Naver workers");
 
                 SetStartupLoading(
@@ -268,6 +267,13 @@ namespace TradingDashboard
                     "Open positions are checked before new candidates",
                     "Balance and risk view have priority over watchlist");
                 await RefreshBalanceAsync("startup priority");
+
+                SetStartupLoading(
+                    true,
+                    "Loading watchlist cache...",
+                    "Holdings already have priority",
+                    "Cached candidates will be applied after balance");
+                LoadWatchlistCache();
 
                 string conditionLabel = GetConfiguredConditionLabel();
                 SetStartupLoading(
