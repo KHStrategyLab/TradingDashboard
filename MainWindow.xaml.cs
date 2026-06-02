@@ -1447,10 +1447,17 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(stock.Code))
                 return;
 
+            string code = NormalizeStockCode(stock.Code);
+            if (_watchStockByCode.TryGetValue(code, out WatchStockItem? tracked))
+                MergeBalanceStockMetadata(stock, tracked);
+
             for (int i = _recentViewedStocks.Count - 1; i >= 0; i--)
             {
-                if (string.Equals(_recentViewedStocks[i].Code, stock.Code, StringComparison.Ordinal))
+                if (string.Equals(NormalizeStockCode(_recentViewedStocks[i].Code), code, StringComparison.Ordinal))
+                {
+                    MergeBalanceStockMetadata(stock, _recentViewedStocks[i]);
                     _recentViewedStocks.RemoveAt(i);
+                }
             }
 
             _recentViewedStocks.Insert(0, stock);

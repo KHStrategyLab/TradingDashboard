@@ -261,8 +261,28 @@ namespace TradingDashboard
 
         private bool IsNxtSupportedStock(string stockCode)
         {
-            return _watchStockByCode.TryGetValue(stockCode, out WatchStockItem? selected)
-                && selected.SupportsNxt;
+            string code = NormalizeStockCode(stockCode);
+            if (string.IsNullOrWhiteSpace(code))
+                return false;
+
+            if (_watchStockByCode.TryGetValue(code, out WatchStockItem? selected) && selected.SupportsNxt)
+                return true;
+
+            if (_watchStockByCode.Values.Any(item =>
+                string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal) &&
+                item.SupportsNxt))
+            {
+                return true;
+            }
+
+            if (_recentViewedStocks.Any(item =>
+                string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal) &&
+                item.SupportsNxt))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private static bool IsKrxRegularClosedWindow()
