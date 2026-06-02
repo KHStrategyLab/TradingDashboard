@@ -89,6 +89,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--leader-history-rebuild", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunLeaderHistoryRebuild();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             base.OnStartup(e);
         }
 
@@ -226,6 +234,27 @@ namespace TradingDashboard
                     Error = $"backtest stochastic quick reaction failed: {ex.GetType().Name}: {ex.Message}"
                 };
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunLeaderHistoryRebuild()
+        {
+            try
+            {
+                var job = new LeaderHistoryRebuildJob();
+                LeaderHistoryRebuildSummary summary = job.Rebuild(lookbackTradingDays: 6);
+                WriteBacktestJobSummary(summary, "last_leader_history_rebuild_summary.json", $"leader_history_rebuild_summary_{summary.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var summary = new LeaderHistoryRebuildSummary
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Logs = [$"leader history rebuild failed: {ex.GetType().Name}: {ex.Message}"]
+                };
+                WriteBacktestJobSummary(summary, "last_leader_history_rebuild_summary.json", $"leader_history_rebuild_summary_{summary.RunId}.json");
                 return 1;
             }
         }

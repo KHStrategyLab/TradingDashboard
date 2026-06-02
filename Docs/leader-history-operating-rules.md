@@ -14,6 +14,7 @@ Active leaders are stored in:
 
 ```text
 Storage/LeaderHistory/active_leaders.json
+Storage/LeaderHistory/active_leaders.csv
 ```
 
 Only recent leaders needed for current operation stay in this file.
@@ -25,6 +26,12 @@ recent 6 trading days
 ```
 
 If the active file is missing, empty, or stale, the program may rebuild it from recent KRX daily data. This is a recovery path so trading does not stop after the program has been unused for several days.
+
+Manual rebuild command:
+
+```text
+dotnet run -- --leader-history-rebuild
+```
 
 ## Archive Storage
 
@@ -117,3 +124,39 @@ ManualDiscarded
 ```
 
 `TurnoverRate` is optional. The strategy must still run when it is missing.
+
+## Current Quality Grade
+
+The first implementation writes a provisional quality score and grade.
+
+The score uses currently available fields first:
+
+```text
+TradingValue
+ChangeRate
+PrevHighPlus10
+CloseLocationPercent
+UpperTailPercent
+BollingerUpperBreak
+```
+
+Reserved fields are kept for later expansion:
+
+```text
+MarketCap
+ValueToMarketCapPercent
+TurnoverRate
+```
+
+When market cap is missing, the scorer gives a neutral placeholder instead of blocking the leader record. Later, when market cap or listed-share data is available, the same record shape can distinguish absolute market leaders from stock-relative leaders.
+
+Current grade labels:
+
+```text
+A++
+A+
+A
+B
+C
+Exclude
+```

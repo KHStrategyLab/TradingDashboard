@@ -24,6 +24,8 @@ namespace TradingDashboard.Services.Backtests
             _rootPath = string.IsNullOrWhiteSpace(rootPath) ? ResolveDefaultRootPath() : rootPath;
         }
 
+        public string RootPath => _rootPath;
+
         public IReadOnlyList<BacktestDailyBar> LoadDailyBars(string code, string market)
         {
             lock (_sync)
