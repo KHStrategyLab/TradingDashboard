@@ -94,6 +94,7 @@ MarketCap
 ListedShares
 FloatingShares
 ValueToMarketCapPercent
+TradingValueToMarketCapPercent
 TurnoverRateByListedShares
 TurnoverRateByFloatingShares
 TradingValueRankInMarket
@@ -124,6 +125,17 @@ raw value >= 1,000,000 => treat as 1-share unit
 ```
 
 Market cap uses listed shares. Turnover prefers floating shares, then listed shares if floating shares are missing.
+
+Ratio naming:
+
+```text
+TradingValueToMarketCapPercent = TradingValue / MarketCap * 100
+ValueToMarketCapPercent        = compatibility alias for the same value
+TurnoverRateByListedShares     = Volume / ListedShares * 100
+TurnoverRateByFloatingShares   = Volume / FloatingShares * 100
+```
+
+Trading-value-to-market-cap ratio and share turnover are separate concepts. Keep both when the data exists.
 
 Score fields remain pending:
 

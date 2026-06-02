@@ -67,7 +67,8 @@ namespace TradingDashboard.Services
 
         private static decimal ScoreMarketRelativePower(LeaderHistoryEntry entry, List<string> reasons)
         {
-            if (entry.ValueToMarketCapPercent is not decimal ratio)
+            decimal? marketRelativePower = entry.TradingValueToMarketCapPercent ?? entry.ValueToMarketCapPercent;
+            if (marketRelativePower is not decimal ratio)
             {
                 reasons.Add("market cap missing");
                 return 10m;
@@ -181,11 +182,12 @@ namespace TradingDashboard.Services
             if (entry.MarketCap is decimal cap)
             {
                 decimal capB = cap / 100_000_000m;
+                decimal? marketRelativePower = entry.TradingValueToMarketCapPercent ?? entry.ValueToMarketCapPercent;
                 if (capB >= 100_000m && valueB >= 10_000m)
                     return "Market Leader";
-                if (entry.ValueToMarketCapPercent >= 50m && capB < 3_000m)
+                if (marketRelativePower >= 50m && capB < 3_000m)
                     return "Speculative Leader";
-                if (entry.ValueToMarketCapPercent >= 20m)
+                if (marketRelativePower >= 20m)
                     return "Stock Leader";
             }
 

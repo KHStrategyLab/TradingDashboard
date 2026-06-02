@@ -101,7 +101,11 @@ namespace TradingDashboard.Services
             candidate.FundamentalStatus = marketCap > 0 || listedShares > 0 || floatingShares > 0 ? "Loaded" : "Pending";
 
             if (candidate.TradingValue > 0 && marketCap > 0)
-                candidate.ValueToMarketCapPercent = candidate.TradingValue / (decimal)marketCap * 100m;
+            {
+                decimal ratio = candidate.TradingValue / (decimal)marketCap * 100m;
+                candidate.ValueToMarketCapPercent = ratio;
+                candidate.TradingValueToMarketCapPercent = ratio;
+            }
             if (candidate.Volume > 0 && listedShares > 0)
                 candidate.TurnoverRateByListedShares = candidate.Volume / (decimal)listedShares * 100m;
             if (candidate.Volume > 0 && floatingShares > 0)

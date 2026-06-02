@@ -116,6 +116,7 @@ namespace TradingDashboard.Services
                 UpperTailPercent = candidate.UpperTailPercent ?? 0m,
                 MarketCap = candidate.MarketCap,
                 ValueToMarketCapPercent = candidate.ValueToMarketCapPercent,
+                TradingValueToMarketCapPercent = candidate.TradingValueToMarketCapPercent ?? candidate.ValueToMarketCapPercent,
                 TurnoverRate = candidate.TurnoverRateByFloatingShares ?? candidate.TurnoverRateByListedShares,
                 KrxClose = candidate.TodayClose,
                 BollingerUpperBreak = candidate.IsBollingerUpperBreak == true,

@@ -61,6 +61,7 @@ namespace TradingDashboard.Models
         public string TradingValueMarket { get; set; } = string.Empty;
 
         public decimal? ValueToMarketCapPercent { get; set; }
+        public decimal? TradingValueToMarketCapPercent { get; set; }
         public decimal? TurnoverRateByFloatingShares { get; set; }
         public decimal? TurnoverRateByListedShares { get; set; }
 

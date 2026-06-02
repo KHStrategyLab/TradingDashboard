@@ -20,6 +20,7 @@ namespace TradingDashboard.Models
         public decimal UpperTailPercent { get; set; }
         public decimal? MarketCap { get; set; }
         public decimal? ValueToMarketCapPercent { get; set; }
+        public decimal? TradingValueToMarketCapPercent { get; set; }
         public decimal? TurnoverRate { get; set; }
         public long KrxClose { get; set; }
         public long NxtClose { get; set; }

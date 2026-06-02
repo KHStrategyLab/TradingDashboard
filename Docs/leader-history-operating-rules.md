@@ -153,8 +153,11 @@ Reserved fields are kept for later expansion:
 ```text
 MarketCap
 ValueToMarketCapPercent
+TradingValueToMarketCapPercent
 TurnoverRate
 ```
+
+`TradingValueToMarketCapPercent` means daily trading value divided by market cap. `ValueToMarketCapPercent` is kept as a compatibility alias for the same value. `TurnoverRate` remains share-volume based and should not be mixed with market-cap ratio.
 
 When market cap is missing, the scorer gives a neutral placeholder instead of blocking the leader record. Later, when market cap or listed-share data is available, the same record shape can distinguish absolute market leaders from stock-relative leaders.
 
