@@ -50,6 +50,7 @@ namespace TradingDashboard
         private readonly StrategyPositionLedgerStore _strategyPositionLedgerStore = new();
         private readonly StrategySlotConfigStore _strategySlotConfigStore = new();
         private readonly StrategySwitchStateStore _strategySwitchStateStore = new();
+        private readonly CandidateRuntimeQueue _candidateRuntimeQueue = new();
         private readonly ManualPositionLedgerStore _manualPositionLedgerStore = new();
         private readonly PaperPositionLedgerStore _paperPositionLedgerStore = new();
         private readonly PaperTradeMarkStore _paperTradeMarkStore = new();

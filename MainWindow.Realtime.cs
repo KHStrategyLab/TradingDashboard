@@ -504,6 +504,7 @@ namespace TradingDashboard
                         ApplyWatchlistTradeValueEstimate(stock);
                         _watchStocks.Insert(0, stock);
                         _watchStockByCode[stock.Code] = stock;
+                        QueueRuntimeCandidate(stock, "new enter");
                         ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
                         StartStrategyMinuteAutoPreload([stock]);
                         AppendLog($"condition enter: {stock.Name} ({stock.Code})");
@@ -600,6 +601,7 @@ namespace TradingDashboard
                 stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
                 _watchStocks.Insert(0, stock);
                 _watchStockByCode[stock.Code] = stock;
+                QueueRuntimeCandidate(stock, "cache re-enter");
                 ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
                 StartStrategyMinuteAutoPreload([stock]);
                 AppendLog($"condition re-enter(cache): {stock.Name} ({stock.Code})");
