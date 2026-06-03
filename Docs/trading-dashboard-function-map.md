@@ -20,6 +20,9 @@ Date: 2026-06-01
 | `MainWindow_Loaded` | `MainWindow.xaml.cs` | 시작 오버레이, 장상태 prime, 조건검색 watchlist 로드, 실시간 시작 | REST disabled 경로와 캐시 fallback을 유지한다. |
 | `PrimeMarketStatusBeforeWatchlistAsync` | `MainWindow.xaml.cs` | watchlist 로드 전에 0s 장상태를 먼저 확인 | KRX/NXT 모드 선택에 영향. 실패 시 앱 시작을 막지 않는다. |
 | `MarkMarketStatusUnknown` | `MainWindow.xaml.cs` | 장상태를 임시 unknown으로 표시 | unknown 상태를 KRX 확정으로 해석하지 않는다. |
+| `StartUnattendedOperations` | `MainWindow.Unattended.cs` | 24시간 운용용 WebSocket watchdog과 07:30 리프레시 스케줄러 시작 | 앱 시작 로드가 끝난 뒤 한 번만 켠다. |
+| `RunDailyStartupRefreshAsync` | `MainWindow.Unattended.cs` | 07:30 KST 하루 시작 리프레시 | 잔고 우선, 0s prime, 조건식, 실시간 등록을 재정렬한다. 같은 날짜 중복 실행 금지. |
+| `RunRealtimeWatchdogAsync` | `MainWindow.Unattended.cs` | WebSocket 닫힘/무응답 감시 후 재접속 | 조건검색/0s/0B/선택 0D/0H 재등록 흐름과 연결된다. |
 | `MainWindow_Closed` | `MainWindow.xaml.cs` | WebSocket/CTS/잔고 요청 정리 | 종료 중 재연결 또는 늦은 응답 반영을 막는 정리 지점. |
 
 ## Watchlist / 조건검색 / 검색

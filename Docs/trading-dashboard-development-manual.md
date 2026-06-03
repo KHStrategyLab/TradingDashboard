@@ -333,19 +333,22 @@ Paper Trading:
 ## 시작 흐름
 
 1. `Config/local.settings.json` 로드
-2. `Config/watchlist_stock_cache.json` 로드
-3. 차트 중앙에 시작 로딩 오버레이 표시
-4. WebSocket `0s` 장운영구분 선조회
-5. `Kiwoom.ConditionSeq01` 조건검색식 조회 및 실시간 추적 등록
-6. 왼쪽 종목 목록 구성
-7. 첫 종목 자동 선택
-8. WebSocket `0B`, `0D/0H`, `0s`, 조건검색 실시간 수신 시작
-9. 선택 종목 차트 선표시 후 기준가, 호가, 체결, 종목정보를 순서대로 로드한다. 뉴스/공시는 별도 비동기로 병행한다.
+2. 차트 중앙에 시작 로딩 오버레이 표시
+3. WebSocket `0s` 장운영구분 선조회
+4. 잔고/보유종목을 먼저 조회하고 최근조회 목록과 전략 장부 우선순위에 반영
+5. `Config/watchlist_stock_cache.json` 로드
+6. `Kiwoom.ConditionSeq01` 조건검색식 조회 및 실시간 추적 등록
+7. 왼쪽 종목 목록 구성
+8. 첫 종목 자동 선택
+9. WebSocket `0B`, `0D/0H`, `0s`, 조건검색 실시간 수신 시작
+10. 선택 종목 차트 선표시 후 기준가, 호가, 체결, 종목정보를 순서대로 로드한다. 뉴스/공시는 별도 비동기로 병행한다.
+11. 무인 운용 모니터를 시작한다. WebSocket watchdog은 끊김/무응답을 재접속하고, 07:30 KST 하루 시작 리프레시는 잔고, 조건식, watchlist, 실시간 등록을 하루 한 번 다시 정렬한다.
 
 관련 구현:
 
 - `MainWindow.xaml.cs`: 앱 시작, 종목 선택, 캐시, 상태/뉴스/공시
 - `MainWindow.Realtime.cs`: WebSocket, 0B/0D/0H/0s, 조건검색 실시간
+- `MainWindow.Unattended.cs`: 24시간 무인 운용 watchdog, 07:30 하루 시작 리프레시
 - `MainWindow.Chart.cs`: 차트 조회, 캐시, 드래그 확대, 실시간 봉 갱신
 - `Services/KiwoomRestConditionService.cs`: 키움 REST/WebSocket 호출
 
@@ -633,6 +636,14 @@ wss://api.kiwoom.com:10000/api/dostk/websocket
 PING:
 
 - 서버에서 받은 PING 메시지는 같은 내용으로 다시 전송한다.
+
+무인 운용:
+
+- 앱이 24시간 켜져 있을 수 있으므로 WebSocket은 watchdog이 감시한다.
+- WebSocket이 닫히거나 일정 시간 수신이 없으면 토큰을 다시 확인하고 `CNSRREQ`, `0s`, `0B`, 선택 종목 `0D/0H`를 재등록한다.
+- 07:30 KST에는 하루 시작 리프레시를 1회 실행한다. 이 작업은 장운영구분 선조회, 잔고 우선 갱신, watchlist 캐시 로드, 조건검색 조회, 실시간 재등록을 다시 수행한다.
+- 07:30 이후 앱을 새로 켠 경우에는 시작 로드 자체를 그날의 하루 시작 리프레시로 본다.
+- WebSocket watchdog과 07:30 리프레시는 역할이 다르다. watchdog은 연결 생명줄이고, 07:30 리프레시는 하루 판을 새로 정렬하는 작업이다.
 
 ## 0s 장운영구분
 
@@ -1268,6 +1279,7 @@ NXT/KRX:
 
 - 전략 탭 최상단의 빨간 실행 영역에는 `Engine Start`, `Live Orders`, 예산, 슬롯수를 둔다.
 - `Engine Start`가 ON이면 전략 신호 엔진과 알림/기록이 작동하며 예산/슬롯수 입력창은 잠긴다.
+- `Engine Start`와 `Live Orders`는 안전 스위치라 재시작 때 항상 OFF로 시작한다. 예산/슬롯수 입력값은 전역 설정으로 저장하고 재시작 때 복원한다.
 - `Live Orders`가 ON이면 전략 신호를 기존 실전 주문 레이어로 넘긴다.
 - `Live Orders`가 OFF이면 `Engine Start`가 ON이어도 실주문은 내지 않고 알림/기록만 남긴다.
 - 전략 슬롯/컨트롤 보드는 진행 상태 표시판과 모의 실행 검증판을 겸한다. 단, `Live Orders`가 ON이면 신호 후보를 주문/리스크 레이어로 넘기며, 실제 주문은 RiskGuard와 주문 journal 중복 방지를 통과한 경우에만 실행한다.

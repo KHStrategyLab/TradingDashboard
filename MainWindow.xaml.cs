@@ -370,6 +370,9 @@ namespace TradingDashboard
                 SetStartupLoading(false, string.Empty, string.Empty, string.Empty);
             }
 
+            MarkDailyStartupRefreshCompletedByStartup();
+            StartUnattendedOperations();
+
             if (WatchListBox.SelectedItem is not ListBoxItem)
             {
                 ResetStartupChartPeriodToDaily();
@@ -3206,6 +3209,8 @@ namespace TradingDashboard
         {
             try
             {
+                StopUnattendedOperations();
+                SaveStrategyControlInputState();
                 _selectedRequestCts?.Cancel();
                 _selectedRequestCts?.Dispose();
                 _chartRequestCts?.Cancel();

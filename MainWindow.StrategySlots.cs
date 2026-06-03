@@ -16,6 +16,8 @@ namespace TradingDashboard
         private readonly StrategySlotRegistry _strategySlotRegistry = StrategySlotRegistry.CreateDefault();
         private readonly System.Collections.ObjectModel.ObservableCollection<StrategyProgressRow> _strategyProgressRows = [];
         private const int StrategyMinuteRequiredCandleCount = 120;
+        private const string StrategyControlBudgetKey = "AutoTradeBudget";
+        private const string StrategyControlSlotCountKey = "AutoTradeSlotCount";
         private bool _isRevertingLockedStrategyToggle;
         private bool _isInitializingStrategyControls = true;
 
@@ -103,6 +105,7 @@ namespace TradingDashboard
         private void StrategyControlBoardInput_Changed(object sender, TextChangedEventArgs e)
         {
             UpdateStrategyControlBoard();
+            SaveStrategyControlInputState(sender);
         }
 
         private void StrategyMinutePreloadIdleSecondsTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -403,6 +406,7 @@ namespace TradingDashboard
             SetSwitchStateFromStore(ProgressFilterThemeAssistToggle, "ProgressFilterThemeAssist", defaultValue: false);
             SetSwitchStateFromStore(ProgressFilterUnownedToggle, "ProgressFilterUnowned", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterOwnedToggle, "ProgressFilterOwned", defaultValue: false);
+            ApplyStrategyControlInputStateFromStore();
         }
 
         private void SetSwitchStateFromStore(ToggleButton? toggle, string key, bool defaultValue)
@@ -413,6 +417,24 @@ namespace TradingDashboard
             toggle.IsChecked = _strategySwitchStateByKey.TryGetValue(key, out StrategySwitchStateEntry? entry)
                 ? entry.IsChecked
                 : defaultValue;
+        }
+
+        private void ApplyStrategyControlInputStateFromStore()
+        {
+            SetTextStateFromStore(AutoTradeBudgetTextBox, StrategyControlBudgetKey);
+            SetTextStateFromStore(AutoTradeSlotCountTextBox, StrategyControlSlotCountKey);
+        }
+
+        private void SetTextStateFromStore(TextBox? textBox, string key)
+        {
+            if (textBox == null)
+                return;
+
+            if (_strategySwitchStateByKey.TryGetValue(key, out StrategySwitchStateEntry? entry) &&
+                !string.IsNullOrWhiteSpace(entry.TextValue))
+            {
+                textBox.Text = entry.TextValue;
+            }
         }
 
         private void SaveStrategySwitchState(object sender)
@@ -429,6 +451,52 @@ namespace TradingDashboard
                 UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
             };
             _strategySwitchStateStore.Save(_strategySwitchStateByKey.Values);
+        }
+
+        private void SaveStrategyControlInputState(object sender)
+        {
+            if (_isInitializingStrategyControls ||
+                sender is not TextBox textBox ||
+                !TryResolvePersistedStrategyInputKey(textBox, out string key))
+                return;
+
+            SaveStrategyControlInputValue(key, textBox.Text);
+            _strategySwitchStateStore.Save(_strategySwitchStateByKey.Values);
+        }
+
+        private void SaveStrategyControlInputState()
+        {
+            SaveStrategyControlInputValue(StrategyControlBudgetKey, AutoTradeBudgetTextBox?.Text);
+            SaveStrategyControlInputValue(StrategyControlSlotCountKey, AutoTradeSlotCountTextBox?.Text);
+            _strategySwitchStateStore.Save(_strategySwitchStateByKey.Values);
+        }
+
+        private void SaveStrategyControlInputValue(string key, string? text)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                return;
+
+            _strategySwitchStateByKey[key] = new StrategySwitchStateEntry
+            {
+                Key = key,
+                TextValue = (text ?? string.Empty).Trim(),
+                UpdatedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
+            };
+        }
+
+        private bool TryResolvePersistedStrategyInputKey(TextBox textBox, out string key)
+        {
+            if (ReferenceEquals(textBox, AutoTradeBudgetTextBox))
+                key = StrategyControlBudgetKey;
+            else if (ReferenceEquals(textBox, AutoTradeSlotCountTextBox))
+                key = StrategyControlSlotCountKey;
+            else
+            {
+                key = string.Empty;
+                return false;
+            }
+
+            return true;
         }
 
         private bool TryResolvePersistedStrategySwitchKey(ToggleButton toggle, out string key)

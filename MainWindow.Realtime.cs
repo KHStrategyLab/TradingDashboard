@@ -17,12 +17,14 @@ namespace TradingDashboard
     {
         private async Task StartRealtimeTradeAsync()
         {
+            await _realtimeConnectionLock.WaitAsync();
             try
             {
                 if (_watchStockByCode.Count == 0 || !_config.Kiwoom.UseRestApi)
                     return;
 
                 _realtimeCts?.Cancel();
+                _realtimeWs?.Abort();
                 _realtimeWs?.Dispose();
                 _realtimeCts = new CancellationTokenSource();
                 CancellationToken ct = _realtimeCts.Token;
@@ -31,6 +33,8 @@ namespace TradingDashboard
 
                 _realtimeWs = new ClientWebSocket();
                 await _realtimeWs.ConnectAsync(new Uri("wss://api.kiwoom.com:10000/api/dostk/websocket"), ct);
+                _lastRealtimeConnectAt = DateTime.Now;
+                _lastRealtimeMessageAt = _lastRealtimeConnectAt;
                 AppendLog("0B WS connected");
 
                 await SendWsJsonAsync(_realtimeWs, new { trnm = "LOGIN", token }, ct);
@@ -53,6 +57,10 @@ namespace TradingDashboard
             catch (Exception ex)
             {
                 AppendLog($"0B start error: {ex.Message}");
+            }
+            finally
+            {
+                _realtimeConnectionLock.Release();
             }
         }
 
@@ -415,11 +423,13 @@ namespace TradingDashboard
 
         private async Task ReceiveRealtimeLoopAsync(ClientWebSocket ws, CancellationToken ct)
         {
+            bool shouldReconnect = false;
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
                     string text = await ReceiveTextAsync(ws, ct);
+                    _lastRealtimeMessageAt = DateTime.Now;
                     using JsonDocument doc = JsonDocument.Parse(text);
                     JsonElement root = doc.RootElement;
                     string trnm = ReadString(root, "trnm");
@@ -444,6 +454,12 @@ namespace TradingDashboard
             catch (Exception ex)
             {
                 Dispatcher.Invoke(() => AppendLog($"0B receive error: {ex.Message}"));
+                shouldReconnect = !ct.IsCancellationRequested;
+            }
+            finally
+            {
+                if (shouldReconnect && ReferenceEquals(ws, _realtimeWs))
+                    _ = RestartRealtimeTradeAfterDelayAsync("receive loop ended");
             }
         }
 

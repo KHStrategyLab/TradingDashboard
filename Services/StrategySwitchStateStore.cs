@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using TradingDashboard.Models;
 
@@ -35,7 +36,7 @@ namespace TradingDashboard.Services
 
                 try
                 {
-                    string json = File.ReadAllText(path);
+                    string json = File.ReadAllText(path, Encoding.UTF8);
                     return JsonSerializer.Deserialize<List<StrategySwitchStateEntry>>(json, JsonOptions) ?? [];
                 }
                 catch
@@ -56,7 +57,7 @@ namespace TradingDashboard.Services
                     .OrderBy(x => x.Key, StringComparer.Ordinal)];
 
                 Directory.CreateDirectory(_rootPath);
-                File.WriteAllText(BuildPath(), JsonSerializer.Serialize(rows, JsonOptions));
+                File.WriteAllText(BuildPath(), JsonSerializer.Serialize(rows, JsonOptions), Encoding.UTF8);
             }
         }
 
