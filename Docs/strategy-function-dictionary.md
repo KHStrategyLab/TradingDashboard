@@ -252,6 +252,31 @@ ToKoreanProgressText(StrategyProgressSnapshot snapshot)
 주의: 손익비가 부족하면 신호가 좋아도 진입 금지다.
 ```
 
+### StrategyExitFirstPlanner
+
+```text
+역할: 매수 신호가 주문 단계로 넘어가기 전에 탈출 계획을 먼저 검증한다.
+입력: EntryPrice, StopPrice, TargetPrice, 최소 손익비, 손절폭 허용 범위
+출력: StrategyExitFirstPlan
+소유권: 위험 필터
+공용성: 백테스트/실시간 공용
+현재 구현: Services/Strategies/Core/StrategyExitFirstPlan.cs
+연결 문서: Docs/Strategies/exit-first-risk-filter.md
+주의: 이 함수는 주문을 보내지 않는다. NoBuyReasons가 하나라도 있으면 전략은 추적만 하고 주문 핸드오프를 막는다.
+```
+
+현재 1차 연결 슬롯:
+
+```text
+Slot 1: SOR 10m MA60 + 3m Breakout
+Slot 2: SOR 15m MA60 + 5m Breakout
+Slot 3: SOR 10m MA60 + 5m Breakout
+Slot 5: Intraday 15m Base + 1m Trigger
+```
+
+Progress에는 `exit-first RR` 단계로 표시한다.
+디버그 스냅샷에는 `EntryPrice`, `StopPrice`, `TargetPrice`, `RewardRiskRatio`, `NoBuyReasons`를 저장한다.
+
 ### EvaluateNoBuyZone
 
 ```text
