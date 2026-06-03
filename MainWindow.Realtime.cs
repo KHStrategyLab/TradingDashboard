@@ -45,6 +45,7 @@ namespace TradingDashboard
                 await _realtimeWs.ConnectAsync(new Uri("wss://api.kiwoom.com:10000/api/dostk/websocket"), ct);
                 _lastRealtimeConnectAt = DateTime.Now;
                 _lastRealtimeMessageAt = _lastRealtimeConnectAt;
+                ClearStrategyOrderBookProbeRegistration();
                 AppendLog("0B WS connected");
 
                 await SendWsJsonAsync(_realtimeWs, new { trnm = "LOGIN", token }, ct);
@@ -901,38 +902,53 @@ namespace TradingDashboard
         {
             string rawCode = ReadAnyRealtime(item, "item", "stk_cd", "stkCd", "code", "jm_code", "9001");
             string code = NormalizeStockCode(rawCode);
-            if (string.IsNullOrWhiteSpace(code) || code != _selectedStockCode)
+            if (string.IsNullOrWhiteSpace(code))
                 return;
             if (!ShouldApplyRealtimeMarketToDisplay(code, rawCode))
-                return;
-            if (ShouldPauseOrderBookUi("0D"))
                 return;
 
             JsonElement values = item;
             if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("values", out JsonElement nestedValues))
                 values = nestedValues;
 
+            var sellRows = new List<(long Price, long Qty)>(10);
+            var buyRows = new List<(long Price, long Qty)>(10);
+
+            for (int i = 0; i < 10; i++)
+            {
+                int level = i + 1;
+                long sellPriceNum = ParseLongAbs(ReadAnyRealtime(values, SellPriceKeys[i], level == 1 ? "sel_fpr_bid" : string.Empty, $"sel_{level}bid", $"sel_{level}_bid", $"sel_{level}th_pre_bid", $"sell_{level}_price"));
+                long sellQtyNum = ParseLongAbs(ReadAnyRealtime(values, SellQtyKeys[i], level == 1 ? "sel_fpr_req" : string.Empty, $"sel_{level}bid_req", $"sel_{level}_req", $"sel_{level}th_pre_req", $"sell_{level}_qty"));
+                sellRows.Add((sellPriceNum, sellQtyNum));
+
+                long buyPriceNum = ParseLongAbs(ReadAnyRealtime(values, BuyPriceKeys[i], level == 1 ? "buy_fpr_bid" : string.Empty, $"buy_{level}bid", $"buy_{level}_bid", $"buy_{level}th_pre_bid", $"buy_{level}_price"));
+                long buyQtyNum = ParseLongAbs(ReadAnyRealtime(values, BuyQtyKeys[i], level == 1 ? "buy_fpr_req" : string.Empty, $"buy_{level}bid_req", $"buy_{level}_req", $"buy_{level}th_pre_req", $"buy_{level}_qty"));
+                buyRows.Add((buyPriceNum, buyQtyNum));
+            }
+
+            var sellDisplayRows = sellRows.AsEnumerable().Reverse().Take(10).ToList();
+            var buyDisplayRows = buyRows.Take(10).ToList();
+            bool hasOrderBook = sellDisplayRows.Any(r => r.Price > 0 || r.Qty > 0) || buyDisplayRows.Any(r => r.Price > 0 || r.Qty > 0);
+            DateTime receivedAt = DateTime.Now;
+
+            if (hasOrderBook)
+            {
+                UpdateStrategyRealtimeOrderBookSnapshot(
+                    code,
+                    ResolveRealtimeItemMarket(rawCode),
+                    sellRows,
+                    buyRows,
+                    receivedAt);
+            }
+
+            if (code != _selectedStockCode)
+                return;
+            if (ShouldPauseOrderBookUi("0D"))
+                return;
+
             Dispatcher.Invoke(() =>
             {
-                var sellRows = new List<(long Price, long Qty)>(10);
-                var buyRows = new List<(long Price, long Qty)>(10);
-
-                for (int i = 0; i < 10; i++)
-                {
-                    int level = i + 1;
-                    long sellPriceNum = ParseLongAbs(ReadAnyRealtime(values, SellPriceKeys[i], level == 1 ? "sel_fpr_bid" : string.Empty, $"sel_{level}bid", $"sel_{level}_bid", $"sel_{level}th_pre_bid", $"sell_{level}_price"));
-                    long sellQtyNum = ParseLongAbs(ReadAnyRealtime(values, SellQtyKeys[i], level == 1 ? "sel_fpr_req" : string.Empty, $"sel_{level}bid_req", $"sel_{level}_req", $"sel_{level}th_pre_req", $"sell_{level}_qty"));
-                    sellRows.Add((sellPriceNum, sellQtyNum));
-
-                    long buyPriceNum = ParseLongAbs(ReadAnyRealtime(values, BuyPriceKeys[i], level == 1 ? "buy_fpr_bid" : string.Empty, $"buy_{level}bid", $"buy_{level}_bid", $"buy_{level}th_pre_bid", $"buy_{level}_price"));
-                    long buyQtyNum = ParseLongAbs(ReadAnyRealtime(values, BuyQtyKeys[i], level == 1 ? "buy_fpr_req" : string.Empty, $"buy_{level}bid_req", $"buy_{level}_req", $"buy_{level}th_pre_req", $"buy_{level}_qty"));
-                    buyRows.Add((buyPriceNum, buyQtyNum));
-                }
-
-                var sellDisplayRows = sellRows.AsEnumerable().Reverse().Take(10).ToList();
-                var buyDisplayRows = buyRows.Take(10).ToList();
-
-                if (!sellDisplayRows.Any(r => r.Price > 0 || r.Qty > 0) && !buyDisplayRows.Any(r => r.Price > 0 || r.Qty > 0))
+                if (!hasOrderBook)
                 {
                     if (TryApplyCurrentPriceFallbackHoga(code, "0D fallback"))
                         return;
@@ -978,15 +994,9 @@ namespace TradingDashboard
                     _buyHogaLevels[i].PriceBrush = ResolveHogaBrushByKrxPrevClose(price);
                 }
 
-                _last0DReceivedAt = DateTime.Now;
+                _last0DReceivedAt = receivedAt;
                 long totalSell = sellDisplayRows.Sum(r => r.Qty);
                 long totalBuy = buyDisplayRows.Sum(r => r.Qty);
-                UpdateStrategyRealtimeOrderBookSnapshot(
-                    code,
-                    ResolveRealtimeItemMarket(rawCode),
-                    sellRows,
-                    buyRows,
-                    _last0DReceivedAt);
                 UpdateHogaSummary(totalSell, totalBuy);
                 string selectedMarket = ResolveDisplayMarketForStockCode(_selectedStockCode);
                 string selectedRateText = TryGetWatchStockForMarket(_selectedStockCode, selectedMarket, out WatchStockItem? s2) && s2 != null ? s2.ChangeRateText : "-";
@@ -1911,6 +1921,65 @@ namespace TradingDashboard
             }, ct);
 
             AppendLog($"0D/0H registered: {requestCode}");
+        }
+
+        private void ClearStrategyOrderBookProbeRegistration()
+        {
+            lock (_strategyOrderBookProbeLock)
+            {
+                _strategyOrderBookProbeRequestCodes.Clear();
+                _strategyOrderBookProbeRetryAfterByKey.Clear();
+            }
+        }
+
+        private async Task RegisterStrategyOrderBookProbeAsync(WatchStockItem? stock)
+        {
+            if (stock == null || _realtimeWs == null || _realtimeWs.State != WebSocketState.Open || _realtimeCts == null)
+                return;
+
+            string code = NormalizeStockCode(stock.Code);
+            if (string.IsNullOrWhiteSpace(code))
+                return;
+
+            string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
+            string key = BuildMarketIdentityKey(code, market);
+            string requestCode = string.Equals(market, "NXT", StringComparison.Ordinal) ? $"{code}_NX" : code;
+            string[] requestCodes;
+            bool added;
+
+            lock (_strategyOrderBookProbeLock)
+            {
+                DateTime now = DateTime.Now;
+                if (_strategyOrderBookProbeRetryAfterByKey.TryGetValue(key, out DateTime retryAfter) && now < retryAfter)
+                    return;
+
+                _strategyOrderBookProbeRetryAfterByKey[key] = now + TimeSpan.FromSeconds(10);
+                added = _strategyOrderBookProbeRequestCodes.Add(requestCode);
+                if (!added)
+                    return;
+
+                while (_strategyOrderBookProbeRequestCodes.Count > 10)
+                    _strategyOrderBookProbeRequestCodes.Remove(_strategyOrderBookProbeRequestCodes.First());
+
+                requestCodes = [.. _strategyOrderBookProbeRequestCodes];
+            }
+
+            await SendWsJsonAsync(_realtimeWs, new
+            {
+                trnm = "REG",
+                grp_no = "902",
+                refresh = "1",
+                data = new[]
+                {
+                    new
+                    {
+                        item = requestCodes,
+                        type = new[] { "0D", "0H" }
+                    }
+                }
+            }, _realtimeCts.Token);
+
+            AppendLog($"strategy 0D probe registered: {requestCode} / {requestCodes.Length}items");
         }
 
         private static async Task SendWsJsonAsync(ClientWebSocket ws, object payload, CancellationToken ct)

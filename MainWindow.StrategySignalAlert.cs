@@ -38,6 +38,8 @@ namespace TradingDashboard
                 !IsStrategyMinuteDataReady(stock))
                 return;
 
+            RequestStrategyOrderBookProbeIfNeeded(stock, results);
+
             foreach (StrategyEvaluationResult result in results.Where(x => x.HasSignal))
             {
                 StrategyOrderIntent orderIntent = result.ResolvedOrderIntent;
@@ -56,6 +58,29 @@ namespace TradingDashboard
 
                 _ = TrySendStrategySignalAlertAsync(stock, result, orderMode);
             }
+        }
+
+        private void RequestStrategyOrderBookProbeIfNeeded(
+            WatchStockItem stock,
+            IReadOnlyList<StrategyEvaluationResult> results)
+        {
+            if (stock == null || results.Count == 0)
+                return;
+
+            bool needsOrderBookProbe = results.Any(result =>
+                result.SlotId == StrategySlotId.IntradayFifteenMinuteScalp &&
+                result.ResolvedOrderIntent.Action == StrategyOrderIntentAction.PrepareBuy &&
+                (
+                    result.ResolvedOrderIntent.NoBuyReasons?.Any(reason =>
+                        reason.Contains("0D", StringComparison.OrdinalIgnoreCase)) == true ||
+                    result.Progress?.Steps.Any(step =>
+                        (string.Equals(step.Key, "0d-fresh", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(step.Key, "0d-support", StringComparison.OrdinalIgnoreCase)) &&
+                        step.IsCurrent) == true
+                ));
+
+            if (needsOrderBookProbe)
+                _ = RegisterStrategyOrderBookProbeAsync(stock);
         }
 
         private async Task TrySubmitStrategyLiveBuyAsync(
