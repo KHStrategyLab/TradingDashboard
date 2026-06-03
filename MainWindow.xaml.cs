@@ -107,6 +107,9 @@ namespace TradingDashboard
         private readonly Dictionary<string, ManualBuyStopAnchor> _manualBuyStopAnchorsByCode = new(StringComparer.Ordinal);
         private readonly HashSet<string> _manualBuyStopAnchorLoadingCodes = new(StringComparer.Ordinal);
         private readonly object _strategyLiveOrderLock = new();
+        private readonly object _strategyRealtimeFlowLock = new();
+        private readonly Dictionary<string, Queue<StrategyRealtimeTradeSample>> _strategyRealtimeTradeSamplesByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, StrategyRealtimeFlowSnapshot> _strategyRealtimeFlowByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _conditionRealtimeEnterSemaphore = new(1, 1);

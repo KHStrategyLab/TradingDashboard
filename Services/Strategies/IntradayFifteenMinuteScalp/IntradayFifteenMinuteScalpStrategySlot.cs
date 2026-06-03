@@ -102,10 +102,20 @@ namespace TradingDashboard.Services.Strategies
                 volumeMa60 > 0 &&
                 volumeMa5 >= volumeMa60;
 
-            // 0B buy-flow and 0D order-book summaries are not yet part of StrategyEvaluationContext.
-            // Keep this as a separate final gate so the strategy cannot silently become live-order ready.
-            bool realtimeFlowConnected = false;
-            bool realtimeFlowOk = realtimeFlowConnected;
+            StrategyRealtimeFlowSnapshot realtime = context.RealtimeFlow;
+            DateTime now = DateTime.Now;
+            bool realtimeTickFresh = realtime.HasFreshTick(now, 10);
+            bool orderBookFresh = realtime.HasFreshOrderBook(now, 15);
+            bool buyFlowOk = realtimeTickFresh &&
+                realtime.LastTradeIsBuy &&
+                realtime.BuyTradeVolume60s > realtime.SellTradeVolume60s &&
+                realtime.BuyTradeVolumeRatio60s >= 55.0 &&
+                realtime.BuyTradeValue60s >= 50_000_000;
+            bool orderBookSupport = orderBookFresh &&
+                realtime.TotalBidQuantity > 0 &&
+                realtime.BidQuantityRatio >= 45.0 &&
+                (realtime.BestBidPrice <= 0 || signalPrice >= realtime.BestBidPrice);
+            bool realtimeFlowOk = buyFlowOk && orderBookSupport;
 
             bool preSignal = hasStock &&
                 notOwned &&
@@ -137,7 +147,10 @@ namespace TradingDashboard.Services.Strategies
                 fiveTrend && fiveBull,
                 threeTurn,
                 onePriceMaMix && oneBreakout && oneVolumeExpansion,
-                realtimeFlowOk);
+                realtimeTickFresh,
+                buyFlowOk,
+                orderBookFresh,
+                orderBookSupport);
 
             StrategyOrderIntent orderIntent = hasSignal
                 ? StrategyOrderIntent.BuyNow(
@@ -173,7 +186,10 @@ namespace TradingDashboard.Services.Strategies
                     StrategyProgressCalculator.Step("1m-ma", "1m MA5 over MA60", onePriceMaMix),
                     StrategyProgressCalculator.Step("1m-volume", "1m volume MA expansion", oneVolumeExpansion),
                     StrategyProgressCalculator.Step("1m-breakout", "1m high breakout", oneBreakout),
-                    StrategyProgressCalculator.Step("0b-flow", "0B buy-flow connect", realtimeFlowOk),
+                    StrategyProgressCalculator.Step("0b-fresh", "0B fresh", realtimeTickFresh),
+                    StrategyProgressCalculator.Step("0b-flow", "0B buy-flow", buyFlowOk),
+                    StrategyProgressCalculator.Step("0d-fresh", "0D fresh", orderBookFresh),
+                    StrategyProgressCalculator.Step("0d-support", "0D bid support", orderBookSupport),
                     StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
                 ],
                 [
@@ -194,7 +210,7 @@ namespace TradingDashboard.Services.Strategies
                 Name,
                 hasSignal,
                 context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
-                FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, volumeMa5, volumeMa60, noBuyReasons),
+                FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, volumeMa5, volumeMa60, realtime, noBuyReasons),
                 progress,
                 orderIntent);
         }
@@ -295,7 +311,10 @@ namespace TradingDashboard.Services.Strategies
             bool fiveConfirm,
             bool threeTurn,
             bool oneTrigger,
-            bool realtimeFlowOk)
+            bool realtimeTickFresh,
+            bool buyFlowOk,
+            bool orderBookFresh,
+            bool orderBookSupport)
         {
             List<string> reasons = [];
             if (!hasStock) reasons.Add("no stock");
@@ -310,7 +329,10 @@ namespace TradingDashboard.Services.Strategies
             if (!fiveConfirm) reasons.Add("5m confirm wait");
             if (!threeTurn) reasons.Add("3m turn wait");
             if (!oneTrigger) reasons.Add("1m trigger wait");
-            if (!realtimeFlowOk) reasons.Add("0B buy-flow wait");
+            if (!realtimeTickFresh) reasons.Add("0B fresh tick wait");
+            if (!buyFlowOk) reasons.Add("0B buy-flow wait");
+            if (!orderBookFresh) reasons.Add("0D order-book wait");
+            if (!orderBookSupport) reasons.Add("0D bid support wait");
             return reasons;
         }
 
@@ -322,6 +344,7 @@ namespace TradingDashboard.Services.Strategies
             long signalPrice,
             double volumeMa5,
             double volumeMa60,
+            StrategyRealtimeFlowSnapshot realtime,
             IReadOnlyList<string> noBuyReasons)
         {
             string baseText = baseCandle == null
@@ -330,7 +353,7 @@ namespace TradingDashboard.Services.Strategies
             string waitText = noBuyReasons.Count == 0
                 ? "ready"
                 : $"wait {string.Join(", ", noBuyReasons.Take(2))}";
-            return $"intraday {changeRate:0.##}% / {todayTradeValue / (double)OneEok:0.#}eok / {baseText} / price {signalPrice:N0} / volMA5 {volumeMa5:0} vs 60 {volumeMa60:0} / {waitText}";
+            return $"intraday {changeRate:0.##}% / {todayTradeValue / (double)OneEok:0.#}eok / {baseText} / price {signalPrice:N0} / volMA5 {volumeMa5:0} vs 60 {volumeMa60:0} / 0B buy {realtime.BuyTradeVolumeRatio60s:0}% / 0D bid {realtime.BidQuantityRatio:0}% / {waitText}";
         }
     }
 }

@@ -18,6 +18,8 @@ namespace TradingDashboard.Services.Strategies
         public IReadOnlyDictionary<int, IReadOnlyList<StrategyMinuteBar>> MinuteBars { get; init; } =
             new Dictionary<int, IReadOnlyList<StrategyMinuteBar>>();
 
+        public StrategyRealtimeFlowSnapshot RealtimeFlow { get; init; } = StrategyRealtimeFlowSnapshot.Empty;
+
         public string Market { get; init; } = string.Empty;
 
         public bool IsOwned { get; init; }

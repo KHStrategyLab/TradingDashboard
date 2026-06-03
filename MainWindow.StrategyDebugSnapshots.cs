@@ -145,6 +145,7 @@ namespace TradingDashboard
             IReadOnlyList<StrategyEvaluationResult> progressResults = EvaluateEnabledStrategySlots(stock);
             string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
             long signalPrice = ResolveStrategySignalPrice(stock);
+            StrategyRealtimeFlowSnapshot realtimeFlow = BuildStrategyRealtimeFlowSnapshot(stock);
 
             return new StrategyMinuteDebugSnapshot(
                 CreatedAt: DateTime.Now,
@@ -162,6 +163,7 @@ namespace TradingDashboard
                 GateBaseCandleChangeRate: stock.GateBaseCandleChangeRate,
                 GateBaseCandleTradeValue: stock.GateBaseCandleTradeValue,
                 IsIntradayPreCandidate: stock.IsIntradayPreCandidate,
+                RealtimeFlow: StrategyRealtimeFlowDebugSnapshot.FromSnapshot(realtimeFlow),
                 MinuteStatus: BuildMinuteStatusMap(status),
                 Frames: snapshots?.Frames.Values
                     .OrderBy(frame => frame.Minute)
@@ -640,11 +642,48 @@ namespace TradingDashboard
             double GateBaseCandleChangeRate,
             long GateBaseCandleTradeValue,
             bool IsIntradayPreCandidate,
+            StrategyRealtimeFlowDebugSnapshot RealtimeFlow,
             IReadOnlyDictionary<int, StrategyMinuteDebugStatus> MinuteStatus,
             IReadOnlyList<StrategyMinuteDebugFrame> Frames,
             IReadOnlyList<StrategyProgressDebugSnapshot> Progress,
             StrategyChartDebugSnapshot? VisibleChart,
             StrategyDebugEvidence Evidence);
+
+        private sealed record StrategyRealtimeFlowDebugSnapshot(
+            DateTime LastTickAt,
+            DateTime LastOrderBookAt,
+            long LastPrice,
+            long LastTradeQuantity,
+            bool LastTradeIsBuy,
+            long BuyTradeVolume60s,
+            long SellTradeVolume60s,
+            long BuyTradeValue60s,
+            long SellTradeValue60s,
+            double BuyRatio60s,
+            long BestAskPrice,
+            long BestBidPrice,
+            long TotalAskQuantity,
+            long TotalBidQuantity,
+            double BidRatio)
+        {
+            public static StrategyRealtimeFlowDebugSnapshot FromSnapshot(StrategyRealtimeFlowSnapshot snapshot) =>
+                new(
+                    snapshot.LastTickAt,
+                    snapshot.LastOrderBookAt,
+                    snapshot.LastPrice,
+                    snapshot.LastTradeQuantity,
+                    snapshot.LastTradeIsBuy,
+                    snapshot.BuyTradeVolume60s,
+                    snapshot.SellTradeVolume60s,
+                    snapshot.BuyTradeValue60s,
+                    snapshot.SellTradeValue60s,
+                    snapshot.BuyTradeVolumeRatio60s,
+                    snapshot.BestAskPrice,
+                    snapshot.BestBidPrice,
+                    snapshot.TotalAskQuantity,
+                    snapshot.TotalBidQuantity,
+                    snapshot.BidQuantityRatio);
+        }
 
         private sealed record StrategyMinuteDebugSnapshotBatch(
             DateTime CreatedAt,

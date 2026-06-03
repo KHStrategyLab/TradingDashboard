@@ -10,11 +10,21 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using TradingDashboard.Models;
+using TradingDashboard.Services.Strategies;
 
 namespace TradingDashboard
 {
     public partial class MainWindow
     {
+        private readonly record struct RealtimeTradeFlowUpdate(
+            bool HasTrade,
+            bool IsBuyAggressive,
+            long EffectiveTradeQuantity,
+            long BuyCumulativeQuantity,
+            long SellCumulativeQuantity,
+            bool HasCumulativeSide,
+            bool HasSingleSide);
+
         private async Task StartRealtimeTradeAsync()
         {
             await _realtimeConnectionLock.WaitAsync();
@@ -971,6 +981,12 @@ namespace TradingDashboard
                 _last0DReceivedAt = DateTime.Now;
                 long totalSell = sellDisplayRows.Sum(r => r.Qty);
                 long totalBuy = buyDisplayRows.Sum(r => r.Qty);
+                UpdateStrategyRealtimeOrderBookSnapshot(
+                    code,
+                    ResolveRealtimeItemMarket(rawCode),
+                    sellRows,
+                    buyRows,
+                    _last0DReceivedAt);
                 UpdateHogaSummary(totalSell, totalBuy);
                 string selectedMarket = ResolveDisplayMarketForStockCode(_selectedStockCode);
                 string selectedRateText = TryGetWatchStockForMarket(_selectedStockCode, selectedMarket, out WatchStockItem? s2) && s2 != null ? s2.ChangeRateText : "-";
@@ -978,6 +994,43 @@ namespace TradingDashboard
 
                 HighlightCenterPriceInHoga();
             });
+        }
+
+        private void UpdateStrategyRealtimeOrderBookSnapshot(
+            string code,
+            string market,
+            IReadOnlyList<(long Price, long Qty)> sellRows,
+            IReadOnlyList<(long Price, long Qty)> buyRows,
+            DateTime at)
+        {
+            string normalizedCode = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(normalizedCode))
+                return;
+
+            string normalizedMarket = string.Equals(market, "NXT", StringComparison.OrdinalIgnoreCase) ? "NXT" : "KRX";
+            string key = BuildMarketIdentityKey(normalizedCode, normalizedMarket);
+            long totalAskQuantity = sellRows.Sum(row => row.Qty);
+            long totalBidQuantity = buyRows.Sum(row => row.Qty);
+            long bestAskPrice = sellRows.FirstOrDefault(row => row.Price > 0).Price;
+            long bestBidPrice = buyRows.FirstOrDefault(row => row.Price > 0).Price;
+
+            lock (_strategyRealtimeFlowLock)
+            {
+                StrategyRealtimeFlowSnapshot previous = _strategyRealtimeFlowByKey.TryGetValue(key, out StrategyRealtimeFlowSnapshot? oldSnapshot)
+                    ? oldSnapshot
+                    : StrategyRealtimeFlowSnapshot.Empty with
+                    {
+                        Code = normalizedCode,
+                        Market = normalizedMarket
+                    };
+
+                _strategyRealtimeFlowByKey[key] = previous.WithOrderBook(
+                    at,
+                    bestAskPrice,
+                    bestBidPrice,
+                    totalAskQuantity,
+                    totalBidQuantity);
+            }
         }
 
         private void ApplyRealtimeExpectedItem(JsonElement item)
@@ -1221,6 +1274,16 @@ namespace TradingDashboard
                 rate = "-";
 
             ApplyRealtimeTickToStrategyMinuteLedger(candidateStock, rawCode, price, volume, tradeQty, tradeTimeText);
+            RealtimeTradeFlowUpdate tradeFlow = UpdateStrategyRealtimeTradeFlow(
+                code,
+                realtimeMarket,
+                price,
+                tradeQty,
+                realtimeSide,
+                buyExecQty,
+                sellExecQty,
+                buyExecSingleQty,
+                sellExecSingleQty);
 
             Dispatcher.Invoke(() =>
             {
@@ -1253,32 +1316,9 @@ namespace TradingDashboard
 
                 if (code == _selectedStockCode)
                 {
-                    bool hasSideByRealtimeKey = buyExecQty > 0 || sellExecQty > 0;
-                    bool hasSideBySingleKey = buyExecSingleQty > 0 || sellExecSingleQty > 0;
-                    string realtimeStateKey = BuildMarketIdentityKey(code, realtimeMarket);
-                    bool hasPrevBuy = _lastBuyExecCumByCode.TryGetValue(realtimeStateKey, out long prevBuyCum);
-                    bool hasPrevSell = _lastSellExecCumByCode.TryGetValue(realtimeStateKey, out long prevSellCum);
-                    long buyDelta = hasPrevBuy ? Math.Max(0, buyExecQty - prevBuyCum) : 0;
-                    long sellDelta = hasPrevSell ? Math.Max(0, sellExecQty - prevSellCum) : 0;
-                    bool isBuyAggressive = realtimeSide > 0
-                        || (realtimeSide == 0 && hasSideBySingleKey && buyExecSingleQty >= sellExecSingleQty)
-                        || (realtimeSide == 0 && hasSideByRealtimeKey && buyDelta >= sellDelta);
-
-                    long lastTick = _lastTickPriceByCode.TryGetValue(realtimeStateKey, out long prevTick) ? prevTick : 0;
-                    if (realtimeSide == 0 && !hasSideByRealtimeKey && !hasSideBySingleKey && lastTick > 0)
-                        isBuyAggressive = stock.CurrentPrice >= lastTick;
-
+                    bool isBuyAggressive = tradeFlow.IsBuyAggressive;
                     Brush qtyColor = isBuyAggressive ? _upColorBrush : _downColorBrush;
-
-                    long effectiveTradeQty = tradeQty;
-                    if (effectiveTradeQty <= 0 && hasSideByRealtimeKey)
-                    {
-                        effectiveTradeQty = Math.Max(buyDelta, sellDelta);
-                    }
-                    if (effectiveTradeQty <= 0 && hasSideBySingleKey)
-                    {
-                        effectiveTradeQty = Math.Max(buyExecSingleQty, sellExecSingleQty);
-                    }
+                    long effectiveTradeQty = tradeFlow.EffectiveTradeQuantity;
 
                     _recentTrades.Insert(0, new TradePrint
                     {
@@ -1291,15 +1331,12 @@ namespace TradingDashboard
                     while (_recentTrades.Count > 10)
                         _recentTrades.RemoveAt(_recentTrades.Count - 1);
 
-                    if (hasSideByRealtimeKey)
+                    if (tradeFlow.HasCumulativeSide)
                     {
-                        _lastBuyExecCumByCode[realtimeStateKey] = buyExecQty;
-                        _lastSellExecCumByCode[realtimeStateKey] = sellExecQty;
-
-                        _buyTradeVolume = buyExecQty;
-                        _sellTradeVolume = sellExecQty;
+                        _buyTradeVolume = tradeFlow.BuyCumulativeQuantity;
+                        _sellTradeVolume = tradeFlow.SellCumulativeQuantity;
                     }
-                    else if (hasSideBySingleKey)
+                    else if (tradeFlow.HasSingleSide)
                     {
                         _buyTradeVolume += buyExecSingleQty;
                         _sellTradeVolume += sellExecSingleQty;
@@ -1312,7 +1349,6 @@ namespace TradingDashboard
                             _sellTradeVolume += effectiveTradeQty;
                     }
 
-                    _lastTickPriceByCode[realtimeStateKey] = stock.CurrentPrice;
                     HighlightCenterPriceInHoga();
 
                     long total = _buyTradeVolume + _sellTradeVolume;
@@ -1346,6 +1382,179 @@ namespace TradingDashboard
 
                 }
             });
+        }
+
+        private RealtimeTradeFlowUpdate UpdateStrategyRealtimeTradeFlow(
+            string code,
+            string market,
+            long price,
+            long tradeQuantity,
+            int realtimeSide,
+            long buyCumulativeQuantity,
+            long sellCumulativeQuantity,
+            long buySingleQuantity,
+            long sellSingleQuantity)
+        {
+            if (string.IsNullOrWhiteSpace(code) || price <= 0)
+                return default;
+
+            string normalizedCode = NormalizeStockCode(code);
+            string normalizedMarket = string.Equals(market, "NXT", StringComparison.OrdinalIgnoreCase) ? "NXT" : "KRX";
+            string key = BuildMarketIdentityKey(normalizedCode, normalizedMarket);
+            DateTime now = DateTime.Now;
+
+            lock (_strategyRealtimeFlowLock)
+            {
+                bool hasCumulativeSide = buyCumulativeQuantity > 0 || sellCumulativeQuantity > 0;
+                bool hasSingleSide = buySingleQuantity > 0 || sellSingleQuantity > 0;
+                bool hasPrevBuy = _lastBuyExecCumByCode.TryGetValue(key, out long previousBuyCumulative);
+                bool hasPrevSell = _lastSellExecCumByCode.TryGetValue(key, out long previousSellCumulative);
+                long buyDelta = hasPrevBuy ? Math.Max(0, buyCumulativeQuantity - previousBuyCumulative) : 0;
+                long sellDelta = hasPrevSell ? Math.Max(0, sellCumulativeQuantity - previousSellCumulative) : 0;
+
+                bool isBuyAggressive = realtimeSide > 0
+                    || (realtimeSide == 0 && hasSingleSide && buySingleQuantity >= sellSingleQuantity)
+                    || (realtimeSide == 0 && hasCumulativeSide && buyDelta >= sellDelta);
+
+                long lastTick = _lastTickPriceByCode.TryGetValue(key, out long previousTick) ? previousTick : 0;
+                if (realtimeSide == 0 && !hasCumulativeSide && !hasSingleSide && lastTick > 0)
+                    isBuyAggressive = price >= lastTick;
+
+                long effectiveTradeQuantity = tradeQuantity;
+                if (effectiveTradeQuantity <= 0 && hasCumulativeSide)
+                    effectiveTradeQuantity = Math.Max(buyDelta, sellDelta);
+                if (effectiveTradeQuantity <= 0 && hasSingleSide)
+                    effectiveTradeQuantity = Math.Max(buySingleQuantity, sellSingleQuantity);
+
+                if (hasCumulativeSide)
+                {
+                    _lastBuyExecCumByCode[key] = buyCumulativeQuantity;
+                    _lastSellExecCumByCode[key] = sellCumulativeQuantity;
+                }
+
+                _lastTickPriceByCode[key] = price;
+
+                if (effectiveTradeQuantity > 0)
+                    AddStrategyRealtimeTradeSample(key, normalizedCode, normalizedMarket, now, price, effectiveTradeQuantity, isBuyAggressive);
+                else
+                    EnsureStrategyRealtimePriceSnapshot(key, normalizedCode, normalizedMarket, now, price);
+
+                return new RealtimeTradeFlowUpdate(
+                    effectiveTradeQuantity > 0,
+                    isBuyAggressive,
+                    effectiveTradeQuantity,
+                    buyCumulativeQuantity,
+                    sellCumulativeQuantity,
+                    hasCumulativeSide,
+                    hasSingleSide);
+            }
+        }
+
+        private void AddStrategyRealtimeTradeSample(
+            string key,
+            string code,
+            string market,
+            DateTime now,
+            long price,
+            long quantity,
+            bool isBuy)
+        {
+            if (!_strategyRealtimeTradeSamplesByKey.TryGetValue(key, out Queue<StrategyRealtimeTradeSample>? samples))
+            {
+                samples = new Queue<StrategyRealtimeTradeSample>();
+                _strategyRealtimeTradeSamplesByKey[key] = samples;
+            }
+
+            long tradeValue = quantity > 0
+                ? (long)Math.Min(long.MaxValue, price * (double)quantity)
+                : 0;
+            samples.Enqueue(new StrategyRealtimeTradeSample(now, price, quantity, tradeValue, isBuy));
+            TrimStrategyRealtimeTradeSamples(samples, now);
+            UpdateStrategyRealtimeTradeSnapshotFromSamples(key, code, market, now, price, quantity, isBuy, samples);
+        }
+
+        private static void TrimStrategyRealtimeTradeSamples(Queue<StrategyRealtimeTradeSample> samples, DateTime now)
+        {
+            DateTime cutoff = now.AddSeconds(-60);
+            while (samples.Count > 0 && samples.Peek().At < cutoff)
+                samples.Dequeue();
+
+            while (samples.Count > 300)
+                samples.Dequeue();
+        }
+
+        private void UpdateStrategyRealtimeTradeSnapshotFromSamples(
+            string key,
+            string code,
+            string market,
+            DateTime now,
+            long price,
+            long lastTradeQuantity,
+            bool lastTradeIsBuy,
+            Queue<StrategyRealtimeTradeSample> samples)
+        {
+            StrategyRealtimeFlowSnapshot previous = _strategyRealtimeFlowByKey.TryGetValue(key, out StrategyRealtimeFlowSnapshot? oldSnapshot)
+                ? oldSnapshot
+                : StrategyRealtimeFlowSnapshot.Empty;
+
+            long buyVolume = 0;
+            long sellVolume = 0;
+            long buyValue = 0;
+            long sellValue = 0;
+            int buyCount = 0;
+            int sellCount = 0;
+
+            foreach (StrategyRealtimeTradeSample sample in samples)
+            {
+                if (sample.IsBuy)
+                {
+                    buyVolume += sample.Quantity;
+                    buyValue += sample.TradeValue;
+                    buyCount++;
+                }
+                else
+                {
+                    sellVolume += sample.Quantity;
+                    sellValue += sample.TradeValue;
+                    sellCount++;
+                }
+            }
+
+            _strategyRealtimeFlowByKey[key] = previous with
+            {
+                Code = code,
+                Market = market,
+                LastTickAt = now,
+                LastPrice = price,
+                LastTradeQuantity = lastTradeQuantity,
+                LastTradeIsBuy = lastTradeIsBuy,
+                BuyTradeVolume60s = buyVolume,
+                SellTradeVolume60s = sellVolume,
+                BuyTradeValue60s = buyValue,
+                SellTradeValue60s = sellValue,
+                BuyTradeCount60s = buyCount,
+                SellTradeCount60s = sellCount
+            };
+        }
+
+        private void EnsureStrategyRealtimePriceSnapshot(
+            string key,
+            string code,
+            string market,
+            DateTime now,
+            long price)
+        {
+            StrategyRealtimeFlowSnapshot previous = _strategyRealtimeFlowByKey.TryGetValue(key, out StrategyRealtimeFlowSnapshot? oldSnapshot)
+                ? oldSnapshot
+                : StrategyRealtimeFlowSnapshot.Empty;
+
+            _strategyRealtimeFlowByKey[key] = previous with
+            {
+                Code = code,
+                Market = market,
+                LastTickAt = now,
+                LastPrice = price
+            };
         }
 
         private void ApplyRealtimeTickToStrategyMinuteLedger(

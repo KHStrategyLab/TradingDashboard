@@ -763,6 +763,7 @@ namespace TradingDashboard
                 MinuteData = BuildStrategyMinuteDataStatus(stock),
                 MinuteSnapshots = BuildStrategyMinuteSnapshotSet(stock),
                 MinuteBars = BuildStrategyMinuteBars(stock),
+                RealtimeFlow = BuildStrategyRealtimeFlowSnapshot(stock),
                 Market = stock != null && ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX",
                 IsOwned = IsStockOwned(stock) && !GetStrategyDuplicatePolicy().AllowAdditionalBuy
             };
@@ -1074,6 +1075,21 @@ namespace TradingDashboard
                 bars[minute] = _strategyMinuteCacheService.GetBars(stock.Code, market, minute);
 
             return new StrategyMinuteBars(bars);
+        }
+
+        private StrategyRealtimeFlowSnapshot BuildStrategyRealtimeFlowSnapshot(WatchStockItem? stock)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return StrategyRealtimeFlowSnapshot.Empty;
+
+            string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
+            string key = BuildMarketIdentityKey(stock.Code, market);
+            lock (_strategyRealtimeFlowLock)
+            {
+                return _strategyRealtimeFlowByKey.TryGetValue(key, out StrategyRealtimeFlowSnapshot? snapshot)
+                    ? snapshot
+                    : StrategyRealtimeFlowSnapshot.Empty;
+            }
         }
 
         private static List<DailyCandle> ConvertChartCandlesToDailyCandles(IEnumerable<ChartCandle> candles)
