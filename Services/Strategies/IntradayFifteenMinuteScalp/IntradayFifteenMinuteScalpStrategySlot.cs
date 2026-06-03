@@ -116,6 +116,14 @@ namespace TradingDashboard.Services.Strategies
                 realtime.BidQuantityRatio >= 45.0 &&
                 (realtime.BestBidPrice <= 0 || signalPrice >= realtime.BestBidPrice);
             bool realtimeFlowOk = buyFlowOk && orderBookSupport;
+            long scalpTargetPrice = signalPrice > 0
+                ? (long)Math.Round(signalPrice * 1.018, MidpointRounding.AwayFromZero)
+                : 0;
+            StrategyExitFirstPlan exitPlan = StrategyExitFirstPlanner.Build(
+                signalPrice,
+                baseCenter,
+                scalpTargetPrice,
+                maxStopRiskPercent: 2.5);
 
             bool preSignal = hasStock &&
                 notOwned &&
@@ -132,7 +140,7 @@ namespace TradingDashboard.Services.Strategies
                 onePriceMaMix &&
                 oneBreakout &&
                 oneVolumeExpansion;
-            bool hasSignal = preSignal && realtimeFlowOk;
+            bool hasSignal = preSignal && realtimeFlowOk && exitPlan.IsTradable;
 
             List<string> noBuyReasons = BuildNoBuyReasons(
                 hasStock,
@@ -151,16 +159,21 @@ namespace TradingDashboard.Services.Strategies
                 buyFlowOk,
                 orderBookFresh,
                 orderBookSupport);
+            noBuyReasons.AddRange(exitPlan.NoBuyReasons);
+
+            string prepareReason = preSignal && realtimeFlowOk && !exitPlan.IsTradable
+                ? "exit-first blocked before order handoff"
+                : "waiting for 0B buy-flow/order-book confirmation";
 
             StrategyOrderIntent orderIntent = hasSignal
                 ? StrategyOrderIntent.BuyNow(
                     "intraday 15m base + 1m MA/volume/buy-flow trigger",
                     signalPrice,
-                    stopPrice: baseCenter,
-                    targetPrice: signalPrice > 0 ? (long)Math.Round(signalPrice * 1.018, MidpointRounding.AwayFromZero) : 0,
-                    rewardRiskRatio: CalculateRewardRisk(signalPrice, baseCenter))
+                    stopPrice: exitPlan.StopPrice,
+                    targetPrice: exitPlan.TargetPrice,
+                    rewardRiskRatio: exitPlan.RewardRiskRatio)
                 : preSignal
-                    ? StrategyOrderIntent.PrepareBuy("waiting for 0B buy-flow/order-book confirmation", noBuyReasons)
+                    ? StrategyOrderIntent.PrepareBuy(prepareReason, noBuyReasons)
                     : StrategyOrderIntent.Watch(noBuyReasons.Count == 0 ? "tracking intraday scalp setup" : string.Join(" / ", noBuyReasons.Take(3)));
 
             StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
@@ -190,6 +203,7 @@ namespace TradingDashboard.Services.Strategies
                     StrategyProgressCalculator.Step("0b-flow", "0B buy-flow", buyFlowOk),
                     StrategyProgressCalculator.Step("0d-fresh", "0D fresh", orderBookFresh),
                     StrategyProgressCalculator.Step("0d-support", "0D bid support", orderBookSupport),
+                    StrategyProgressCalculator.Step("exit-first", "exit-first RR", exitPlan.IsTradable),
                     StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
                 ],
                 [
@@ -210,7 +224,7 @@ namespace TradingDashboard.Services.Strategies
                 Name,
                 hasSignal,
                 context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
-                FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, volumeMa5, volumeMa60, realtime, noBuyReasons),
+                FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, volumeMa5, volumeMa60, realtime, exitPlan, noBuyReasons),
                 progress,
                 orderIntent);
         }
@@ -288,16 +302,6 @@ namespace TradingDashboard.Services.Strategies
             return bars.Count >= period ? bars.Average(bar => bar.Volume) : 0;
         }
 
-        private static double CalculateRewardRisk(long entry, long stop)
-        {
-            if (entry <= 0 || stop <= 0 || entry <= stop)
-                return 0;
-
-            double risk = entry - stop;
-            double target = entry * 1.018 - entry;
-            return risk > 0 ? target / risk : 0;
-        }
-
         private static List<string> BuildNoBuyReasons(
             bool hasStock,
             bool notOwned,
@@ -345,6 +349,7 @@ namespace TradingDashboard.Services.Strategies
             double volumeMa5,
             double volumeMa60,
             StrategyRealtimeFlowSnapshot realtime,
+            StrategyExitFirstPlan exitPlan,
             IReadOnlyList<string> noBuyReasons)
         {
             string baseText = baseCandle == null
@@ -353,7 +358,7 @@ namespace TradingDashboard.Services.Strategies
             string waitText = noBuyReasons.Count == 0
                 ? "ready"
                 : $"wait {string.Join(", ", noBuyReasons.Take(2))}";
-            return $"intraday {changeRate:0.##}% / {todayTradeValue / (double)OneEok:0.#}eok / {baseText} / price {signalPrice:N0} / volMA5 {volumeMa5:0} vs 60 {volumeMa60:0} / 0B buy {realtime.BuyTradeVolumeRatio60s:0}% / 0D bid {realtime.BidQuantityRatio:0}% / {waitText}";
+            return $"intraday {changeRate:0.##}% / {todayTradeValue / (double)OneEok:0.#}eok / {baseText} / price {signalPrice:N0} / volMA5 {volumeMa5:0} vs 60 {volumeMa60:0} / 0B buy {realtime.BuyTradeVolumeRatio60s:0}% / 0D bid {realtime.BidQuantityRatio:0}% / {StrategyExitFirstPlanner.FormatSummary(exitPlan)} / {waitText}";
         }
     }
 }

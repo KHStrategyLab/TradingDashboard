@@ -26,8 +26,8 @@ namespace TradingDashboard.Services.Strategies
         public static StrategyOrderIntent None(string reason = "") =>
             new(StrategyOrderIntentAction.None, false, reason);
 
-        public static StrategyOrderIntent Watch(string reason) =>
-            new(StrategyOrderIntentAction.Watch, false, reason);
+        public static StrategyOrderIntent Watch(string reason, IReadOnlyList<string>? noBuyReasons = null) =>
+            new(StrategyOrderIntentAction.Watch, false, reason, NoBuyReasons: noBuyReasons);
 
         public static StrategyOrderIntent PrepareBuy(string reason, IReadOnlyList<string>? noBuyReasons = null) =>
             new(StrategyOrderIntentAction.PrepareBuy, false, reason, NoBuyReasons: noBuyReasons);

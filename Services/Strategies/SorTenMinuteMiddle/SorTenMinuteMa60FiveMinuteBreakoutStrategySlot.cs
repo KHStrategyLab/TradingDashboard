@@ -21,17 +21,24 @@ namespace TradingDashboard.Services.Strategies
             bool gatePassed = context.Stock?.GateBaseCandleFound == true;
             bool hasBasePrice = context.Stock?.LastPrice > 0 || context.Metrics.BasePriceText != "-";
             StrategyMinuteBreakoutCheck minuteCheck = StrategyMinuteSignalChecks.EvaluateMa60Breakout(context, 10, 5);
+            StrategyExitFirstPlan exitPlan = StrategyExitFirstPlanner.FromMa60Breakout(minuteCheck, maxStopRiskPercent: 3.0);
             bool hasMinuteChart = minuteCheck.HasMinuteData;
             string minuteDataText = minuteCheck.FormatReadiness(10, 5);
-            bool hasSignal = !context.IsOwned &&
+            bool setupSignal = !context.IsOwned &&
                 gatePassed &&
                 hasBasePrice &&
                 minuteCheck.HasSignal;
+            bool hasSignal = setupSignal && exitPlan.IsTradable;
             StrategyOrderIntent orderIntent = hasSignal
                 ? StrategyOrderIntent.BuyNow(
                     "10m MA60 recovery + 5m 20-high breakout",
-                    minuteCheck.SignalPrice)
-                : StrategyOrderIntent.Watch("waiting for 10m MA60 recovery and 5m breakout");
+                    minuteCheck.SignalPrice,
+                    exitPlan.StopPrice,
+                    exitPlan.TargetPrice,
+                    exitPlan.RewardRiskRatio)
+                : StrategyOrderIntent.Watch(
+                    setupSignal ? "exit-first blocked before order handoff" : "waiting for 10m MA60 recovery and 5m breakout",
+                    exitPlan.NoBuyReasons);
 
             StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
                 Id,
@@ -45,6 +52,7 @@ namespace TradingDashboard.Services.Strategies
                     StrategyProgressCalculator.Step("ma60-pullback", "10m MA60 pullback", minuteCheck.Ma60Recovery),
                     StrategyProgressCalculator.Step("ma60-recovery", "10m MA60 recovery", minuteCheck.AboveMa60),
                     StrategyProgressCalculator.Step("breakout", "5m 20-high breakout", minuteCheck.BreakoutTriggered),
+                    StrategyProgressCalculator.Step("exit-first", "exit-first RR", exitPlan.IsTradable),
                     StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
                 ],
                 [
@@ -63,7 +71,7 @@ namespace TradingDashboard.Services.Strategies
                 context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : "WAIT",
                 context.IsOwned
                     ? $"exit tracking after middle breakout entry / {minuteDataText}"
-                    : minuteCheck.FormatSummary("10m MA60 / 5m breakout", 10, 5),
+                    : $"{minuteCheck.FormatSummary("10m MA60 / 5m breakout", 10, 5)} / {StrategyExitFirstPlanner.FormatSummary(exitPlan)}",
                 progress,
                 orderIntent);
         }
