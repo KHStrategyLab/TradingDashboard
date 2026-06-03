@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using TradingDashboard.Models;
@@ -32,7 +33,7 @@ namespace TradingDashboard.Services
                     settingsPath ?? DefaultRelativePath);
             }
 
-            string json = File.ReadAllText(settingsPath);
+            string json = File.ReadAllText(settingsPath, Encoding.UTF8);
 
             var options = new JsonSerializerOptions
             {
@@ -54,7 +55,7 @@ namespace TradingDashboard.Services
             if (string.IsNullOrWhiteSpace(settingsPath) || !File.Exists(settingsPath))
                 return;
 
-            JsonNode root = JsonNode.Parse(File.ReadAllText(settingsPath), documentOptions: ReadNodeOptions) ?? new JsonObject();
+            JsonNode root = JsonNode.Parse(File.ReadAllText(settingsPath, Encoding.UTF8), documentOptions: ReadNodeOptions) ?? new JsonObject();
             if (root is not JsonObject rootObject)
                 return;
 
@@ -65,7 +66,7 @@ namespace TradingDashboard.Services
             }
 
             preloadObject["IdleDelaySeconds"] = Math.Clamp(seconds, 5, 3600);
-            File.WriteAllText(settingsPath, rootObject.ToJsonString(WriteOptions));
+            File.WriteAllText(settingsPath, rootObject.ToJsonString(WriteOptions), Encoding.UTF8);
         }
 
         private static string ResolveSettingsPath()

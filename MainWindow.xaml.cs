@@ -1850,6 +1850,8 @@ namespace TradingDashboard
             InfoBasePriceText.Foreground = _whiteBrush;
             TryApplyTrustedCachedBasePriceToSelection(stockCode);
             AppendLog($"stock selected: {stockName}");
+            if (IsTemporaryKrxFallbackDisplayMarket(stockCode))
+                AppendLog($"market unresolved fallback: {stockName} ({stockCode}) / display KRX? / 0s {_lastMarketStatusText}");
             if (selectedItem is WatchStockItem recentStock)
             {
                 await EnsureRealtime0BTrackingAsync(recentStock, "select");
@@ -1864,9 +1866,7 @@ namespace TradingDashboard
 
             if (IsOrderBookUiActive())
             {
-                await LoadSelectedOrderBookSnapshotAsync(stockCode, selectionVersion, requestToken);
-                if (!IsCurrentSelection(stockCode, selectionVersion))
-                    return;
+                _ = LoadSelectedOrderBookSnapshotAsync(stockCode, selectionVersion, requestToken);
             }
             else
             {
@@ -2357,6 +2357,9 @@ namespace TradingDashboard
 
                 if (!HasAnyHogaLevel(snapshot) && useNxtMarket && !IsNxtFrozenWindow())
                 {
+                    // DO NOT CHANGE WITHOUT GUIDE UPDATE:
+                    // For an NXT display path, KRX order-book values are not a fallback.
+                    // Only KRX previous close may be shared as the base/rate reference.
                     // When showing NXT/SOR, only KRX previous close is used as base price.
                     // KRX order-book fallback is skipped because it mixes values unlike the MTS NXT view.
                     AppendLog($"NXT order book empty, skip KRX fallback: {stockCode}");
@@ -2413,6 +2416,9 @@ namespace TradingDashboard
                 StockStatusMetrics m = await _kiwoomConditionService.GetStockStatusMetricsByGuideAsync(stockCode, useNxtMarket, cancellationToken);
                 if (useNxtMarket && IsEmptyStockStatus(m) && !IsNxtFrozenWindow())
                 {
+                    // DO NOT CHANGE WITHOUT GUIDE UPDATE:
+                    // For an NXT display path, KRX OHLC/current/volume values are not fallback data.
+                    // Empty NXT metrics must remain waiting/blank instead of being filled from KRX.
                     // When showing NXT/SOR, only KRX previous close is used as base price.
                     // Refilling OHLC/current price from KRX would diverge from MTS SOR ON.
                     AppendLog($"NXT stock metrics empty, skip KRX fallback: {stockCode}");
@@ -2437,8 +2443,8 @@ namespace TradingDashboard
                     $"stock metrics TR: {statusRequestCode} / {(useNxtMarket ? "NXT" : "KRX")} / " +
                     $"screen base(KRX) {(_krxPrevClosePrice > 0 ? _krxPrevClosePrice.ToString("N0") : "-")} / " +
                     $"response base {m.BasePriceText} / open {m.OpenPriceText} / high {m.HighPriceText} / low {m.LowPriceText} / close {m.ClosePriceText} / volume {m.VolumeText}");
-                if (IsNxtSupportedStock(stockCode))
-                    await LogStockStatusCompareAsync(stockCode, selectionVersion, cancellationToken);
+                if (_config.Kiwoom.LogStockStatusCompare && IsNxtSupportedStock(stockCode))
+                    _ = LogStockStatusCompareAsync(stockCode, selectionVersion, cancellationToken);
 
                 _currentStatusMetrics = m;
                 ApplySelectedWatchStockPriceInfo(stockCode, m, useNxtMarket);

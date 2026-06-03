@@ -203,6 +203,12 @@ namespace TradingDashboard
             return true;
         }
 
+        private bool IsMarketStatusUncertain()
+        {
+            DateTime now = DateTime.Now;
+            return now < _marketStatusUnknownUntil || _lastMarketStatusAt == DateTime.MinValue;
+        }
+
         private static bool IsNxtOpenStatus(string code)
         {
             return string.Equals(code, "P", StringComparison.OrdinalIgnoreCase) ||
@@ -1392,6 +1398,10 @@ namespace TradingDashboard
 
         private string ResolveDisplayMarketForStockCode(string stockCode)
         {
+            // DO NOT CHANGE WITHOUT GUIDE UPDATE:
+            // KRX fallback here is only an unresolved/default display market.
+            // It must never be treated as replacement data for an already-NXT display path.
+            // Confirmed on 2026-06-03: "KRX fallback is an unresolved default, not an NXT data substitute."
             string code = NormalizeStockCode(stockCode);
             if (!string.IsNullOrWhiteSpace(code) &&
                 string.Equals(code, _selectedStockCode, StringComparison.Ordinal) &&
@@ -1404,6 +1414,18 @@ namespace TradingDashboard
                 return candidateMarket;
 
             return ShouldUseNxtDataForStock(code) ? "NXT" : "KRX";
+        }
+
+        private bool IsTemporaryKrxFallbackDisplayMarket(string stockCode)
+        {
+            string code = NormalizeStockCode(stockCode);
+            if (string.IsNullOrWhiteSpace(code) || !IsMarketStatusUncertain())
+                return false;
+
+            if (!string.Equals(ResolveDisplayMarketForStockCode(code), "KRX", StringComparison.Ordinal))
+                return false;
+
+            return !TryResolveCandidateMarketForStock(code, out _);
         }
 
         private static DateTime ParseRealtimeTradeTime(string tradeTimeText)

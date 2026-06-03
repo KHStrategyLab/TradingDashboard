@@ -44,6 +44,7 @@ namespace TradingDashboard.Models
         public bool AutoLogin { get; set; } = false;
         public bool MockMode { get; set; } = false;
         public bool RealMode { get; set; } = true;
+        public bool LogStockStatusCompare { get; set; } = false;
     }
 
     public class TelegramSettings

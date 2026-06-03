@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -48,7 +49,7 @@ namespace TradingDashboard.Services
                 if (!File.Exists(_path))
                     return null;
 
-                string json = await File.ReadAllTextAsync(_path, cancellationToken).ConfigureAwait(false);
+                string json = await File.ReadAllTextAsync(_path, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
                 return JsonSerializer.Deserialize<StockMasterCacheDocument>(json, JsonOptions);
             }
             catch
@@ -64,7 +65,7 @@ namespace TradingDashboard.Services
                 Directory.CreateDirectory(directory);
 
             string json = JsonSerializer.Serialize(document, JsonOptions);
-            await File.WriteAllTextAsync(_path, json, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(_path, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
         }
 
         private static string ResolveDefaultPath()

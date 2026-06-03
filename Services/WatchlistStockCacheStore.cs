@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using TradingDashboard.Models;
 
@@ -20,7 +21,7 @@ namespace TradingDashboard.Services
             if (!File.Exists(CachePath))
                 return [];
 
-            string json = File.ReadAllText(CachePath);
+            string json = File.ReadAllText(CachePath, Encoding.UTF8);
             return JsonSerializer.Deserialize<List<WatchlistStockCacheEntry>>(json, JsonOptions)
                    ?? [];
         }
@@ -32,7 +33,7 @@ namespace TradingDashboard.Services
                 Directory.CreateDirectory(directory);
 
             string json = JsonSerializer.Serialize(entries.OrderBy(e => e.Code).ToList(), JsonOptions);
-            File.WriteAllText(CachePath, json);
+            File.WriteAllText(CachePath, json, Encoding.UTF8);
         }
 
         private static string ResolvePath()

@@ -22,7 +22,8 @@
     "AccountNo": "KIWOOM_ACCOUNT_NO",
     "AutoLogin": false,
     "MockMode": false,
-    "RealMode": true
+    "RealMode": true,
+    "LogStockStatusCompare": false
   },
   "Telegram": {
     "BotToken": "TELEGRAM_BOT_TOKEN",
