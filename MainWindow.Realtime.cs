@@ -933,12 +933,14 @@ namespace TradingDashboard
 
             if (hasOrderBook)
             {
+                string realtimeMarket = ResolveRealtimeItemMarket(rawCode);
                 UpdateStrategyRealtimeOrderBookSnapshot(
                     code,
-                    ResolveRealtimeItemMarket(rawCode),
+                    realtimeMarket,
                     sellRows,
                     buyRows,
                     receivedAt);
+                LogStrategyOrderBookProbeSnapshotIfNeeded(code, realtimeMarket, sellRows, buyRows, receivedAt);
             }
 
             if (code != _selectedStockCode)
@@ -1929,6 +1931,7 @@ namespace TradingDashboard
             {
                 _strategyOrderBookProbeRequestCodes.Clear();
                 _strategyOrderBookProbeRetryAfterByKey.Clear();
+                _strategyOrderBookProbeLastReceiveLogAtByKey.Clear();
             }
         }
 
@@ -1943,7 +1946,7 @@ namespace TradingDashboard
 
             string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
             string key = BuildMarketIdentityKey(code, market);
-            string requestCode = string.Equals(market, "NXT", StringComparison.Ordinal) ? $"{code}_NX" : code;
+            string requestCode = BuildStrategyRealtimeRequestCode(code, market);
             string[] requestCodes;
             bool added;
 
@@ -1980,6 +1983,56 @@ namespace TradingDashboard
             }, _realtimeCts.Token);
 
             AppendLog($"strategy 0D probe registered: {requestCode} / {requestCodes.Length}items");
+        }
+
+        private void LogStrategyOrderBookProbeSnapshotIfNeeded(
+            string code,
+            string market,
+            IReadOnlyList<(long Price, long Qty)> sellRows,
+            IReadOnlyList<(long Price, long Qty)> buyRows,
+            DateTime at)
+        {
+            string normalizedCode = NormalizeStockCode(code);
+            string normalizedMarket = NormalizeIdentityMarket(market);
+            string requestCode = BuildStrategyRealtimeRequestCode(normalizedCode, normalizedMarket);
+            string key = BuildMarketIdentityKey(normalizedCode, normalizedMarket);
+            bool shouldLog;
+
+            lock (_strategyOrderBookProbeLock)
+            {
+                if (!_strategyOrderBookProbeRequestCodes.Contains(requestCode))
+                    return;
+
+                if (_strategyOrderBookProbeLastReceiveLogAtByKey.TryGetValue(key, out DateTime lastLogAt) &&
+                    (at - lastLogAt).TotalSeconds < 30)
+                {
+                    return;
+                }
+
+                _strategyOrderBookProbeLastReceiveLogAtByKey[key] = at;
+                shouldLog = true;
+            }
+
+            if (!shouldLog)
+                return;
+
+            long askQty = sellRows.Sum(row => row.Qty);
+            long bidQty = buyRows.Sum(row => row.Qty);
+            double bidRatio = askQty + bidQty > 0 ? bidQty / (double)(askQty + bidQty) * 100.0 : 0;
+            long bestAsk = sellRows.FirstOrDefault(row => row.Price > 0).Price;
+            long bestBid = buyRows.FirstOrDefault(row => row.Price > 0).Price;
+
+            Dispatcher.Invoke(() => AppendLog(
+                $"strategy 0D probe snapshot: {requestCode} / ask {bestAsk:N0} {askQty:N0} / bid {bestBid:N0} {bidQty:N0} / bidRatio {bidRatio:0}%"));
+        }
+
+        private static string BuildStrategyRealtimeRequestCode(string code, string market)
+        {
+            string normalizedCode = NormalizeStockCode(code);
+            string normalizedMarket = NormalizeIdentityMarket(market);
+            return string.Equals(normalizedMarket, "NXT", StringComparison.Ordinal)
+                ? $"{normalizedCode}_NX"
+                : normalizedCode;
         }
 
         private static async Task SendWsJsonAsync(ClientWebSocket ws, object payload, CancellationToken ct)

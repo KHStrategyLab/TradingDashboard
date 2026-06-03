@@ -31,3 +31,17 @@ Orders still flow through:
 
 `StrategySlot.Evaluate` -> `ProcessStrategySignalAlerts` -> `RiskGuard` -> `KiwoomTradingClient`
 
+## Debug Snapshot
+
+Strategy debug snapshots include `OrderBookProbe`.
+
+This section records:
+
+- whether the probe request code is registered,
+- last `0D` order-book receive/log time,
+- fresh/stale state,
+- best ask/bid,
+- total ask/bid quantity,
+- bid quantity ratio.
+
+This is for inspection only. It must not change strategy decisions by itself.

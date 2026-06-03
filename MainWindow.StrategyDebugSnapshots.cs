@@ -164,6 +164,7 @@ namespace TradingDashboard
                 GateBaseCandleTradeValue: stock.GateBaseCandleTradeValue,
                 IsIntradayPreCandidate: stock.IsIntradayPreCandidate,
                 RealtimeFlow: StrategyRealtimeFlowDebugSnapshot.FromSnapshot(realtimeFlow),
+                OrderBookProbe: BuildStrategyOrderBookProbeDebugSnapshot(stock, realtimeFlow),
                 MinuteStatus: BuildMinuteStatusMap(status),
                 Frames: snapshots?.Frames.Values
                     .OrderBy(frame => frame.Minute)
@@ -581,6 +582,39 @@ namespace TradingDashboard
                     .ToList());
         }
 
+        private StrategyOrderBookProbeDebugSnapshot BuildStrategyOrderBookProbeDebugSnapshot(
+            WatchStockItem stock,
+            StrategyRealtimeFlowSnapshot realtimeFlow)
+        {
+            string code = NormalizeStockCode(stock.Code);
+            string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
+            string key = BuildMarketIdentityKey(code, market);
+            string requestCode = BuildStrategyRealtimeRequestCode(code, market);
+            bool isRegistered;
+            DateTime retryAfter;
+            DateTime lastProbeLogAt;
+
+            lock (_strategyOrderBookProbeLock)
+            {
+                isRegistered = _strategyOrderBookProbeRequestCodes.Contains(requestCode);
+                _strategyOrderBookProbeRetryAfterByKey.TryGetValue(key, out retryAfter);
+                _strategyOrderBookProbeLastReceiveLogAtByKey.TryGetValue(key, out lastProbeLogAt);
+            }
+
+            return new StrategyOrderBookProbeDebugSnapshot(
+                RequestCode: requestCode,
+                IsRegistered: isRegistered,
+                RetryAfter: retryAfter,
+                LastReceiveLogAt: lastProbeLogAt,
+                LastOrderBookAt: realtimeFlow.LastOrderBookAt,
+                IsFresh: realtimeFlow.HasFreshOrderBook(DateTime.Now, maxAgeSeconds: 15),
+                BestAskPrice: realtimeFlow.BestAskPrice,
+                BestBidPrice: realtimeFlow.BestBidPrice,
+                TotalAskQuantity: realtimeFlow.TotalAskQuantity,
+                TotalBidQuantity: realtimeFlow.TotalBidQuantity,
+                BidRatio: realtimeFlow.BidQuantityRatio);
+        }
+
         private static string ResolveDebugSnapshotDirectory()
         {
             string? projectFromBase = SearchUpwards(AppContext.BaseDirectory, "TradingDashboard.csproj");
@@ -643,6 +677,7 @@ namespace TradingDashboard
             long GateBaseCandleTradeValue,
             bool IsIntradayPreCandidate,
             StrategyRealtimeFlowDebugSnapshot RealtimeFlow,
+            StrategyOrderBookProbeDebugSnapshot OrderBookProbe,
             IReadOnlyDictionary<int, StrategyMinuteDebugStatus> MinuteStatus,
             IReadOnlyList<StrategyMinuteDebugFrame> Frames,
             IReadOnlyList<StrategyProgressDebugSnapshot> Progress,
@@ -684,6 +719,19 @@ namespace TradingDashboard
                     snapshot.TotalBidQuantity,
                     snapshot.BidQuantityRatio);
         }
+
+        private sealed record StrategyOrderBookProbeDebugSnapshot(
+            string RequestCode,
+            bool IsRegistered,
+            DateTime RetryAfter,
+            DateTime LastReceiveLogAt,
+            DateTime LastOrderBookAt,
+            bool IsFresh,
+            long BestAskPrice,
+            long BestBidPrice,
+            long TotalAskQuantity,
+            long TotalBidQuantity,
+            double BidRatio);
 
         private sealed record StrategyMinuteDebugSnapshotBatch(
             DateTime CreatedAt,

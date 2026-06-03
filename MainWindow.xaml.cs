@@ -113,6 +113,7 @@ namespace TradingDashboard
         private readonly object _strategyOrderBookProbeLock = new();
         private readonly HashSet<string> _strategyOrderBookProbeRequestCodes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTime> _strategyOrderBookProbeRetryAfterByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, DateTime> _strategyOrderBookProbeLastReceiveLogAtByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastBuyExecCumByCode = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastSellExecCumByCode = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _conditionRealtimeEnterSemaphore = new(1, 1);
