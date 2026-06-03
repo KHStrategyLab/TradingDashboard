@@ -11,6 +11,7 @@ namespace TradingDashboard
         private static readonly TimeSpan RealtimeWatchdogInterval = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan RealtimeSilenceReconnectAfter = TimeSpan.FromMinutes(3);
         private static readonly TimeSpan RealtimeReconnectDelay = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan StrategyDebugSnapshotInterval = TimeSpan.FromMinutes(3);
 
         private readonly SemaphoreSlim _realtimeConnectionLock = new(1, 1);
         private CancellationTokenSource? _unattendedOpsCts;
@@ -19,6 +20,7 @@ namespace TradingDashboard
         private DateTime _lastRealtimeConnectAt = DateTime.MinValue;
         private DateTime _lastRealtimeWatchdogLogAt = DateTime.MinValue;
         private bool _isDailyStartupRefreshRunning;
+        private bool _isStrategyDebugSnapshotRunning;
 
         private void StartUnattendedOperations()
         {
@@ -27,7 +29,8 @@ namespace TradingDashboard
             CancellationToken token = _unattendedOpsCts.Token;
             _ = Task.Run(() => RunRealtimeWatchdogAsync(token), token);
             _ = Task.Run(() => RunDailyStartupRefreshSchedulerAsync(token), token);
-            AppendLog("unattended monitor started: WS watchdog / daily 07:30 refresh");
+            _ = Task.Run(() => RunStrategyDebugSnapshotSchedulerAsync(token), token);
+            AppendLog("unattended monitor started: WS watchdog / daily 07:30 refresh / strategy snapshot 3m");
         }
 
         private void StopUnattendedOperations()
@@ -144,6 +147,52 @@ namespace TradingDashboard
                     await Dispatcher.InvokeAsync(() => AppendLog($"0B watchdog error: {ex.Message}"));
                 }
             }
+        }
+
+        private async Task RunStrategyDebugSnapshotSchedulerAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(StrategyDebugSnapshotInterval, cancellationToken).ConfigureAwait(false);
+                    if (!ShouldRunStrategyDebugSnapshotScheduler())
+                        continue;
+
+                    await InvokeOnUiThreadAsync(
+                        () => SaveAllStrategyMinuteDebugSnapshotsAsync("3m auto"),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    await Dispatcher.InvokeAsync(() => AppendLog($"strategy minute debug snapshot scheduler error: {ex.Message}"));
+                }
+            }
+        }
+
+        private bool ShouldRunStrategyDebugSnapshotScheduler()
+        {
+            if (_isStrategyDebugSnapshotRunning)
+                return false;
+
+            return Dispatcher.Invoke(() =>
+                AutoTradingEnabledToggle != null &&
+                AutoTradingEnabledToggle.IsChecked == true &&
+                StrategyDebugSnapshotToggle != null &&
+                StrategyDebugSnapshotToggle.IsChecked == true &&
+                _watchStocks.Count > 0 &&
+                IsStrategyDebugSnapshotMarketWindow());
+        }
+
+        private static bool IsStrategyDebugSnapshotMarketWindow()
+        {
+            TimeSpan now = DateTime.Now.TimeOfDay;
+            bool krxRegular = now >= new TimeSpan(9, 0, 0) && now < new TimeSpan(15, 30, 0);
+            return krxRegular || IsNxtMarketWindow();
         }
 
         private string ResolveRealtimeWatchdogReconnectReason()

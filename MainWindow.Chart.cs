@@ -1531,6 +1531,9 @@ namespace TradingDashboard
             double chartW = Math.Max(40, w - axisWidth - ChartRightPadding);
 
             long maxVol = Math.Max(1, candles.Max(c => c.Volume));
+            int visibleStartIndex = GetVisibleChartStartIndex();
+            double maxVolumeMa = ResolveVisibleVolumeMovingAverageMax(candles.Count, visibleStartIndex, 5, 20, 60);
+            maxVol = Math.Max(maxVol, (long)Math.Ceiling(maxVolumeMa));
             double barW = Math.Max(1, chartW / candles.Count * 0.62);
             double gap = chartW / candles.Count;
 
@@ -1542,7 +1545,7 @@ namespace TradingDashboard
                 var bar = new Rectangle
                 {
                     Width = barW,
-                    Height = Math.Max(1, barH),
+                    Height = c.Volume > 0 ? Math.Max(2, barH) : 1,
                     Fill = c.Close >= c.Open ? _upColorBrush : _downColorBrush,
                     Opacity = 0.8
                 };
@@ -1554,8 +1557,111 @@ namespace TradingDashboard
                     _lastVolumeBar = bar;
             }
 
+            DrawVolumeMovingAverage(canvas, candles.Count, visibleStartIndex, 5, (Brush)FindResource("Ma5Brush"), chartW, h, maxVol, 1.45);
+            DrawVolumeMovingAverage(canvas, candles.Count, visibleStartIndex, 20, (Brush)FindResource("Ma20Brush"), chartW, h, maxVol, 1.25);
+            DrawVolumeMovingAverage(canvas, candles.Count, visibleStartIndex, 60, (Brush)FindResource("Ma60Brush"), chartW, h, maxVol, 1.25);
+            DrawVolumeMaLegend(canvas);
             DrawRightVolumeAxis(canvas, chartW + ChartRightPadding, axisWidth, h, maxVol);
-            _volumeChartRenderState = new ChartRenderState(candles.Count, GetVisibleChartStartIndex(), chartW, h, 0, 0, gap, barW, maxVol, 0);
+            _volumeChartRenderState = new ChartRenderState(candles.Count, visibleStartIndex, chartW, h, 0, 0, gap, barW, maxVol, 0);
+        }
+
+        private double ResolveVisibleVolumeMovingAverageMax(int visibleCount, int visibleStartIndex, params int[] periods)
+        {
+            if (_currentChartCandles.Count == 0 || visibleCount <= 0 || periods.Length == 0)
+                return 0;
+
+            double max = 0;
+            int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, visibleStartIndex + visibleCount - 1);
+            foreach (int period in periods.Where(p => p > 0))
+            {
+                long sum = 0;
+                for (int i = 0; i < _currentChartCandles.Count; i++)
+                {
+                    sum += Math.Max(0, _currentChartCandles[i].Volume);
+                    if (i >= period)
+                        sum -= Math.Max(0, _currentChartCandles[i - period].Volume);
+                    if (i < period - 1)
+                        continue;
+                    if (i < visibleStartIndex)
+                        continue;
+                    if (i > visibleEndIndex)
+                        break;
+
+                    max = Math.Max(max, sum / (double)period);
+                }
+            }
+
+            return max;
+        }
+
+        private void DrawVolumeMovingAverage(Canvas canvas, int visibleCount, int visibleStartIndex, int period, Brush color, double w, double h, long maxVol, double strokeThickness)
+        {
+            if (_currentChartCandles.Count < period || visibleCount <= 0 || maxVol <= 0)
+                return;
+
+            double gap = w / visibleCount;
+            var points = new PointCollection();
+            long sum = 0;
+            int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, visibleStartIndex + visibleCount - 1);
+
+            for (int i = 0; i < _currentChartCandles.Count; i++)
+            {
+                sum += Math.Max(0, _currentChartCandles[i].Volume);
+                if (i >= period)
+                    sum -= Math.Max(0, _currentChartCandles[i - period].Volume);
+                if (i < period - 1)
+                    continue;
+                if (i < visibleStartIndex)
+                    continue;
+                if (i > visibleEndIndex)
+                    break;
+
+                double avg = sum / (double)period;
+                double x = (i - visibleStartIndex) * gap + gap / 2;
+                double y = h - avg / maxVol * (h - 2);
+                points.Add(new Point(x, Math.Max(1, Math.Min(h - 1, y))));
+            }
+
+            if (points.Count < 2)
+                return;
+
+            canvas.Children.Add(new Polyline
+            {
+                Stroke = color,
+                StrokeThickness = strokeThickness,
+                Opacity = 0.95,
+                Points = points
+            });
+        }
+
+        private void DrawVolumeMaLegend(Canvas canvas)
+        {
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(6, 2, 0, 0),
+                IsHitTestVisible = false
+            };
+
+            AddVolumeMaLegendText(panel, "Vol5", (Brush)FindResource("Ma5Brush"));
+            AddVolumeMaLegendText(panel, "Vol20", (Brush)FindResource("Ma20Brush"));
+            AddVolumeMaLegendText(panel, "Vol60", (Brush)FindResource("Ma60Brush"));
+
+            Canvas.SetLeft(panel, 4);
+            Canvas.SetTop(panel, 2);
+            canvas.Children.Add(panel);
+        }
+
+        private static void AddVolumeMaLegendText(Panel panel, string text, Brush brush)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = text,
+                Foreground = brush,
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(0, 0, 8, 0)
+            });
         }
 
         private void DrawRightVolumeAxis(Canvas canvas, double chartW, double axisWidth, double h, long maxVol)

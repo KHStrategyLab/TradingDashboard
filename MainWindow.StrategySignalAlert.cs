@@ -40,20 +40,19 @@ namespace TradingDashboard
 
             foreach (StrategyEvaluationResult result in results.Where(x => x.HasSignal))
             {
-                if (execution.AllowsLiveBuy)
+                StrategyOrderIntent orderIntent = result.ResolvedOrderIntent;
+                if (execution.AllowsLiveBuy && orderIntent.AllowsOrderHandoff)
                     _ = TrySubmitStrategyLiveBuyAsync(stock, result, execution);
 
                 string key = BuildStrategySignalAlertKey(stock, result);
                 if (!_strategySignalAlertLoggedKeys.Add(key))
                     continue;
 
-                string orderMode = execution.LiveBuyEnabled
-                    ? "LIVE ORDERS ON / order handoff pending"
-                    : "LIVE ORDERS OFF / alert only";
+                string orderMode = BuildStrategyOrderModeText(execution, orderIntent);
 
                 AppendReadyLog(
                     $"STRATEGY BUY SIGNAL: {stock.Code} {stock.Name} / {result.Name} / " +
-                    $"price {ResolveStrategySignalPrice(stock):N0} / {orderMode}");
+                    $"intent {orderIntent.Action} / price {ResolveStrategySignalPrice(stock):N0} / {orderMode}");
 
                 _ = TrySendStrategySignalAlertAsync(stock, result, orderMode);
             }
@@ -205,6 +204,8 @@ namespace TradingDashboard
                 return StrategyLiveBuyGuardResult.Blocked("minute ledger not ready");
             if (!result.HasSignal)
                 return StrategyLiveBuyGuardResult.Blocked("signal not active");
+            if (!result.ResolvedOrderIntent.AllowsOrderHandoff)
+                return StrategyLiveBuyGuardResult.Blocked($"order intent blocked: {result.ResolvedOrderIntent.Action}");
             if (!TryResolveStrategyEntry5MinuteLow(stock, out _, out _))
                 return StrategyLiveBuyGuardResult.Blocked("entry 5m stop anchor missing");
             if (execution.SlotCount <= 0)
@@ -254,6 +255,17 @@ namespace TradingDashboard
             return _config.Telegram.Enabled &&
                 !string.IsNullOrWhiteSpace(_config.Telegram.BotToken) &&
                 !string.IsNullOrWhiteSpace(_config.Telegram.DefaultChatId);
+        }
+
+        private static string BuildStrategyOrderModeText(
+            StrategyExecutionSettings execution,
+            StrategyOrderIntent orderIntent)
+        {
+            if (!orderIntent.AllowsOrderHandoff)
+                return $"ORDER INTENT {orderIntent.Action} / alert only";
+            if (execution.LiveBuyEnabled)
+                return $"LIVE ORDERS ON / order handoff pending / intent {orderIntent.Action}";
+            return $"LIVE ORDERS OFF / alert only / intent {orderIntent.Action}";
         }
 
         private string BuildStrategySignalAlertKey(WatchStockItem stock, StrategyEvaluationResult result)
@@ -426,13 +438,23 @@ namespace TradingDashboard
             string strategy = WebUtility.HtmlEncode(result.Name);
             string mode = WebUtility.HtmlEncode(orderMode);
             string summary = WebUtility.HtmlEncode(result.Summary);
+            StrategyOrderIntent intent = result.ResolvedOrderIntent;
+            string intentText = WebUtility.HtmlEncode(intent.Action.ToString());
+            string intentReason = WebUtility.HtmlEncode(intent.Reason);
             string price = ResolveStrategySignalPrice(stock) > 0 ? $"{ResolveStrategySignalPrice(stock):N0}" : "-";
+            string entryPrice = intent.EntryPrice > 0 ? $"{intent.EntryPrice:N0}" : "-";
+            string stopPrice = intent.StopPrice > 0 ? $"{intent.StopPrice:N0}" : "-";
+            string targetPrice = intent.TargetPrice > 0 ? $"{intent.TargetPrice:N0}" : "-";
+            string rewardRisk = intent.RewardRiskRatio > 0 ? $"{intent.RewardRiskRatio:0.##}R" : "-";
 
             return string.Join(Environment.NewLine, new[]
             {
                 $"<b>STRATEGY BUY SIGNAL</b> {name} ({code})",
                 $"strategy: {strategy}",
+                $"intent: {intentText}",
                 $"price: {price}",
+                $"entry: {entryPrice} / stop: {stopPrice} / target: {targetPrice} / R: {rewardRisk}",
+                $"reason: {intentReason}",
                 $"mode: {mode}",
                 $"summary: {summary}"
             });

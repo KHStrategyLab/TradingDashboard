@@ -27,6 +27,11 @@ namespace TradingDashboard.Services.Strategies
                 gatePassed &&
                 hasBasePrice &&
                 minuteCheck.HasSignal;
+            StrategyOrderIntent orderIntent = hasSignal
+                ? StrategyOrderIntent.BuyNow(
+                    "15m MA60 recovery + 5m 20-high breakout",
+                    minuteCheck.SignalPrice)
+                : StrategyOrderIntent.Watch("waiting for 15m MA60 recovery and 5m breakout");
 
             StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
                 Id,
@@ -59,7 +64,8 @@ namespace TradingDashboard.Services.Strategies
                 context.IsOwned
                     ? $"exit tracking after stable breakout entry / {minuteDataText}"
                     : minuteCheck.FormatSummary("15m MA60 / 5m breakout", 15, 5),
-                progress);
+                progress,
+                orderIntent);
         }
     }
 }

@@ -1882,7 +1882,7 @@
                     Background="{StaticResource BgPanelBrush}"
                     BorderBrush="{StaticResource LineBrush}"
                     BorderThickness="0,0,1,0">
-                <Grid>
+                <Grid x:Name="ChartSnapshotHost">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="35"/>
                         <RowDefinition Height="6*"/>
@@ -2781,13 +2781,32 @@
                                                   IsChecked="False"
                                                   Style="{StaticResource PolicyCardToggleStyle}"
                                                   Checked="StrategyControlBoard_Changed"
-                                                  Unchecked="StrategyControlBoard_Changed">
+                                                  Unchecked="StrategyControlBoard_Changed"
+                                                  Margin="0,0,0,7">
                                         <StackPanel>
                                             <TextBlock Text="파일 저장"
                                                        Foreground="{StaticResource TextMainBrush}"
                                                        FontSize="15"
                                                        FontWeight="Bold"/>
                                             <TextBlock Text="ON = 분봉 seed를 Storage에 남기는 모드로 예약한다"
+                                                       Style="{StaticResource CardMutedTextStyle}"
+                                                       FontSize="10"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+
+                                    <ToggleButton x:Name="StrategyDebugSnapshotToggle"
+                                                  IsChecked="False"
+                                                  Style="{StaticResource PolicyCardToggleStyle}"
+                                                  Checked="StrategyControlBoard_Changed"
+                                                  Unchecked="StrategyControlBoard_Changed">
+                                        <StackPanel>
+                                            <TextBlock Text="Codex 확인"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="15"
+                                                       FontWeight="Bold"/>
+                                            <TextBlock Text="ON = Engine Start 중 3분마다 전체 전략 장부 JSON을 자동 저장한다"
                                                        Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="10"
                                                        Margin="0,3,0,0"
@@ -3413,12 +3432,27 @@
                                     CornerRadius="6"
                                     Padding="10"
                                     Margin="0,8,0,0">
-                                <TextBlock x:Name="StrategyMinuteDataLoadStatusText"
-                                           Text="선택 종목의 1/3/5/10/15/30분 전략 장부 상태가 Progress에 표시됨"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="11"
-                                           VerticalAlignment="Center"
-                                           TextWrapping="Wrap"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="StrategyMinuteDataLoadStatusText"
+                                               Text="선택 종목의 1/3/5/10/15/30분 전략 장부 상태가 Progress에 표시됨"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                    <Button Grid.Column="1"
+                                            Content="장부 저장"
+                                            Click="SaveSelectedStrategyMinuteSnapshotButton_Click"
+                                            Margin="10,0,0,0"
+                                            Padding="10,4"
+                                            Background="{StaticResource BgInnerBrush}"
+                                            BorderBrush="{StaticResource LineBrush}"
+                                            Foreground="{StaticResource TextMainBrush}"
+                                            ToolTip="선택 종목의 전략 분봉 장부를 JSON으로 저장"/>
+                                </Grid>
                             </Border>
                         </Grid>
                     </TabItem>

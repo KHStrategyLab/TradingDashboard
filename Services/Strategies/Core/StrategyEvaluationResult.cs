@@ -6,8 +6,11 @@ namespace TradingDashboard.Services.Strategies
         bool HasSignal,
         string StateText,
         string Summary,
-        StrategyProgressSnapshot? Progress = null)
+        StrategyProgressSnapshot? Progress = null,
+        StrategyOrderIntent? OrderIntent = null)
     {
+        public StrategyOrderIntent ResolvedOrderIntent => OrderIntent ?? StrategyOrderIntent.None();
+
         public static StrategyEvaluationResult Ignored(StrategySlotId slotId, string name) =>
             new(slotId, name, false, "미적용", "slot disabled", StrategyProgressSnapshot.Empty(slotId));
 

@@ -164,6 +164,36 @@ namespace TradingDashboard.Services.Strategies
             return new StrategyMinuteSnapshotSet(normalizedCode, normalizedMarket, frames);
         }
 
+        public IReadOnlyList<StrategyMinuteBar> GetBars(string code, string market, int minute, int takeCount = 0)
+        {
+            string normalizedCode = NormalizeCode(code);
+            string normalizedMarket = NormalizeMarket(market);
+            if (string.IsNullOrWhiteSpace(normalizedCode) || minute <= 0)
+                return [];
+
+            lock (_syncRoot)
+            {
+                if (!_stockCaches.TryGetValue(BuildStockKey(normalizedCode, normalizedMarket), out StrategyStockMinuteCache? stockCache) ||
+                    !stockCache.Frames.TryGetValue(minute, out StrategyMinuteBlock? block))
+                    return [];
+
+                List<StrategyMinuteBar> bars = [.. block.CompletedBars.Select(bar => bar.Clone())];
+                if (block.CurrentBar != null)
+                    bars.Add(block.CurrentBar.Clone());
+
+                bars = [.. bars
+                    .Where(bar => bar.Close > 0 && bar.BucketTime != DateTime.MinValue)
+                    .GroupBy(bar => bar.BucketTime)
+                    .Select(group => group.Last())
+                    .OrderBy(bar => bar.BucketTime)];
+
+                if (takeCount > 0 && bars.Count > takeCount)
+                    bars = [.. bars.TakeLast(takeCount)];
+
+                return bars;
+            }
+        }
+
         public bool TryGetLastMa60TouchAnchor(
             string code,
             string market,

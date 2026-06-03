@@ -17,6 +17,7 @@ Config/watchlist_stock_cache.json
 Config/watchlist_stock_cache.*.bak.json
 Config/stock_master_cache.json
 Config/chart_candle_cache.json
+Docs/LectureNotes/
 Storage/StrategyMinuteSeeds/
 Storage/StrategyAnchors/
 Storage/StrategyOrderJournal/
@@ -29,6 +30,9 @@ Storage/PaperTradeMarks/
 Storage/Backtests/
 Storage/LeaderHistory/
 Storage/CandidateLedger/
+Storage/DebugSnapshots/
+Storage/AiReviewQueue/
+Storage/LectureSnapshots/
 !Config/local.settings.example.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)

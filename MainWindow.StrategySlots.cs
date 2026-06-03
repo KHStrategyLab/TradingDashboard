@@ -286,6 +286,8 @@ namespace TradingDashboard
                 return "Minute Preload";
             if (ReferenceEquals(toggle, StrategyMinuteSeedFileSaveToggle))
                 return "Minute File Save";
+            if (ReferenceEquals(toggle, StrategyDebugSnapshotToggle))
+                return "Codex Check";
             if (ReferenceEquals(toggle, ProgressFilterBaseCandleChaseToggle))
                 return "Progress Filter 10m+3m";
             if (ReferenceEquals(toggle, ProgressFilterPullbackToggle))
@@ -400,6 +402,7 @@ namespace TradingDashboard
             SetSwitchStateFromStore(DuplicateAlertPolicyToggle, "DuplicateAlertPolicy", defaultValue: true);
             SetSwitchStateFromStore(StrategyMinutePreloadToggle, "StrategyMinutePreload", defaultValue: true);
             SetSwitchStateFromStore(StrategyMinuteSeedFileSaveToggle, "StrategyMinuteSeedFileSave", defaultValue: false);
+            SetSwitchStateFromStore(StrategyDebugSnapshotToggle, "StrategyDebugSnapshot", defaultValue: false);
             SetSwitchStateFromStore(ProgressFilterBaseCandleChaseToggle, "ProgressFilterBaseCandleChase", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterPullbackToggle, "ProgressFilterPullback", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterMiddleToggle, "ProgressFilterMiddle", defaultValue: true);
@@ -512,6 +515,8 @@ namespace TradingDashboard
                 key = "StrategyMinutePreload";
             else if (ReferenceEquals(toggle, StrategyMinuteSeedFileSaveToggle))
                 key = "StrategyMinuteSeedFileSave";
+            else if (ReferenceEquals(toggle, StrategyDebugSnapshotToggle))
+                key = "StrategyDebugSnapshot";
             else if (ReferenceEquals(toggle, ProgressFilterBaseCandleChaseToggle))
                 key = "ProgressFilterBaseCandleChase";
             else if (ReferenceEquals(toggle, ProgressFilterPullbackToggle))
@@ -1094,6 +1099,7 @@ namespace TradingDashboard
             bool paperTradingPreview = IsPaperTradingPreviewEnabled();
             bool preloadMinutes = IsStrategyMinutePreloadEnabled();
             bool saveMinuteSeeds = IsStrategyMinuteSeedFileSaveEnabled();
+            bool saveDebugSnapshots = IsStrategyDebugSnapshotEnabled();
             int preloadIdleSeconds = ResolveStrategyMinuteAutoPreloadIdleSeconds();
             IReadOnlyList<StrategySlotSetting> settings = GetStrategySlotSettings();
             StrategyWatchReadiness readiness = BuildStrategyWatchReadiness();
@@ -1120,7 +1126,8 @@ namespace TradingDashboard
                 $"DUP BUY {(duplicate.AllowAdditionalBuy ? "ON" : "OFF")} / " +
                 $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")} · " +
                 $"MINUTE PRELOAD {(preloadMinutes ? "ON" : "OFF")} / " +
-                $"IDLE {preloadIdleSeconds}s / FILE SAVE {(saveMinuteSeeds ? "ON" : "OFF")}";
+                $"IDLE {preloadIdleSeconds}s / FILE SAVE {(saveMinuteSeeds ? "ON" : "OFF")} / " +
+                $"CODEX CHECK {(saveDebugSnapshots ? "ON" : "OFF")}";
         }
 
         private StrategyWatchReadiness BuildStrategyWatchReadiness()
@@ -1427,6 +1434,9 @@ namespace TradingDashboard
 
         private bool IsStrategyMinuteSeedFileSaveEnabled() =>
             StrategyMinuteSeedFileSaveToggle != null && IsStrategyToggleOn(StrategyMinuteSeedFileSaveToggle);
+
+        private bool IsStrategyDebugSnapshotEnabled() =>
+            StrategyDebugSnapshotToggle != null && IsStrategyToggleOn(StrategyDebugSnapshotToggle);
 
         private void StartStrategyMinuteAutoPreload(IEnumerable<WatchStockItem> stocks, bool force = false, bool immediate = false)
         {
