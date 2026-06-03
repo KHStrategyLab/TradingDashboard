@@ -181,7 +181,8 @@ namespace TradingDashboard
                 StrategySlotId.BaseCandleChase => "Slot 01",
                 StrategySlotId.ThreeMinutePullback => "Slot 02",
                 StrategySlotId.SorTenMinuteFiveMinuteBreakout => "Slot 03",
-                StrategySlotId.ThemeDisclosureAssist => "Slot 04",
+                StrategySlotId.IntradayFifteenMinuteScalp => "Slot 05",
+                StrategySlotId.ThemeDisclosureAssist => "Assist",
                 _ => "Slot ??"
             };
 

@@ -5,6 +5,7 @@ namespace TradingDashboard.Services.Strategies
         BaseCandleChase,
         ThreeMinutePullback,
         SorTenMinuteFiveMinuteBreakout,
+        IntradayFifteenMinuteScalp,
         ThemeDisclosureAssist
     }
 }

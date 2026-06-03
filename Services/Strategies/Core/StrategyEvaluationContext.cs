@@ -1,4 +1,5 @@
 using TradingDashboard.Models;
+using System.Collections.Generic;
 
 namespace TradingDashboard.Services.Strategies
 {
@@ -13,6 +14,9 @@ namespace TradingDashboard.Services.Strategies
         public StrategyMinuteDataStatus MinuteData { get; init; } = new();
 
         public StrategyMinuteSnapshotSet? MinuteSnapshots { get; init; }
+
+        public IReadOnlyDictionary<int, IReadOnlyList<StrategyMinuteBar>> MinuteBars { get; init; } =
+            new Dictionary<int, IReadOnlyList<StrategyMinuteBar>>();
 
         public string Market { get; init; } = string.Empty;
 

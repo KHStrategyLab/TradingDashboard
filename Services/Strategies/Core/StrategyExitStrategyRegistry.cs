@@ -62,6 +62,7 @@ namespace TradingDashboard.Services.Strategies
                 StrategySlotId.BaseCandleChase => QuickReactionReentry,
                 StrategySlotId.ThreeMinutePullback => BaseCandleLowProfitScale,
                 StrategySlotId.SorTenMinuteFiveMinuteBreakout => QuickReactionReentry,
+                StrategySlotId.IntradayFifteenMinuteScalp => ProfitScaleTrail,
                 StrategySlotId.ThemeDisclosureAssist => ManualBuyStopAssist,
                 _ => BaseCandleLowProfitScale
             };

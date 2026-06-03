@@ -242,6 +242,7 @@ namespace TradingDashboard
             ReferenceEquals(toggle, StrategySlotBaseCandleChaseToggle) ||
             ReferenceEquals(toggle, StrategySlotPullbackToggle) ||
             ReferenceEquals(toggle, StrategySlotMiddleToggle) ||
+            ReferenceEquals(toggle, StrategySlotIntradayScalpToggle) ||
             ReferenceEquals(toggle, StrategySlotThemeAssistToggle) ||
             ReferenceEquals(toggle, DuplicateBuyPolicyToggle) ||
             ReferenceEquals(toggle, DuplicateAlertPolicyToggle);
@@ -250,6 +251,7 @@ namespace TradingDashboard
             ReferenceEquals(comboBox, StrategySlotBaseCandleChaseExitComboBox) ||
             ReferenceEquals(comboBox, StrategySlotPullbackExitComboBox) ||
             ReferenceEquals(comboBox, StrategySlotMiddleExitComboBox) ||
+            ReferenceEquals(comboBox, StrategySlotIntradayScalpExitComboBox) ||
             ReferenceEquals(comboBox, StrategySlotThemeAssistExitComboBox);
 
         private void LogStrategyToggleState(object sender)
@@ -276,6 +278,8 @@ namespace TradingDashboard
                 return "Slot 2 SOR 15m+5m";
             if (ReferenceEquals(toggle, StrategySlotMiddleToggle))
                 return "Slot 3 SOR 10m+5m";
+            if (ReferenceEquals(toggle, StrategySlotIntradayScalpToggle))
+                return "Slot 5 Intraday 15m+1m";
             if (ReferenceEquals(toggle, StrategySlotThemeAssistToggle))
                 return "Assist Theme";
             if (ReferenceEquals(toggle, DuplicateBuyPolicyToggle))
@@ -294,6 +298,8 @@ namespace TradingDashboard
                 return "Progress Filter 15m+5m";
             if (ReferenceEquals(toggle, ProgressFilterMiddleToggle))
                 return "Progress Filter 10m+5m";
+            if (ReferenceEquals(toggle, ProgressFilterIntradayScalpToggle))
+                return "Progress Filter Intraday";
             if (ReferenceEquals(toggle, ProgressFilterThemeAssistToggle))
                 return "Progress Filter Theme";
             if (ReferenceEquals(toggle, ProgressFilterUnownedToggle))
@@ -348,6 +354,11 @@ namespace TradingDashboard
                 "SOR 10min MA60 + 5min Breakout",
                 IsStrategyToggleOn(StrategySlotMiddleToggle),
                 ResolveStrategySlotExitStrategyCode(StrategySlotId.SorTenMinuteFiveMinuteBreakout)),
+            new(
+                StrategySlotId.IntradayFifteenMinuteScalp,
+                "Intraday 15m Base + 1m Trigger",
+                IsStrategyToggleOn(StrategySlotIntradayScalpToggle),
+                ResolveStrategySlotExitStrategyCode(StrategySlotId.IntradayFifteenMinuteScalp)),
             new(
                 StrategySlotId.ThemeDisclosureAssist,
                 "Theme / Disclosure Assist",
@@ -406,6 +417,7 @@ namespace TradingDashboard
             SetSwitchStateFromStore(ProgressFilterBaseCandleChaseToggle, "ProgressFilterBaseCandleChase", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterPullbackToggle, "ProgressFilterPullback", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterMiddleToggle, "ProgressFilterMiddle", defaultValue: true);
+            SetSwitchStateFromStore(ProgressFilterIntradayScalpToggle, "ProgressFilterIntradayScalp", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterThemeAssistToggle, "ProgressFilterThemeAssist", defaultValue: false);
             SetSwitchStateFromStore(ProgressFilterUnownedToggle, "ProgressFilterUnowned", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterOwnedToggle, "ProgressFilterOwned", defaultValue: false);
@@ -523,6 +535,8 @@ namespace TradingDashboard
                 key = "ProgressFilterPullback";
             else if (ReferenceEquals(toggle, ProgressFilterMiddleToggle))
                 key = "ProgressFilterMiddle";
+            else if (ReferenceEquals(toggle, ProgressFilterIntradayScalpToggle))
+                key = "ProgressFilterIntradayScalp";
             else if (ReferenceEquals(toggle, ProgressFilterThemeAssistToggle))
                 key = "ProgressFilterThemeAssist";
             else if (ReferenceEquals(toggle, ProgressFilterUnownedToggle))
@@ -543,6 +557,7 @@ namespace TradingDashboard
             SetStrategySlotToggleFromConfig(StrategySlotBaseCandleChaseToggle, StrategySlotId.BaseCandleChase);
             SetStrategySlotToggleFromConfig(StrategySlotPullbackToggle, StrategySlotId.ThreeMinutePullback);
             SetStrategySlotToggleFromConfig(StrategySlotMiddleToggle, StrategySlotId.SorTenMinuteFiveMinuteBreakout);
+            SetStrategySlotToggleFromConfig(StrategySlotIntradayScalpToggle, StrategySlotId.IntradayFifteenMinuteScalp);
             SetStrategySlotToggleFromConfig(StrategySlotThemeAssistToggle, StrategySlotId.ThemeDisclosureAssist);
         }
 
@@ -598,7 +613,8 @@ namespace TradingDashboard
         }
 
         private static bool GetDefaultStrategySlotEnabled(StrategySlotId slotId) =>
-            slotId != StrategySlotId.ThemeDisclosureAssist;
+            slotId != StrategySlotId.ThemeDisclosureAssist &&
+            slotId != StrategySlotId.IntradayFifteenMinuteScalp;
 
         private bool TryResolveStrategySlotId(ToggleButton toggle, out StrategySlotId slotId)
         {
@@ -617,6 +633,12 @@ namespace TradingDashboard
             if (ReferenceEquals(toggle, StrategySlotMiddleToggle))
             {
                 slotId = StrategySlotId.SorTenMinuteFiveMinuteBreakout;
+                return true;
+            }
+
+            if (ReferenceEquals(toggle, StrategySlotIntradayScalpToggle))
+            {
+                slotId = StrategySlotId.IntradayFifteenMinuteScalp;
                 return true;
             }
 
@@ -650,6 +672,10 @@ namespace TradingDashboard
                 StrategySlotId.SorTenMinuteFiveMinuteBreakout,
                 normalExitStrategies);
             SetExitStrategyComboBox(
+                StrategySlotIntradayScalpExitComboBox,
+                StrategySlotId.IntradayFifteenMinuteScalp,
+                normalExitStrategies);
+            SetExitStrategyComboBox(
                 StrategySlotThemeAssistExitComboBox,
                 StrategySlotId.ThemeDisclosureAssist,
                 assistExitStrategies.Count > 0 ? assistExitStrategies : StrategyExitStrategyRegistry.GetDescriptors(includeManualOnly: true));
@@ -675,6 +701,7 @@ namespace TradingDashboard
             SetStrategyExitStrategySelectorLock(StrategySlotBaseCandleChaseExitComboBox, StrategySlotBaseCandleChaseToggle);
             SetStrategyExitStrategySelectorLock(StrategySlotPullbackExitComboBox, StrategySlotPullbackToggle);
             SetStrategyExitStrategySelectorLock(StrategySlotMiddleExitComboBox, StrategySlotMiddleToggle);
+            SetStrategyExitStrategySelectorLock(StrategySlotIntradayScalpExitComboBox, StrategySlotIntradayScalpToggle);
             SetStrategyExitStrategySelectorLock(StrategySlotThemeAssistExitComboBox, StrategySlotThemeAssistToggle);
         }
 
@@ -735,6 +762,7 @@ namespace TradingDashboard
                 ChartCandleCount = _currentChartCandles.Count,
                 MinuteData = BuildStrategyMinuteDataStatus(stock),
                 MinuteSnapshots = BuildStrategyMinuteSnapshotSet(stock),
+                MinuteBars = BuildStrategyMinuteBars(stock),
                 Market = stock != null && ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX",
                 IsOwned = IsStockOwned(stock) && !GetStrategyDuplicatePolicy().AllowAdditionalBuy
             };
@@ -1032,6 +1060,20 @@ namespace TradingDashboard
             bool useNxtMarket = ShouldUseNxtDataForStock(stock);
             string market = useNxtMarket ? "NXT" : "KRX";
             return _strategyMinuteCacheService.GetSnapshotSet(stock.Code, market, 1, 3, 5, 10, 15, 30);
+        }
+
+        private StrategyMinuteBars BuildStrategyMinuteBars(WatchStockItem? stock)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return new StrategyMinuteBars();
+
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock);
+            string market = useNxtMarket ? "NXT" : "KRX";
+            Dictionary<int, IReadOnlyList<StrategyMinuteBar>> bars = [];
+            foreach (int minute in new[] { 1, 3, 5, 10, 15, 30 })
+                bars[minute] = _strategyMinuteCacheService.GetBars(stock.Code, market, minute);
+
+            return new StrategyMinuteBars(bars);
         }
 
         private static List<DailyCandle> ConvertChartCandlesToDailyCandles(IEnumerable<ChartCandle> candles)
@@ -1341,6 +1383,11 @@ namespace TradingDashboard
                         if (!HasFreshMa60AndBreakout20(snapshots, 10, 5))
                             return false;
                         break;
+                    case StrategySlotId.IntradayFifteenMinuteScalp:
+                        hasMinuteStrategy = true;
+                        if (!HasFreshIntradayScalpMinutes(snapshots))
+                            return false;
+                        break;
                 }
             }
 
@@ -1354,6 +1401,16 @@ namespace TradingDashboard
             snapshots.HasMa60AndBreakout20(ma60Minute, breakoutMinute) &&
             IsStrategyMinuteFrameFresh(snapshots.Get(ma60Minute)) &&
             IsStrategyMinuteFrameFresh(snapshots.Get(breakoutMinute));
+
+        private bool HasFreshIntradayScalpMinutes(StrategyMinuteSnapshotSet snapshots) =>
+            snapshots.Get(1)?.IsReady == true &&
+            snapshots.Get(3)?.IsReady == true &&
+            snapshots.Get(5)?.IsReady == true &&
+            snapshots.Get(15)?.IsReady == true &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(1)) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(3)) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(5)) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(15));
 
         private bool IsStrategyMinuteFrameFresh(StrategyMinuteFrameSnapshot? frame)
         {
@@ -1416,6 +1473,9 @@ namespace TradingDashboard
                     case StrategySlotId.SorTenMinuteFiveMinuteBreakout:
                         parts.Add(snapshots?.FormatMa60AndBreakout20(10, 5) ?? "10m:MA60 wait / 5m:20H wait");
                         break;
+                    case StrategySlotId.IntradayFifteenMinuteScalp:
+                        parts.Add(FormatIntradayScalpReadiness(snapshots));
+                        break;
                 }
             }
 
@@ -1427,6 +1487,17 @@ namespace TradingDashboard
 
             return string.Join(" / ", new[] { 1, 3, 5, 10, 15, 30 }
                 .Select(minute => $"{minute}m {status.GetCount(minute):N0}/{status.GetTargetCount(minute):N0}"));
+        }
+
+        private static string FormatIntradayScalpReadiness(StrategyMinuteSnapshotSet? snapshots)
+        {
+            if (snapshots == null)
+                return "DAY:1/3/5/15 wait";
+
+            static string ReadyText(StrategyMinuteSnapshotSet set, int minute) =>
+                set.Get(minute)?.IsReady == true ? $"{minute}m ready" : $"{minute}m wait";
+
+            return $"DAY:{ReadyText(snapshots, 1)} / {ReadyText(snapshots, 3)} / {ReadyText(snapshots, 5)} / {ReadyText(snapshots, 15)}";
         }
 
         private bool IsStrategyMinutePreloadEnabled() =>
@@ -1741,6 +1812,7 @@ namespace TradingDashboard
                 StrategySlotId.BaseCandleChase => IsStrategyToggleOn(ProgressFilterBaseCandleChaseToggle),
                 StrategySlotId.ThreeMinutePullback => IsStrategyToggleOn(ProgressFilterPullbackToggle),
                 StrategySlotId.SorTenMinuteFiveMinuteBreakout => IsStrategyToggleOn(ProgressFilterMiddleToggle),
+                StrategySlotId.IntradayFifteenMinuteScalp => IsStrategyToggleOn(ProgressFilterIntradayScalpToggle),
                 StrategySlotId.ThemeDisclosureAssist => IsStrategyToggleOn(ProgressFilterThemeAssistToggle),
                 _ => false
             };

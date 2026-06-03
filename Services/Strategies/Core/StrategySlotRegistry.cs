@@ -18,6 +18,7 @@ namespace TradingDashboard.Services.Strategies
                 new SorTenMinuteMa60ThreeMinuteBreakoutAggressiveStrategySlot(),
                 new SorFifteenMinuteMa60FiveMinuteBreakoutStrategySlot(),
                 new SorTenMinuteMa60FiveMinuteBreakoutStrategySlot(),
+                new IntradayFifteenMinuteScalpStrategySlot(),
                 new ThemeDisclosureAssistStrategySlot()
             ]);
 
