@@ -921,6 +921,281 @@ Ma60SupportConfirmed
 그 다음 거래량이 실제로 붙었는지 확인하고,
 마지막에 기준마디와 허리를 통해 매수 가능 위치를 좁힌다.
 
+## 구현 계약 v1
+
+이 장은 실제 코드로 옮길 때의 입력/출력 계약이다.
+함수명은 영문으로 고정하고, 화면/로그/문서 표시만 한글로 변환한다.
+
+### CandleSeriesContext
+
+```text
+역할: 특정 종목/시장/분봉의 봉 묶음을 계산 함수에 전달한다.
+입력: Code, Market, Minute, Bars, Now
+출력: 계산 함수 공통 입력 컨텍스트
+소유권: 전략분봉 장부 / 백테스트 장부
+주의: 함수는 REST나 파일을 직접 보지 않는다. 이미 준비된 Bars만 본다.
+```
+
+필수 포함값:
+
+```text
+Code
+Market
+Minute
+Bars
+LastCompletedBar
+CurrentBar
+Now
+```
+
+### VolumeMovingAverageSet
+
+```text
+역할: 거래량/거래대금이 늘었는지 줄었는지 판단할 공통 숫자 묶음이다.
+입력: Bars
+출력: VolumeMA5, VolumeMA20, VolumeMA60, TradeValueMA5, TradeValueMA20, TradeValueMA60
+소유권: 거래량 계산부
+공용성: 백테스트/실시간 공용
+주의: "거래가 늘었다"는 말은 이 값으로만 판단한다.
+```
+
+1차 함수:
+
+```text
+CalculateVolumeMovingAverages(CandleSeriesContext context) -> VolumeMovingAverageSet
+MeasureVolumeExpansion(CurrentBar, VolumeMovingAverageSet ma) -> VolumeExpansionResult
+DetectVolumeMaCross(VolumeMovingAverageSet ma, CurrentBar) -> VolumeMaCrossState
+```
+
+### BasePriceCandidate
+
+```text
+역할: 지지/저항/손절/목표가 후보가 되는 가격대를 표현한다.
+입력: 봉의 고가/저가/종가, 반복 지지/저항, 거래량
+출력: Price, Type, Strength, TouchCount, Source
+소유권: 기준가 계산부
+주의: KRX 전일종가 기준가와 다른 값이다.
+```
+
+1차 함수:
+
+```text
+FindBasePriceCandidates(CandleSeriesContext context) -> IReadOnlyList<BasePriceCandidate>
+ClassifyBasePrice(BasePriceCandidate candidate, CandleSeriesContext context) -> StrategyBasePriceType
+ResolveStopBasePrice(EntryScenario scenario, IReadOnlyList<BasePriceCandidate> candidates) -> BasePriceCandidate?
+ResolveTargetBasePrice(EntryScenario scenario, IReadOnlyList<BasePriceCandidate> candidates) -> BasePriceCandidate?
+```
+
+### MadiSegmentCandidate
+
+```text
+역할: 기준봉 하나가 아니라 기준봉이 포함된 상승/하락 구간 전체를 표현한다.
+입력: 봉 묶음, 거래량/거래대금, 시작점/고점/조정 시작 후보
+출력: StartTime, EndTime, StartPrice, HighPrice, LowPrice, Direction, TradeValue
+소유권: 마디 계산부
+주의: GateBaseCandle과 별도다. 전략마다 자기 마디를 따로 가진다.
+```
+
+1차 함수:
+
+```text
+FindImpulseLeg(CandleSeriesContext context) -> IReadOnlyList<MadiSegmentCandidate>
+FindMadiSegment(CandleSeriesContext context, BaseCandle baseCandle) -> MadiSegmentCandidate?
+MeasureMadiEfficiency(MadiSegmentCandidate madi) -> double
+```
+
+### MadiWaistZoneCandidate
+
+```text
+역할: 마디 중심 부근에서 실제 힘이 모인 지지/저항 영역을 표현한다.
+입력: MadiSegmentCandidate, 봉 묶음, 전고/전저/종가 클러스터, 거래량 감소
+출력: LowPrice, HighPrice, CenterPrice, Score, SupportCount, BreakCount
+소유권: 허리 계산부
+주의: 허리는 산술 50% 하나가 아니다. 50%는 후보일 뿐이다.
+```
+
+1차 함수:
+
+```text
+FindMadiWaistZone(MadiSegmentCandidate madi, CandleSeriesContext context) -> MadiWaistZoneCandidate?
+DetectWaistSupport(MadiWaistZoneCandidate waist, CandleSeriesContext context) -> WaistSupportState
+DetectWaistBreak(MadiWaistZoneCandidate waist, CandleSeriesContext context) -> BaseBreakState
+DetectWaistTrapRecovery(MadiWaistZoneCandidate waist, CandleSeriesContext context) -> bool
+```
+
+### NoBuyReason
+
+```text
+역할: 사면 안 되는 이유를 먼저 제거한다.
+입력: 현재가, 손절 기준가, 목표 기준가, 허리, 거래량 상태, 상위 저항
+출력: NoBuyReason 목록
+소유권: 위험 필터
+주의: 이 목록이 비어야만 매수 후보가 될 수 있다.
+```
+
+1차 함수:
+
+```text
+EvaluateNoBuyZone(EntryScenario scenario) -> IReadOnlyList<NoBuyReason>
+MeasureStopRisk(EntryPrice, StopPrice) -> double
+MeasureTargetRoom(EntryPrice, TargetPrice) -> double
+CalculateRewardRiskRatio(EntryPrice, StopPrice, TargetPrice) -> double
+```
+
+대표 NoBuyReason:
+
+```text
+NoStopBasePrice
+RewardRiskTooLow
+TargetRoomTooSmall
+WaistBroken
+StrongBaseBreak
+VolumeDangerBreakdown
+UpperResistanceTooNear
+OneMinuteTriggerTooEarly
+OrderBookSupportWeak
+MarketBuyFlowWeak
+```
+
+### EntryScenario
+
+```text
+역할: 한 전략이 "지금 살 수 있는가"를 판단하기 위한 전체 묶음이다.
+입력: 상위시간대 방향, 기준가, 마디, 허리, 거래량, 0B, 0D
+출력: Progress, OrderIntent, NoBuyReasons
+소유권: 전략 슬롯
+주의: 같은 종목이라도 전략마다 EntryScenario는 따로 가진다.
+```
+
+포함값:
+
+```text
+Code
+Market
+SlotId
+HigherTimeframeState
+MadiSegment
+WaistZone
+StopBasePrice
+TargetBasePrice
+VolumeState
+RealtimeFlow
+OrderBookProbe
+NoBuyReasons
+RewardRiskRatio
+```
+
+### PredictableTradeScore
+
+```text
+역할: "안 살 이유가 없는가"를 숫자로 요약한다.
+입력: EntryScenario
+출력: RiskFilterScore, StructureScore, FlowScore, RewardRiskScore, TotalScore
+소유권: 검증/Progress 표시부
+주의: 점수는 설명용이다. 실주문은 반드시 NoBuyReason, RiskGuard, Live Orders를 통과해야 한다.
+```
+
+1차 배점:
+
+```text
+RiskFilterScore:
+  손절 기준가 있음
+  손절폭 작음
+  목표 공간 있음
+  손익비 1.5~2.0 이상
+
+StructureScore:
+  기준마디 있음
+  허리 위 지지
+  15분/10분 MA60 생존
+  소마디 저점 미이탈
+
+FlowScore:
+  거래량 MA5 > MA60
+  거래대금 재증가
+  0B 시장가 매수 우위
+  0D 매수잔량 지지
+
+RewardRiskScore:
+  StopRiskPercent 낮음
+  TargetProfitPercent 충분
+  윗저항까지 공간 있음
+```
+
+### 시간대별 함수 연결
+
+```text
+Daily:
+  FindGateBaseCandle
+  FindBasePriceCandidates
+
+15m / 10m:
+  FindMadiSegment
+  FindMadiWaistZone
+  EvaluateMa60Recovery
+  ClassifyPullbackState
+
+5m / 3m:
+  FindEntryMadi
+  EvaluateHigh20Breakout
+  DetectPullbackVolumeDryUp
+  MeasureVolumeExpansion
+
+1m:
+  DetectOneMinutePrecisionTrigger
+  DetectVolumeMaCross
+  DetectMarketBuyFlow
+  DetectOrderBookSupport
+```
+
+### 1분 정밀 타격 함수 후보
+
+1분봉은 초반부터 보지 않는다.
+상위 시간대가 65~70% 부근까지 진행된 뒤 마지막 확인용으로만 쓴다.
+
+```text
+DetectOneMinutePrecisionTrigger
+입력:
+  1m CurrentBar
+  1m MA5/MA20/MA60
+  1m VolumeMA5/VolumeMA60
+  RealtimeFlow 0B
+  OrderBookProbe 0D
+
+출력:
+  OneMinuteTriggerState
+  TriggerPrice
+  StopAnchor
+  Reason
+```
+
+1차 조건:
+
+```text
+가격:
+  현재 1분봉 양봉
+  현재가가 1분 MA60 위 또는 회복
+  1분 MA5가 MA60을 회복 또는 위에서 지지
+
+거래량:
+  1분 거래량 MA5 > 거래량 MA60
+  현재 봉 거래량이 직전 5봉 평균 이상
+
+체결:
+  최근 60초 시장가 매수 체결량 > 시장가 매도 체결량
+  최근 60초 매수 체결 비율 55% 이상
+
+호가:
+  0D fresh
+  매수잔량 비율 45% 이상
+  현재가가 최우선 매수호가 아래로 무너지지 않음
+```
+
+주의:
+
+1분 신호는 예측이 아니라 최종 확인이다.
+상위 구조가 없으면 1분봉이 좋아도 매수하지 않는다.
+
 ## 금지 규칙
 
 - `KrxPreviousCloseBasePrice`를 NXT 현재가나 SOR 현재가로 덮어쓰지 않는다.
