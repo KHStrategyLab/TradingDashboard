@@ -187,8 +187,14 @@ namespace TradingDashboard
                 if (missingExecutionHoldings.Count > 0)
                 {
                     holdings.AddRange(missingExecutionHoldings);
+                    foreach (KiwoomHolding item in missingExecutionHoldings)
+                        knownCodes.Add(NormalizeStockCode(item.StockCode));
                     sources.Add($"{executionKrx.SourceApi}:{executionKrx.QueryMarket}-missing");
-                    AppendLog($"balance kt00005 supplemented missing holdings: {missingExecutionHoldings.Count}items");
+                    AppendLog($"balance kt00005 KRX supplemented missing holdings: {missingExecutionHoldings.Count}items");
+                }
+                else
+                {
+                    AppendLog($"balance kt00005 KRX no missing holdings: {executionKrx.Holdings.Count}items");
                 }
             }
             catch (OperationCanceledException)
@@ -196,11 +202,45 @@ namespace TradingDashboard
                 if (cancellationToken.IsCancellationRequested)
                     throw;
 
-                AppendLog("balance kt00005 supplement skipped: timeout 3s");
+                AppendLog("balance kt00005 KRX supplement skipped: timeout 3s");
             }
             catch (Exception ex)
             {
-                AppendLog($"balance kt00005 supplement skipped: {ex.GetType().Name} / {ex.Message}");
+                AppendLog($"balance kt00005 KRX supplement skipped: {ex.GetType().Name} / {ex.Message}");
+            }
+
+            try
+            {
+                using CancellationTokenSource executionNxtCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                executionNxtCts.CancelAfter(TimeSpan.FromSeconds(3));
+                KiwoomBalanceSnapshot executionNxt = await _tradingClient
+                    .GetExecutionBalanceAsync(KiwoomTradingConstants.MarketNxt, executionNxtCts.Token)
+                    .ConfigureAwait(true);
+                IReadOnlyList<KiwoomHolding> missingExecutionNxtHoldings = [.. executionNxt.Holdings
+                    .Where(item => item.HoldingQuantity > 0 && !knownCodes.Contains(NormalizeStockCode(item.StockCode)))];
+                if (missingExecutionNxtHoldings.Count > 0)
+                {
+                    holdings.AddRange(missingExecutionNxtHoldings);
+                    foreach (KiwoomHolding item in missingExecutionNxtHoldings)
+                        knownCodes.Add(NormalizeStockCode(item.StockCode));
+                    sources.Add($"{executionNxt.SourceApi}:{executionNxt.QueryMarket}-missing");
+                    AppendLog($"balance kt00005 NXT supplemented missing holdings: {missingExecutionNxtHoldings.Count}items");
+                }
+                else
+                {
+                    AppendLog($"balance kt00005 NXT no missing holdings: {executionNxt.Holdings.Count}items");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    throw;
+
+                AppendLog("balance kt00005 NXT supplement skipped: timeout 3s");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"balance kt00005 NXT supplement skipped: {ex.GetType().Name} / {ex.Message}");
             }
 
             IReadOnlyList<KiwoomHolding> mergedHoldings = MergeBalanceHoldings(holdings);

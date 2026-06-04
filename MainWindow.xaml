@@ -1385,6 +1385,7 @@
                                                  <ColumnDefinition Width="Auto"/>
                                                  <ColumnDefinition Width="Auto"/>
                                                  <ColumnDefinition Width="Auto"/>
+                                                 <ColumnDefinition Width="Auto"/>
                                              </Grid.ColumnDefinitions>
 
                                              <TextBlock Grid.Column="0"
@@ -1571,6 +1572,57 @@
                                                      </TextBlock.Style>
                                                  </TextBlock>
                                              </Border>
+
+                                             <Border Grid.Column="6"
+                                                     Margin="6,2,0,0"
+                                                     Padding="4,0"
+                                                     MinWidth="34"
+                                                     Height="14"
+                                                     CornerRadius="3"
+                                                     BorderBrush="{StaticResource PaletteGreen}"
+                                                     BorderThickness="1"
+                                                     Background="#153019"
+                                                     ToolTip="{Binding ConditionEntryReasonDetailText}"
+                                                     VerticalAlignment="Center">
+                                                 <Border.Style>
+                                                     <Style TargetType="Border">
+                                                         <Setter Property="Visibility" Value="Visible"/>
+                                                         <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="">
+                                                                 <Setter Property="Visibility" Value="Collapsed"/>
+                                                             </DataTrigger>
+                                                             <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="FORM">
+                                                                 <Setter Property="BorderBrush" Value="{StaticResource PaletteYellow}"/>
+                                                                 <Setter Property="Background" Value="#302A15"/>
+                                                             </DataTrigger>
+                                                             <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="RANK">
+                                                                 <Setter Property="BorderBrush" Value="{StaticResource PaletteViolet}"/>
+                                                                 <Setter Property="Background" Value="#251A36"/>
+                                                             </DataTrigger>
+                                                         </Style.Triggers>
+                                                     </Style>
+                                                 </Border.Style>
+                                                 <TextBlock Text="{Binding ConditionEntryReasonBadgeText}"
+                                                            FontSize="8"
+                                                            FontWeight="Bold"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            TextAlignment="Center">
+                                                     <TextBlock.Style>
+                                                         <Style TargetType="TextBlock">
+                                                             <Setter Property="Foreground" Value="{StaticResource PaletteGreen}"/>
+                                                             <Style.Triggers>
+                                                                 <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="FORM">
+                                                                     <Setter Property="Foreground" Value="{StaticResource PaletteYellow}"/>
+                                                                 </DataTrigger>
+                                                                 <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="RANK">
+                                                                     <Setter Property="Foreground" Value="{StaticResource PaletteViolet}"/>
+                                                                 </DataTrigger>
+                                                             </Style.Triggers>
+                                                         </Style>
+                                                     </TextBlock.Style>
+                                                 </TextBlock>
+                                             </Border>
                                          </Grid>
 
                                          <Grid Grid.Row="1"
@@ -1707,6 +1759,7 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <TextBlock Grid.Column="0"
                                                                    Text="{Binding Name}"
@@ -1805,6 +1858,56 @@
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding OrderWarning}" Value="5">
                                                                                 <Setter Property="Foreground" Value="{StaticResource UpBrush}"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Border>
+                                                        <Border Grid.Column="4"
+                                                                Margin="5,1,0,0"
+                                                                Padding="4,0"
+                                                                MinWidth="30"
+                                                                Height="14"
+                                                                CornerRadius="3"
+                                                                BorderBrush="{StaticResource PaletteGreen}"
+                                                                BorderThickness="1"
+                                                                Background="#153019"
+                                                                ToolTip="{Binding ConditionEntryReasonDetailText}"
+                                                                VerticalAlignment="Center">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="FORM">
+                                                                            <Setter Property="BorderBrush" Value="{StaticResource PaletteYellow}"/>
+                                                                            <Setter Property="Background" Value="#302A15"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="RANK">
+                                                                            <Setter Property="BorderBrush" Value="{StaticResource PaletteViolet}"/>
+                                                                            <Setter Property="Background" Value="#251A36"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <TextBlock Text="{Binding ConditionEntryReasonBadgeText}"
+                                                                       FontSize="8"
+                                                                       FontWeight="Bold"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"
+                                                                       TextAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="{StaticResource PaletteGreen}"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="FORM">
+                                                                                <Setter Property="Foreground" Value="{StaticResource PaletteYellow}"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding ConditionEntryReasonBadgeText}" Value="RANK">
+                                                                                <Setter Property="Foreground" Value="{StaticResource PaletteViolet}"/>
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
@@ -2552,14 +2655,14 @@
                                             CornerRadius="6"
                                             Padding="10"
                                             Margin="0,0,0,8"
-                                            ToolTip="DAY / Fast practice lane&#x0a;5m base candle waist support, 10/15m context, then 1m MA5/MA60 + volume expansion trigger&#x0a;Stable mode: no blind breakout; exit-first RR must pass before order handoff">
+                                            ToolTip="DAY / Fast practice lane&#x0a;N-minute base candle waist support(current N=5m), 10/15m context, then 1m MA5/MA60 + volume expansion trigger&#x0a;Stable mode: no blind breakout; exit-first RR must pass before order handoff">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Slot 6 · DAY 5m Base + 1m Stable"
+                                                <TextBlock Text="Slot 6 · DAY Nm Base + 1m Stable"
                                                            Foreground="{StaticResource TextMainBrush}"
                                                            FontSize="14"
                                                            FontWeight="Bold"

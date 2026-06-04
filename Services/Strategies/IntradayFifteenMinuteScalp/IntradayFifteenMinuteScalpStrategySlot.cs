@@ -124,6 +124,7 @@ namespace TradingDashboard.Services.Strategies
                 baseCenter,
                 scalpTargetPrice,
                 maxStopRiskPercent: 2.5);
+            StrategyExitBreakEvaluation exitBreak = StrategyExitBreakEvaluator.Evaluate(fifteenBars, exitPlan.StopPrice);
 
             bool preSignal = hasStock &&
                 notOwned &&
@@ -178,9 +179,9 @@ namespace TradingDashboard.Services.Strategies
 
             StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
                 Id,
-                context.IsOwned ? "OWNED" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
+                context.IsOwned && exitBreak.ShouldExit ? "EXIT" : context.IsOwned ? "OWNED" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
                 context.IsOwned
-                    ? "intraday exit tracking"
+                    ? $"intraday exit tracking / {exitBreak.Reason}"
                     : hasSignal
                         ? "1m trigger confirmed"
                         : preSignal
@@ -207,7 +208,7 @@ namespace TradingDashboard.Services.Strategies
                     StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
                 ],
                 [
-                    StrategyProgressCalculator.Step("stop", "base center / -1.5 stop", false),
+                    StrategyProgressCalculator.Step("stop", StrategyExitBreakEvaluator.ToProgressLabel(exitBreak), context.IsOwned && exitBreak.ShouldExit),
                     StrategyProgressCalculator.Step("target1", "+1.5 scale", false),
                     StrategyProgressCalculator.Step("target2", "+2.7 scale", false),
                     StrategyProgressCalculator.Step("trail", "+1 trail", false),
@@ -223,8 +224,10 @@ namespace TradingDashboard.Services.Strategies
                 Id,
                 Name,
                 hasSignal,
-                context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
-                FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, volumeMa5, volumeMa60, realtime, exitPlan, noBuyReasons),
+                context.IsOwned && exitBreak.ShouldExit ? "EXIT" : context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
+                context.IsOwned
+                    ? $"{FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, volumeMa5, volumeMa60, realtime, exitPlan, noBuyReasons)} / {exitBreak.Reason}"
+                    : FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, volumeMa5, volumeMa60, realtime, exitPlan, noBuyReasons),
                 progress,
                 orderIntent);
         }

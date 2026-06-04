@@ -367,7 +367,7 @@ namespace TradingDashboard
                 ResolveStrategySlotExitStrategyCode(StrategySlotId.IntradayFifteenMinuteScalp)),
             new(
                 StrategySlotId.IntradayFiveMinuteStableScalp,
-                "DAY 5m Base + 1m Stable",
+                "DAY Nm Base + 1m Stable",
                 IsStrategyToggleOn(StrategySlotFiveMinuteStableToggle),
                 ResolveStrategySlotExitStrategyCode(StrategySlotId.IntradayFiveMinuteStableScalp)),
             new(
@@ -792,10 +792,62 @@ namespace TradingDashboard
                 MinuteBars = BuildStrategyMinuteBars(stock),
                 RealtimeFlow = BuildStrategyRealtimeFlowSnapshot(stock),
                 Market = stock != null && ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX",
+                PreviousDayHigh = ResolvePreviousDayHighForStrategy(stock),
                 IsOwned = IsStockOwned(stock) && !GetStrategyDuplicatePolicy().AllowAdditionalBuy
             };
 
             return _strategySlotRegistry.EvaluateEnabled(GetStrategySlotSettings(), context);
+        }
+
+        private long ResolvePreviousDayHighForStrategy(WatchStockItem? stock)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return 0;
+
+            bool useNxtMarket = ShouldUseNxtDataForStock(stock);
+            ChartCacheKey key = CreateChartCacheKey(stock.Code, useNxtMarket, ChartPeriod.Daily);
+            if (TryGetChartMemoryCache(key, 2, out List<ChartCandle> memoryCandles) &&
+                TryResolvePreviousDayHigh(memoryCandles, out long memoryHigh))
+            {
+                return memoryHigh;
+            }
+
+            if (TryGetChartFileCache(key, 2, out List<ChartCandle> fileCandles) &&
+                TryResolvePreviousDayHigh(fileCandles, out long fileHigh))
+            {
+                return fileHigh;
+            }
+
+            return 0;
+        }
+
+        private static bool TryResolvePreviousDayHigh(IReadOnlyList<ChartCandle> candles, out long high)
+        {
+            high = 0;
+            if (candles == null || candles.Count == 0)
+                return false;
+
+            string today = DateTime.Today.ToString("yyyyMMdd");
+            List<ChartCandle> ordered = [.. candles
+                .Where(candle => candle != null && !string.IsNullOrWhiteSpace(candle.Date) && candle.High > 0)
+                .OrderBy(candle => candle.Date)];
+
+            if (ordered.Count == 0)
+                return false;
+
+            ChartCandle? previous = ordered
+                .Where(candle => string.CompareOrdinal(NormalizeDateKey(candle.Date), today) < 0)
+                .LastOrDefault();
+
+            previous ??= ordered.Count >= 2 ? ordered[^2] : ordered[^1];
+            high = (long)Math.Round(previous.High, MidpointRounding.AwayFromZero);
+            return high > 0;
+        }
+
+        private static string NormalizeDateKey(string text)
+        {
+            string digits = new([.. (text ?? string.Empty).Where(char.IsDigit)]);
+            return digits.Length >= 8 ? digits[..8] : digits;
         }
 
         private async Task<int> LoadStrategyMinuteDataAsync(WatchStockItem stock)

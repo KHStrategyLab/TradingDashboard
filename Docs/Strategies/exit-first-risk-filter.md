@@ -84,6 +84,81 @@ NoBuyReasons
 
 This lets the user and Codex review the same numeric evidence without touching live orders.
 
+## Exit Break Tracking
+
+After a position is owned, the same strategy progress bar must keep tracking whether the exit base is still alive.
+
+The common evaluator lives in:
+
+```text
+Services/Strategies/Core/StrategyExitBreakEvaluator.cs
+```
+
+It translates the lecture terms into numeric states:
+
+```text
+None             = base alive
+FirstBreak       = first close below the exit base
+TrapCandidate    = low-volume first break that may recover
+Recovered        = close recovered above the base after a break
+SecondBreak      = repeated break of the same base
+StrongBreak      = base break with volume expansion or repeated failure
+ReboundRejected  = price rebounded near the base but closed below it again
+```
+
+Connected slots show this in the sell-side progress step:
+
+```text
+stop
+```
+
+Current policy:
+
+```text
+ShouldExit = true for StrongBreak, SecondBreak, ReboundRejected
+```
+
+This is still a progress/diagnostic signal only.
+It does not directly submit a sell order.
+Live sell order handoff must later pass through the strategy position book, RiskGuard, quantity ownership, and order journal.
+
+## Staged Profit And Stop Exit
+
+The staged exit rule set is a separate post-entry operating evaluator.
+
+It lives in:
+
+```text
+Services/Strategies/Core/StrategyStagedExitEvaluator.cs
+```
+
+Its operating principle is:
+
+```text
+Scale out profits.
+Cut losses as a full exit.
+Use 1m weakness as early warning.
+Use 5m base damage as the final stop.
+Use 15m flow damage as a full-exit condition.
+```
+
+Current rule summary:
+
+```text
++1.0%        -> first scale-out, 30%
++2.0%        -> second scale-out, 50%
+high -1.0%   -> trail the rest
+-1.2%        -> full stop
+5m base low  -> full stop
+15m weak     -> full stop
+min -1%, now >= 0 -> break-even full exit
+closing time -> full exit
+```
+
+This evaluator is not wired to live orders yet.
+It requires position state such as post-buy high, minimum profit rate, and completed scale-out flags.
+Those values must be owned by the position ledger or backtest engine before live handoff is considered.
+
 ## Locked Direction
 
 This is a pre-order filter only.

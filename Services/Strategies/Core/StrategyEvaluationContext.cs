@@ -22,6 +22,8 @@ namespace TradingDashboard.Services.Strategies
 
         public string Market { get; init; } = string.Empty;
 
+        public long PreviousDayHigh { get; init; }
+
         public bool IsOwned { get; init; }
     }
 }

@@ -28,6 +28,7 @@ namespace TradingDashboard.Models
         public long GateBaseCandleTradeValue { get; set; }
         public string GateBaseCandleCheckedDate { get; set; } = string.Empty;
         public string GateBaseCandleRuleVersion { get; set; } = string.Empty;
+        public string ConditionEntryReason { get; set; } = string.Empty;
         public bool SupportsNxt { get; set; }
         public long BasePrice { get; set; }
         public string BasePriceDate { get; set; } = string.Empty;

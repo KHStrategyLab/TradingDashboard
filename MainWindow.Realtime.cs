@@ -658,13 +658,14 @@ namespace TradingDashboard
                         stock.PriceBrush = stock.ChangeAmount > 0 ? _upColorBrush : stock.ChangeAmount < 0 ? _downColorBrush : _whiteBrush;
                         ApplyWatchlistCacheToStock(stock);
                         ApplyWatchlistTradeValueEstimate(stock);
+                        ApplyIntradayConditionEntryReason(stock);
                         ApplyCachedMiniDailyCandleToStock(stock);
                         _watchStocks.Insert(0, stock);
                         IndexWatchStock(stock);
                         QueueRuntimeCandidate(stock, "new enter");
                         ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
                         StartStrategyMinuteAutoPreload([stock]);
-                        AppendLog($"condition enter: {stock.Name} ({stock.Code})");
+                        AppendLog($"condition enter: {stock.Name} ({stock.Code}) / {stock.ConditionEntryReasonBadgeText}");
                         added = true;
                     });
 
@@ -746,11 +747,14 @@ namespace TradingDashboard
                     GateBaseCandleMarket = entry.GateBaseCandleMarket,
                     GateBaseCandleChangeRate = entry.GateBaseCandleChangeRate,
                     GateBaseCandleTradeValue = entry.GateBaseCandleTradeValue,
+                    ConditionEntryReason = entry.ConditionEntryReason,
                     SupportsNxt = entry.SupportsNxt
                 };
 
                 ApplyWatchlistCacheToStock(stock);
                 ApplyWatchlistTradeValueEstimate(stock);
+                if (string.IsNullOrWhiteSpace(stock.ConditionEntryReason))
+                    ApplyIntradayConditionEntryReason(stock);
                 ApplyCachedMiniDailyCandleToStock(stock);
                 string identityKey = BuildWatchStockIdentityKey(stock);
                 if (!string.IsNullOrWhiteSpace(identityKey) && _watchStockByIdentity.ContainsKey(identityKey))
@@ -761,7 +765,7 @@ namespace TradingDashboard
                 QueueRuntimeCandidate(stock, "cache re-enter");
                 ScheduleWatchlistBasePriceRefresh(_watchStocks, TimeSpan.FromSeconds(20));
                 StartStrategyMinuteAutoPreload([stock]);
-                AppendLog($"condition re-enter(cache): {stock.Name} ({stock.Code})");
+                AppendLog($"condition re-enter(cache): {stock.Name} ({stock.Code}) / {stock.ConditionEntryReasonBadgeText}");
                 return (true, stock);
             });
         }

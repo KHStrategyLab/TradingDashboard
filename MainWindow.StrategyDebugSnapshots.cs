@@ -86,6 +86,7 @@ namespace TradingDashboard
                     .Select(stock => BuildStrategyMinuteDebugSnapshot(stock, null))];
 
                 int readyCount = snapshots.Count(IsStrategyMinuteDebugSnapshotReady);
+                int sellTestCandidateCount = snapshots.Count(snapshot => snapshot.SellTest.ShouldSellCandidate);
                 StrategyMinuteDebugSnapshotBatch batch = new(
                     CreatedAt: createdAt,
                     Reason: reason,
@@ -112,7 +113,7 @@ namespace TradingDashboard
                     readyCount,
                     snapshots.Count);
 
-                AppendReadyLog($"strategy minute debug snapshot auto saved: {readyCount}/{snapshots.Count}stocks / {path}{FormatChartSnapshotLogSuffix(chart)}{FormatAiReviewRequestLogSuffix(requestPath)}");
+                AppendReadyLog($"strategy minute debug snapshot auto saved: {readyCount}/{snapshots.Count}stocks / selltest {sellTestCandidateCount}candidates / {path}{FormatChartSnapshotLogSuffix(chart)}{FormatAiReviewRequestLogSuffix(requestPath)}");
             }
             catch (Exception ex)
             {
@@ -146,6 +147,7 @@ namespace TradingDashboard
             string market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX";
             long signalPrice = ResolveStrategySignalPrice(stock);
             StrategyRealtimeFlowSnapshot realtimeFlow = BuildStrategyRealtimeFlowSnapshot(stock);
+            StrategyFiveMinuteOneMinuteSellTestEvaluation sellTest = BuildFiveMinuteOneMinuteSellTest(stock, market, realtimeFlow);
 
             return new StrategyMinuteDebugSnapshot(
                 CreatedAt: DateTime.Now,
@@ -173,8 +175,37 @@ namespace TradingDashboard
                 Progress: progressResults
                     .Select(BuildProgressSnapshot)
                     .ToList(),
+                SellTest: sellTest,
                 VisibleChart: visibleChart,
                 Evidence: StrategyDebugEvidence.Empty());
+        }
+
+        private StrategyFiveMinuteOneMinuteSellTestEvaluation BuildFiveMinuteOneMinuteSellTest(
+            WatchStockItem stock,
+            string market,
+            StrategyRealtimeFlowSnapshot realtimeFlow)
+        {
+            string code = NormalizeStockCode(stock.Code);
+            string normalizedMarket = NormalizeIdentityMarket(market);
+            if (string.IsNullOrWhiteSpace(code))
+                return StrategyFiveMinuteOneMinuteSellTestEvaluation.NotReady(normalizedMarket, "stock code missing");
+
+            IReadOnlyList<StrategyMinuteBar> oneMinuteBars = _strategyMinuteCacheService.GetBars(
+                code,
+                normalizedMarket,
+                1,
+                80);
+            IReadOnlyList<StrategyMinuteBar> fiveMinuteBars = _strategyMinuteCacheService.GetBars(
+                code,
+                normalizedMarket,
+                5,
+                80);
+
+            return StrategyFiveMinuteOneMinuteSellTestEvaluator.Evaluate(
+                normalizedMarket,
+                oneMinuteBars,
+                fiveMinuteBars,
+                realtimeFlow);
         }
 
         private string SaveAiReviewRequest(
@@ -686,6 +717,7 @@ namespace TradingDashboard
             IReadOnlyDictionary<int, StrategyMinuteDebugStatus> MinuteStatus,
             IReadOnlyList<StrategyMinuteDebugFrame> Frames,
             IReadOnlyList<StrategyProgressDebugSnapshot> Progress,
+            StrategyFiveMinuteOneMinuteSellTestEvaluation SellTest,
             StrategyChartDebugSnapshot? VisibleChart,
             StrategyDebugEvidence Evidence);
 

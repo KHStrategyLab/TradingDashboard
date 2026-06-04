@@ -11,15 +11,17 @@ namespace TradingDashboard.Services.Strategies
         private const long OneEok = 100_000_000;
         private const long MinTodayTradeValue = 100 * OneEok;
         private const long MinBaseCandleTradeValue = 5 * OneEok;
+        private const int BaseMinute = 5;
+        private const int TriggerMinute = 1;
 
         public IntradayFiveMinuteStableScalpStrategySlot()
             : base(new StrategySlotDescriptor(
                 StrategySlotId.IntradayFiveMinuteStableScalp,
-                "DAY 5m Base + 1m Stable",
+                $"DAY {BaseMinute}m Base + {TriggerMinute}m Stable",
                 StrategyMarketScope.Sor,
                 "DAY",
-                "5m base candle support + 1m MA/volume stable trigger",
-                "Fast practice lane. Uses a 5m base candle as the small structure, checks 10m/15m context, then waits for 1m MA5/MA60 recovery, volume MA expansion, and small-hill breakout before order handoff.",
+                $"{BaseMinute}m base candle support + {TriggerMinute}m MA/volume stable trigger",
+                $"Fast practice lane. Uses an N-minute base candle as the small structure (current N={BaseMinute}), checks 10m/15m context, then waits for {TriggerMinute}m MA5/MA60 recovery, volume MA expansion, and small-hill breakout before order handoff.",
                 "Docs/Strategies/intraday-5m-base-1m-stable.md"))
         {
         }
@@ -39,15 +41,15 @@ namespace TradingDashboard.Services.Strategies
 
             IReadOnlyList<StrategyMinuteBar> fifteenBars = GetBars(context, 15);
             IReadOnlyList<StrategyMinuteBar> tenBars = GetBars(context, 10);
-            IReadOnlyList<StrategyMinuteBar> fiveBars = GetBars(context, 5);
-            IReadOnlyList<StrategyMinuteBar> oneBars = GetBars(context, 1);
+            IReadOnlyList<StrategyMinuteBar> fiveBars = GetBars(context, BaseMinute);
+            IReadOnlyList<StrategyMinuteBar> oneBars = GetBars(context, TriggerMinute);
 
             bool minuteReady = fifteenBars.Count >= 60 &&
                 tenBars.Count >= 60 &&
                 fiveBars.Count >= 60 &&
                 oneBars.Count >= 60;
 
-            StrategyMinuteBar? baseCandle = FindLatestFiveMinuteBaseCandle(fiveBars);
+            StrategyMinuteBar? baseCandle = FindLatestBaseMinuteCandle(fiveBars);
             bool hasBaseCandle = baseCandle != null;
             long baseCenter = hasBaseCandle ? (baseCandle!.High + baseCandle.Low) / 2 : 0;
             long baseHigh = baseCandle?.High ?? 0;
@@ -99,6 +101,9 @@ namespace TradingDashboard.Services.Strategies
             bool oneSmallBreakout = signalPrice > 0 &&
                 oneSmallHillHigh > 0 &&
                 signalPrice >= oneSmallHillHigh;
+            bool prevHighPlusOneTouched = IsPreviousDayHighPlusOneTouched(context, signalPrice);
+            bool bollingerLowerRecovery = IsBollingerLowerRecovery(oneBars);
+            bool ma200PullbackRecovery = IsMa200PullbackOrRecovery(oneBars);
 
             StrategyRealtimeFlowSnapshot realtime = context.RealtimeFlow;
             DateTime now = DateTime.Now;
@@ -127,6 +132,7 @@ namespace TradingDashboard.Services.Strategies
                 minStopRiskPercent: 0.2,
                 maxStopRiskPercent: 1.8,
                 fallbackTargetRewardMultiple: 1.9);
+            StrategyExitBreakEvaluation exitBreak = StrategyExitBreakEvaluator.Evaluate(oneBars, exitPlan.StopPrice);
 
             bool preSignal = hasStock &&
                 notOwned &&
@@ -184,9 +190,9 @@ namespace TradingDashboard.Services.Strategies
 
             StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
                 Id,
-                context.IsOwned ? "OWNED" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
+                context.IsOwned && exitBreak.ShouldExit ? "EXIT" : context.IsOwned ? "OWNED" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
                 context.IsOwned
-                    ? "stable scalp exit tracking"
+                    ? $"stable scalp exit tracking / {exitBreak.Reason}"
                     : hasSignal
                         ? "1m stable trigger confirmed"
                         : preSignal
@@ -199,13 +205,16 @@ namespace TradingDashboard.Services.Strategies
                     StrategyProgressCalculator.Step("trade-value", "100eok today value", tradeValueOk),
                     StrategyProgressCalculator.Step("minute-data", "1/5/10/15m ready", minuteReady),
                     StrategyProgressCalculator.Step("context", "10/15m not hostile", higherFrameNotHostile),
-                    StrategyProgressCalculator.Step("base-5m", "5m base candle", hasBaseCandle),
-                    StrategyProgressCalculator.Step("base-support", "5m base waist support", fiveBaseSupport),
-                    StrategyProgressCalculator.Step("5m-trend", "5m MA support", fiveTrendSupport),
-                    StrategyProgressCalculator.Step("1m-ma", "1m MA5 near/over MA60", oneMaRecovery),
-                    StrategyProgressCalculator.Step("1m-turn", "1m bullish turn", oneBullishTurn),
-                    StrategyProgressCalculator.Step("1m-volume", "1m volume MA expansion", oneVolumeExpansion),
-                    StrategyProgressCalculator.Step("1m-breakout", "1m small-hill breakout", oneSmallBreakout),
+                    StrategyProgressCalculator.Step("base-nm", $"{BaseMinute}m base candle", hasBaseCandle),
+                    StrategyProgressCalculator.Step("base-support", $"{BaseMinute}m base waist support", fiveBaseSupport),
+                    StrategyProgressCalculator.Step("base-trend", $"{BaseMinute}m MA support", fiveTrendSupport),
+                    StrategyProgressCalculator.Step("trigger-ma", $"{TriggerMinute}m MA5 near/over MA60", oneMaRecovery),
+                    StrategyProgressCalculator.Step("trigger-turn", $"{TriggerMinute}m bullish turn", oneBullishTurn),
+                    StrategyProgressCalculator.Step("trigger-volume", $"{TriggerMinute}m volume MA expansion", oneVolumeExpansion),
+                    StrategyProgressCalculator.Step("trigger-breakout", $"{TriggerMinute}m small-hill breakout", oneSmallBreakout),
+                    StrategyProgressCalculator.Step("prev-high-1", "prev high +1% touched", prevHighPlusOneTouched),
+                    StrategyProgressCalculator.Step("bb-lower", "BB lower recovery", bollingerLowerRecovery),
+                    StrategyProgressCalculator.Step("ma200-recovery", "MA200 pullback/recovery", ma200PullbackRecovery),
                     StrategyProgressCalculator.Step("0b-fresh", "0B fresh", realtimeTickFresh),
                     StrategyProgressCalculator.Step("0b-flow", "0B buy-flow", buyFlowOk),
                     StrategyProgressCalculator.Step("0d-fresh", "0D fresh", orderBookFresh),
@@ -214,13 +223,13 @@ namespace TradingDashboard.Services.Strategies
                     StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
                 ],
                 [
-                    StrategyProgressCalculator.Step("stop", "1m pullback/base stop", false),
+                    StrategyProgressCalculator.Step("stop", StrategyExitBreakEvaluator.ToProgressLabel(exitBreak), context.IsOwned && exitBreak.ShouldExit),
                     StrategyProgressCalculator.Step("target", "small segment target", false),
                     StrategyProgressCalculator.Step("trail", "trail if extends", false),
                     StrategyProgressCalculator.Step("exit", "exit done", false)
                 ],
                 isOwned: context.IsOwned,
-                levelText: hasBaseCandle ? $"{baseCandle!.BucketTime:HH:mm} 5m" : "-",
+                levelText: hasBaseCandle ? $"{baseCandle!.BucketTime:HH:mm} {BaseMinute}m" : "-",
                 strengthPercent: hasSignal ? 70 : preSignal ? 66 : hasBaseCandle ? 46 : isTodayLane ? 18 : 0,
                 strengthLabel: "stable");
 
@@ -228,8 +237,10 @@ namespace TradingDashboard.Services.Strategies
                 Id,
                 Name,
                 hasSignal,
-                context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
-                FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, oneSmallHillHigh, oneVolumeMa5, oneVolumeMa20, realtime, exitPlan, noBuyReasons),
+                context.IsOwned && exitBreak.ShouldExit ? "EXIT" : context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : preSignal ? "ARMED" : "WAIT",
+                context.IsOwned
+                    ? $"{FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, oneSmallHillHigh, oneVolumeMa5, oneVolumeMa20, prevHighPlusOneTouched, bollingerLowerRecovery, ma200PullbackRecovery, realtime, exitPlan, noBuyReasons)} / {exitBreak.Reason}"
+                    : FormatSummary(changeRate, todayTradeValue, baseCandle, baseCenter, signalPrice, oneSmallHillHigh, oneVolumeMa5, oneVolumeMa20, prevHighPlusOneTouched, bollingerLowerRecovery, ma200PullbackRecovery, realtime, exitPlan, noBuyReasons),
                 progress,
                 orderIntent);
         }
@@ -243,7 +254,9 @@ namespace TradingDashboard.Services.Strategies
                 ? bars
                 : [];
 
-        private static StrategyMinuteBar? FindLatestFiveMinuteBaseCandle(IReadOnlyList<StrategyMinuteBar> bars)
+        // N-minute base candle detector. BaseMinute is 5 for now, but this stays isolated
+        // so the slot can later expose N as a UI/config value without rewriting the strategy.
+        private static StrategyMinuteBar? FindLatestBaseMinuteCandle(IReadOnlyList<StrategyMinuteBar> bars)
         {
             if (bars.Count == 0)
                 return null;
@@ -351,6 +364,73 @@ namespace TradingDashboard.Services.Strategies
             return recent.Count == 0 ? 0 : recent.Min(bar => bar.Low);
         }
 
+        private static bool IsPreviousDayHighPlusOneTouched(StrategyEvaluationContext context, long signalPrice)
+        {
+            long previousHigh = context.PreviousDayHigh;
+            if (previousHigh <= 0)
+                return false;
+
+            long observedHigh = Math.Max(signalPrice, context.Stock?.MiniDailyHigh ?? 0);
+            return observedHigh >= (long)Math.Round(previousHigh * 1.01, MidpointRounding.AwayFromZero);
+        }
+
+        private static bool IsBollingerLowerRecovery(IReadOnlyList<StrategyMinuteBar> bars)
+        {
+            if (bars.Count < 21)
+                return false;
+
+            StrategyMinuteBar previous = bars[^2];
+            StrategyMinuteBar current = bars[^1];
+            double? previousLower = ResolveBollingerLower(bars.Take(bars.Count - 1), 20, 2.0);
+            double? currentLower = ResolveBollingerLower(bars, 20, 2.0);
+            if (!previousLower.HasValue || !currentLower.HasValue)
+                return false;
+
+            bool intrabarRecovery = current.Low > 0 &&
+                current.Low < currentLower.Value &&
+                current.Close > currentLower.Value;
+            bool closeCrossRecovery = previous.Close <= previousLower.Value &&
+                current.Close > currentLower.Value;
+
+            return intrabarRecovery || closeCrossRecovery;
+        }
+
+        private static bool IsMa200PullbackOrRecovery(IReadOnlyList<StrategyMinuteBar> bars)
+        {
+            if (bars.Count < 2)
+                return false;
+
+            StrategyMinuteBar previous = bars[^2];
+            StrategyMinuteBar current = bars[^1];
+            if (current.Ma200 <= 0)
+                return false;
+
+            bool ma200NotFalling = previous.Ma200 <= 0 || current.Ma200 >= previous.Ma200 * 0.999;
+            bool nearMa200Pullback = current.Low > 0 &&
+                current.Low <= current.Ma200 * 1.012 &&
+                current.Close >= current.Ma200 * 0.995;
+            bool ma200RecoveryCross = previous.Ma200 > 0 &&
+                previous.Close <= previous.Ma200 &&
+                current.Close > current.Ma200;
+
+            return ma200NotFalling && (nearMa200Pullback || ma200RecoveryCross);
+        }
+
+        private static double? ResolveBollingerLower(IEnumerable<StrategyMinuteBar> source, int period, double deviationMultiplier)
+        {
+            List<double> closes = [.. source
+                .Where(bar => bar.Close > 0)
+                .TakeLast(period)
+                .Select(bar => (double)bar.Close)];
+            if (closes.Count < period)
+                return null;
+
+            double average = closes.Average();
+            double variance = closes.Sum(value => Math.Pow(value - average, 2)) / closes.Count;
+            double standardDeviation = Math.Sqrt(variance);
+            return average - standardDeviation * deviationMultiplier;
+        }
+
         private static List<string> BuildNoBuyReasons(
             bool hasStock,
             bool notOwned,
@@ -404,17 +484,21 @@ namespace TradingDashboard.Services.Strategies
             long oneSmallHillHigh,
             double volumeMa5,
             double volumeMa20,
+            bool prevHighPlusOneTouched,
+            bool bollingerLowerRecovery,
+            bool ma200PullbackRecovery,
             StrategyRealtimeFlowSnapshot realtime,
             StrategyExitFirstPlan exitPlan,
             IReadOnlyList<string> noBuyReasons)
         {
             string baseText = baseCandle == null
-                ? "5m base -"
-                : $"5m base {baseCandle.BucketTime:HH:mm} waist {baseCenter:N0}";
+                ? $"{BaseMinute}m base -"
+                : $"{BaseMinute}m base {baseCandle.BucketTime:HH:mm} waist {baseCenter:N0}";
             string waitText = noBuyReasons.Count == 0
                 ? "ready"
                 : $"wait {string.Join(", ", noBuyReasons.Take(2))}";
-            return $"stable {changeRate:0.##}% / {todayTradeValue / (double)OneEok:0.#}eok / {baseText} / price {signalPrice:N0} / 1m hill {oneSmallHillHigh:N0} / volMA5 {volumeMa5:0} vs 20 {volumeMa20:0} / 0B buy {realtime.BuyTradeVolumeRatio60s:0}% / 0D bid {realtime.BidQuantityRatio:0}% / {StrategyExitFirstPlanner.FormatSummary(exitPlan)} / {waitText}";
+            string helperText = $"prevH+1 {(prevHighPlusOneTouched ? "Y" : "N")} / BB {(bollingerLowerRecovery ? "Y" : "N")} / MA200 {(ma200PullbackRecovery ? "Y" : "N")}";
+            return $"stable {changeRate:0.##}% / {todayTradeValue / (double)OneEok:0.#}eok / {baseText} / price {signalPrice:N0} / 1m hill {oneSmallHillHigh:N0} / volMA5 {volumeMa5:0} vs 20 {volumeMa20:0} / {helperText} / 0B buy {realtime.BuyTradeVolumeRatio60s:0}% / 0D bid {realtime.BidQuantityRatio:0}% / {StrategyExitFirstPlanner.FormatSummary(exitPlan)} / {waitText}";
         }
     }
 }

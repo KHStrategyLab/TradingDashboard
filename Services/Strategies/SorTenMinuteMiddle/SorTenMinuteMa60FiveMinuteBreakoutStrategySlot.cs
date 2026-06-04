@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace TradingDashboard.Services.Strategies
 {
     public sealed class SorTenMinuteMa60FiveMinuteBreakoutStrategySlot
@@ -22,6 +24,8 @@ namespace TradingDashboard.Services.Strategies
             bool hasBasePrice = context.Stock?.LastPrice > 0 || context.Metrics.BasePriceText != "-";
             StrategyMinuteBreakoutCheck minuteCheck = StrategyMinuteSignalChecks.EvaluateMa60Breakout(context, 10, 5);
             StrategyExitFirstPlan exitPlan = StrategyExitFirstPlanner.FromMa60Breakout(minuteCheck, maxStopRiskPercent: 3.0);
+            IReadOnlyList<StrategyMinuteBar> exitBars = context.MinuteBars.TryGetValue(10, out IReadOnlyList<StrategyMinuteBar>? tenBars) ? tenBars : [];
+            StrategyExitBreakEvaluation exitBreak = StrategyExitBreakEvaluator.Evaluate(exitBars, exitPlan.StopPrice);
             bool hasMinuteChart = minuteCheck.HasMinuteData;
             string minuteDataText = minuteCheck.FormatReadiness(10, 5);
             bool setupSignal = !context.IsOwned &&
@@ -42,8 +46,8 @@ namespace TradingDashboard.Services.Strategies
 
             StrategyProgressSnapshot progress = StrategyProgressCalculator.Build(
                 Id,
-                context.IsOwned ? "OWNED" : hasSignal ? "SIGNAL" : "WAIT",
-                context.IsOwned ? "position tracking" : hasSignal ? "buy signal candidate" : "10min MA60 / 5min breakout tracking",
+                context.IsOwned && exitBreak.ShouldExit ? "EXIT" : context.IsOwned ? "OWNED" : hasSignal ? "SIGNAL" : "WAIT",
+                context.IsOwned ? $"position tracking / {exitBreak.Reason}" : hasSignal ? "buy signal candidate" : "10min MA60 / 5min breakout tracking",
                 [
                     StrategyProgressCalculator.Step("condition", "condition", hasStock),
                     StrategyProgressCalculator.Step("gate", "70B/25% or 300B/20 gate", gatePassed),
@@ -56,7 +60,7 @@ namespace TradingDashboard.Services.Strategies
                     StrategyProgressCalculator.Step("buy", "buy filled", context.IsOwned)
                 ],
                 [
-                    StrategyProgressCalculator.Step("stop", "10m MA60 stop", false),
+                    StrategyProgressCalculator.Step("stop", StrategyExitBreakEvaluator.ToProgressLabel(exitBreak), context.IsOwned && exitBreak.ShouldExit),
                     StrategyProgressCalculator.Step("target1", "target 1", false),
                     StrategyProgressCalculator.Step("trail", "trail", false),
                     StrategyProgressCalculator.Step("exit", "exit done", false)
@@ -68,9 +72,9 @@ namespace TradingDashboard.Services.Strategies
                 Id,
                 Name,
                 hasSignal,
-                context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : "WAIT",
+                context.IsOwned && exitBreak.ShouldExit ? "EXIT" : context.IsOwned ? "TRACK" : hasSignal ? "SIGNAL" : "WAIT",
                 context.IsOwned
-                    ? $"exit tracking after middle breakout entry / {minuteDataText}"
+                    ? $"exit tracking after middle breakout entry / {minuteDataText} / {exitBreak.Reason}"
                     : $"{minuteCheck.FormatSummary("10m MA60 / 5m breakout", 10, 5)} / {StrategyExitFirstPlanner.FormatSummary(exitPlan)}",
                 progress,
                 orderIntent);

@@ -32,6 +32,7 @@ namespace TradingDashboard.Models
         private string _gateBaseCandleMarket = string.Empty;
         private double _gateBaseCandleChangeRate;
         private long _gateBaseCandleTradeValue;
+        private string _conditionEntryReason = string.Empty;
         private bool _isIntradayPreCandidate;
         private long _lastPrice;
         private long _miniDailyOpen;
@@ -99,6 +100,11 @@ namespace TradingDashboard.Models
                 {
                     OnPropertyChanged(nameof(TodayTradeValueText));
                     OnPropertyChanged(nameof(IsTodayTradeValueStrong));
+                    if (value >= TradeValueSignalThreshold &&
+                        string.Equals(ConditionEntryReason, "FORMING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ConditionEntryReason = "RANK_HOT";
+                    }
                 }
             }
         }
@@ -274,6 +280,19 @@ namespace TradingDashboard.Models
             }
         }
 
+        public string ConditionEntryReason
+        {
+            get => _conditionEntryReason;
+            set
+            {
+                if (SetField(ref _conditionEntryReason, NormalizeText(value).ToUpperInvariant()))
+                {
+                    OnPropertyChanged(nameof(ConditionEntryReasonBadgeText));
+                    OnPropertyChanged(nameof(ConditionEntryReasonDetailText));
+                }
+            }
+        }
+
         public bool IsIntradayPreCandidate
         {
             get => _isIntradayPreCandidate;
@@ -387,6 +406,8 @@ namespace TradingDashboard.Models
             }
         }
 
+        public string ConditionEntryReasonBadgeText => FormatConditionEntryReasonBadge(ConditionEntryReason);
+        public string ConditionEntryReasonDetailText => FormatConditionEntryReasonDetail(ConditionEntryReason);
         public string PreCandidateBadgeText => IsIntradayPreCandidate ? "NEW" : string.Empty;
         public bool MiniDailyHasCandle => MiniDailyOpen > 0 && MiniDailyHigh > 0 && MiniDailyLow > 0 && MiniDailyClose > 0;
         public double MiniDailyWickTop => CalculateMiniDailyY(MiniDailyHigh);
@@ -593,6 +614,28 @@ namespace TradingDashboard.Models
             if (text.Contains("투자주의") || text.Contains("환기") || text.Contains("Caution", StringComparison.OrdinalIgnoreCase))
                 return "CAUTION";
             return text;
+        }
+
+        private static string FormatConditionEntryReasonBadge(string? value)
+        {
+            return NormalizeText(value).ToUpperInvariant() switch
+            {
+                "BASE_DONE" => "BASE",
+                "FORMING" => "FORM",
+                "RANK_HOT" => "RANK",
+                _ => string.Empty
+            };
+        }
+
+        private static string FormatConditionEntryReasonDetail(string? value)
+        {
+            return NormalizeText(value).ToUpperInvariant() switch
+            {
+                "BASE_DONE" => "이미 완성된 기준봉 문",
+                "FORMING" => "장중 형성 중 문(추정)",
+                "RANK_HOT" => "당일 랭킹 강세 문(추정)",
+                _ => string.Empty
+            };
         }
     }
 }

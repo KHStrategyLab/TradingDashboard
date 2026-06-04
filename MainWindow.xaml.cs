@@ -546,8 +546,6 @@ namespace TradingDashboard
                     result.Add(stock);
                     continue;
                 }
-
-                AppendLog($"gate discard: {stock.Name} ({stock.Code}) / no 6-day 70B+25% or 300B+20% + prev-high+10+BB candle");
             }
 
             return result;
@@ -566,11 +564,15 @@ namespace TradingDashboard
             }
 
             bool useNxtGate = string.Equals(gateMarket, "NXT", StringComparison.OrdinalIgnoreCase);
-            BaseCandleGateResult? gate = await FindBaseCandleGateAsync(stock.Code, useNxtGate, gateMarket, cancellationToken);
+            BaseCandleGateEvaluation evaluation = await EvaluateBaseCandleGateAsync(stock.Code, useNxtGate, gateMarket, cancellationToken);
+            BaseCandleGateResult? gate = evaluation.Result;
 
             ApplyGateResultToStock(stock, gate);
             if (gate == null)
+            {
+                AppendLog($"gate discard: {stock.Name} ({stock.Code}) / {evaluation.RejectSummary}");
                 return false;
+            }
 
             WatchlistStockCacheEntry entry = UpsertWatchlistMemoryCache(
                 stock.Code,
@@ -615,19 +617,20 @@ namespace TradingDashboard
             return entry?.SupportsNxt == true ? "NXT" : "KRX";
         }
 
-        private async Task<BaseCandleGateResult?> FindBaseCandleGateAsync(string code, bool useNxtMarket, string market, CancellationToken cancellationToken)
+        private async Task<BaseCandleGateEvaluation> EvaluateBaseCandleGateAsync(string code, bool useNxtMarket, string market, CancellationToken cancellationToken)
         {
             List<DailyCandle> candles = await _kiwoomConditionService
                 .GetDailyCandlesAsync(code, useNxtMarket, GateBaseCandleLookbackCount + GateBaseCandleBollingerPeriod, cancellationToken)
                 .ConfigureAwait(false);
             if (candles.Count < 2)
-                return null;
+                return new BaseCandleGateEvaluation(null, "daily candle data too short");
 
             List<DailyCandle> ordered = [.. candles.OrderBy(c => c.Date)];
             string today = DateTime.Now.ToString("yyyyMMdd");
             int latestOffsetIndex = ordered.Count - 1;
             int progressDayOffset = ShouldCountTodayAsProgressCandle(ordered[^1].Date, today) ? 1 : 0;
 
+            var rejectSummaries = new List<string>();
             int start = Math.Max(1, ordered.Count - GateBaseCandleLookbackCount);
             for (int i = ordered.Count - 1; i >= start; i--)
             {
@@ -649,24 +652,50 @@ namespace TradingDashboard
                     changeRate >= GateBaseCandleMinChangeRate;
                 bool largeMoneyPower = tradingValue >= GateBaseCandleLargeTradeValue &&
                     changeRate >= GateBaseCandleLargeTradeMinChangeRate;
-                if ((!standardPower && !largeMoneyPower) ||
-                    prevHighDistanceRate < GateBaseCandleMinPrevHighDistanceRate ||
-                    !bollingerUpper20.HasValue ||
-                    candle.Close <= bollingerUpper20.Value ||
-                    upperTailPercent > GateBaseCandleMaxUpperTailPercent ||
-                    closeLocationPercent < GateBaseCandleMinCloseLocationPercent)
+                var rejectReasons = new List<string>();
+                if (!standardPower && !largeMoneyPower)
+                    rejectReasons.Add($"power {FormatEok(tradingValue)}/{changeRate:+0.##;-0.##;0}%");
+                if (prevHighDistanceRate < GateBaseCandleMinPrevHighDistanceRate)
+                    rejectReasons.Add($"prevHigh {prevHighDistanceRate:0.#}%<10%");
+                if (!bollingerUpper20.HasValue)
+                    rejectReasons.Add("BB n/a");
+                else if (candle.Close <= bollingerUpper20.Value)
+                    rejectReasons.Add($"BB close {candle.Close:N0}<={bollingerUpper20.Value:N0}");
+                if (upperTailPercent > GateBaseCandleMaxUpperTailPercent)
+                    rejectReasons.Add($"tail {upperTailPercent:0.#}%>20%");
+                if (closeLocationPercent < GateBaseCandleMinCloseLocationPercent)
+                    rejectReasons.Add($"closeLoc {closeLocationPercent:0.#}%<80%");
+
+                if (rejectReasons.Count > 0)
+                {
+                    if (rejectSummaries.Count < 3)
+                    {
+                        rejectSummaries.Add(
+                            $"{candle.Date} {market} {FormatEok(tradingValue)}/{changeRate:+0.##;-0.##;0}% [{string.Join(", ", rejectReasons)}]");
+                    }
                     continue;
+                }
 
                 int offset = Math.Max(0, latestOffsetIndex - i + progressDayOffset);
-                return new BaseCandleGateResult(
-                    offset,
-                    candle.Date,
-                    market,
-                    changeRate,
-                    tradingValue);
+                return new BaseCandleGateEvaluation(
+                    new BaseCandleGateResult(
+                        offset,
+                        candle.Date,
+                        market,
+                        changeRate,
+                        tradingValue),
+                    string.Empty);
             }
 
-            return null;
+            string summary = rejectSummaries.Count > 0
+                ? string.Join(" | ", rejectSummaries)
+                : "no 6-day candidate candle";
+            return new BaseCandleGateEvaluation(null, summary);
+        }
+
+        private static string FormatEok(long value)
+        {
+            return $"{value / 100_000_000.0:0.#}억";
         }
 
         private static long EstimateTradingValue(DailyCandle candle)
@@ -731,6 +760,7 @@ namespace TradingDashboard
             stock.GateBaseCandleMarket = gate?.Market ?? string.Empty;
             stock.GateBaseCandleChangeRate = gate?.ChangeRate ?? 0;
             stock.GateBaseCandleTradeValue = gate?.TradeValue ?? 0;
+            stock.ConditionEntryReason = gate != null ? "BASE_DONE" : string.Empty;
         }
 
         private static void ApplyGateCacheToStock(WatchStockItem stock, WatchlistStockCacheEntry entry)
@@ -742,6 +772,9 @@ namespace TradingDashboard
             stock.GateBaseCandleMarket = entry.GateBaseCandleMarket;
             stock.GateBaseCandleChangeRate = entry.GateBaseCandleChangeRate;
             stock.GateBaseCandleTradeValue = entry.GateBaseCandleTradeValue;
+            stock.ConditionEntryReason = !string.IsNullOrWhiteSpace(entry.ConditionEntryReason)
+                ? entry.ConditionEntryReason
+                : entry.GateBaseCandleFound ? "BASE_DONE" : string.Empty;
         }
 
         private static void ApplyGateStockToCache(WatchStockItem stock, WatchlistStockCacheEntry entry, string checkedDate)
@@ -754,6 +787,22 @@ namespace TradingDashboard
             entry.GateBaseCandleTradeValue = stock.GateBaseCandleTradeValue;
             entry.GateBaseCandleCheckedDate = checkedDate;
             entry.GateBaseCandleRuleVersion = GateBaseCandleRuleVersion;
+            entry.ConditionEntryReason = string.IsNullOrWhiteSpace(stock.ConditionEntryReason)
+                ? stock.GateBaseCandleFound ? "BASE_DONE" : string.Empty
+                : stock.ConditionEntryReason;
+        }
+
+        private static void ApplyIntradayConditionEntryReason(WatchStockItem stock)
+        {
+            if (stock.GateBaseCandleFound)
+            {
+                stock.ConditionEntryReason = "BASE_DONE";
+                return;
+            }
+
+            // Kiwoom condition realtime does not tell us which OR branch fired.
+            // Keep this as a display-only estimate: strong trade value looks like RANK_HOT, otherwise FORMING.
+            stock.ConditionEntryReason = stock.IsTodayTradeValueStrong ? "RANK_HOT" : "FORMING";
         }
 
         private static bool IsActiveGateBaseCandleCache(WatchlistStockCacheEntry? entry, string today)
@@ -856,6 +905,7 @@ namespace TradingDashboard
                     GateBaseCandleMarket = e.GateBaseCandleMarket,
                     GateBaseCandleChangeRate = e.GateBaseCandleChangeRate,
                     GateBaseCandleTradeValue = e.GateBaseCandleTradeValue,
+                    ConditionEntryReason = e.ConditionEntryReason,
                     SupportsNxt = e.SupportsNxt
                 })];
         }
@@ -1047,6 +1097,7 @@ namespace TradingDashboard
                     GateBaseCandleMarket = s.GateBaseCandleMarket,
                     GateBaseCandleChangeRate = s.GateBaseCandleChangeRate,
                     GateBaseCandleTradeValue = s.GateBaseCandleTradeValue,
+                    ConditionEntryReason = s.ConditionEntryReason,
                     SupportsNxt = s.SupportsNxt
                 })];
 
@@ -1186,6 +1237,8 @@ namespace TradingDashboard
                 stock.StockState = entry.StockState;
             if (string.IsNullOrWhiteSpace(stock.SectorName))
                 stock.SectorName = entry.SectorName;
+            if (string.IsNullOrWhiteSpace(stock.ConditionEntryReason))
+                stock.ConditionEntryReason = entry.ConditionEntryReason;
             if (IsActiveGateBaseCandleCacheForMarket(
                 entry,
                 DateTime.Now.ToString("yyyyMMdd"),
@@ -3332,6 +3385,10 @@ namespace TradingDashboard
             string Market,
             double ChangeRate,
             long TradeValue);
+
+        private sealed record BaseCandleGateEvaluation(
+            BaseCandleGateResult? Result,
+            string RejectSummary);
 
     }
 }

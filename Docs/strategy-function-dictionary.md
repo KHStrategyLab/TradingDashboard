@@ -69,6 +69,11 @@
 | 손절 가능 기준가 | `StrategyBasePriceType.StopCapable` | 손절선 후보 |
 | 절대 기준가 | `StrategyBasePriceType.Absolute` | 이탈 시 시나리오 무효 |
 | 기준봉 | `BaseCandle` | 특정 봉 기준 |
+| 기준봉 판정 | `BaseCandleValidation` | 장대봉/거래량/이평/저항 돌파/종가 확정 검사 |
+| 1차 기준봉 | `PrimaryBaseCandle` | 첫 상승 시작 후보 봉 |
+| 2차 기준봉 | `SecondaryBaseCandle` | 1차 이후 눌림 뒤 재상승 확인 봉 |
+| 기준봉 트랩 | `BaseCandleTrap` | 장중 돌파 후 종가 실패 또는 고점 불꽃 |
+| 기준봉 제외 | `BaseCandleRejection` | 이격/저항/종가 실패 등으로 기준봉 불인정 |
 | 후보 게이트 기준봉 | `GateBaseCandle` | 목록 편입 필터 |
 | 기준마디 | `MadiSegment` | 기준봉 포함 상승/하락 구간 |
 | 허리 | `MadiWaistZone` | 마디 중심 지지/저항 영역 |
@@ -93,6 +98,33 @@
 | 60선 재지지 | `Ma60RetestSupport` | 5이평/가격이 60이평 위에서 버팀 |
 | 작은 언덕 | `SmallHillStructure` | 5이평이 60이평으로 올라가며 만든 재상승 전 언덕 |
 | 언덕 돌파 | `SmallHillBreakout` | 작은 언덕 고점 돌파 |
+| 추세선 돌파 | `TrendlineBreak` | 하락추세 상단 또는 상승추세 하단 이탈 |
+| 추세선 지지 확인 | `TrendlineRetestSupport` | 돌파한 추세선 위에서 재지지 |
+| 의미 있는 고점 | `SignificantSwingHigh` | 좌우 봉/거래량/저항으로 가중된 고점 |
+| 의미 있는 저점 | `SignificantSwingLow` | 좌우 봉/거래량/지지로 가중된 저점 |
+| 추세선 돌파 등급 | `TrendlineBreakGrade` | 종가 돌파/장중 돌파/종가 실패 구분 |
+| 15분 추세 필터 | `TrendlineContext15m` | 큰 방향과 매수 금지 여부 |
+| 5분 추세 타이밍 | `TrendlineTiming5m` | 진입 타이밍 돌파/재지지 |
+| 추세 밖 전고점 돌파 | `OutsideTrendHighBreakout` | 추세선 밖에서 생긴 전고점 재돌파 |
+| 추세 안 트랩 돌파 | `InsideTrendTrapBreakout` | 전저점 이탈 후 추세 안 전고점 돌파 |
+| 시간차 돌파 | `DelayedTrendBreakout` | 추세 돌파 후 시간 조정/이평 수렴 뒤 돌파 |
+| 방향 우세 | `DirectionBias` | 상방/하방/중립 방향 판단 |
+| 거래량 방향 점수 | `VolumeDirectionScore` | 평상시 대비 거래량 증가와 거래량 이평 방향 |
+| 이평 기울기 점수 | `MovingAverageSlopeScore` | 핵심 이평선 우상향/우하향 전환 |
+| 이평 정배열 | `MovingAverageAlignment.Bullish` | 단기→장기 순서의 상승 배열 |
+| 이평 역배열 | `MovingAverageAlignment.Bearish` | 단기→장기 역순의 하락 배열 |
+| 이평 수렴 | `MovingAverageConvergence` | 주요 이평선 간격 축소 |
+| 이평 확산 | `MovingAverageExpansion` | 수렴 후 주요 이평선 간격 확대 |
+| 5선 고개듦 | `Ma5SlopeTurnUp` | 단기 이평선 기울기 상승 시작 |
+| 이평 심리 강도 | `MovingAveragePsychologyStrength` | 이평 기울기로 보는 참여자 심리 강도 |
+| 비교봉 돌릴 가격 | `MovingAverageTurnPrice` | MA(N)를 우상향으로 돌리는 N봉 전 종가 |
+| 이평 전환 준비 | `MovingAverageTurnSetup` | 현재가가 핵심 MA 돌릴 가격을 넘는 상태 |
+| 볼린저 하단 회복 | `BollingerLowerRecovery` | 볼린저 하단 이탈 후 종가 회복 |
+| 200이평 회복 돌파 | `Ma200RecoveryCross` | 200이평 상승 중 종가가 200이평을 돌파 |
+| 200이평 근접 눌림 | `NearMa200Pullback` | 저가가 200이평 근처까지 눌린 뒤 회복 |
+| 전일고가 1% 돌파 | `PreviousHighOnePercentBreakout` | 종가가 전일고가보다 1% 이상 위에서 마감 |
+| 마디 생존 점수 | `MadiAliveScore` | 기준마디 허리 지지/회복 여부 |
+| 장대봉 점수 | `LargeCandleScore` | 평상시 대비 몸통 확대와 연속성 |
 
 ### 변환 함수 원칙
 
@@ -161,6 +193,50 @@ ToKoreanProgressText(StrategyProgressSnapshot snapshot)
 소유권: 후보 게이트
 공용성: 백테스트/실시간 공용
 주의: GateBaseCandle은 전략 소마디 기준봉과 다르다.
+```
+
+### ValidateBaseCandle
+
+```text
+역할: 특정 봉이 전략 기준봉으로 인정 가능한지 판정한다.
+입력: Candle, RecentVolumeStats, MovingAverageSet, ResistanceLineSet
+출력: BaseCandleValidation, RejectionReasons
+소유권: 기준봉 판정부
+공용성: 백테스트/실시간 공용
+주의: 장중 고가 돌파가 아니라 종가 기준 돌파를 우선한다.
+```
+
+### DetectBaseCandleTrap
+
+```text
+역할: 기준봉처럼 보였지만 종가 돌파 실패, 윗꼬리, 과도한 이평 이격으로 트랩 가능성이 높은 봉을 감지한다.
+입력: Candle, ResistanceLineSet, MovingAverageDistanceSet, ClosePosition
+출력: BaseCandleTrap, TrapReason
+소유권: 기준봉 판정부
+공용성: 백테스트/실시간 공용
+주의: 거래량이 터져도 종가 기준 돌파 실패면 기준봉으로 확정하지 않는다.
+```
+
+### FindSecondaryBaseCandle
+
+```text
+역할: 1차 기준봉 이후 눌림/조정 뒤 나오는 2차 기준봉 또는 재돌파 봉을 찾는다.
+입력: PrimaryBaseCandle, SubsequentCandles, PullbackState, ResistanceLineSet
+출력: SecondaryBaseCandle, SecondaryBreakoutReady
+소유권: 기준봉 판정부
+공용성: 백테스트/실시간 공용
+주의: 초보/초기 자동전략은 1차 기준봉 추격보다 2차 기준봉 또는 2차 이후 눌림을 우선한다.
+```
+
+### EvaluateMovingAverageDistanceRisk
+
+```text
+역할: 5/20/60/120 이평선 간격이 과도하게 벌어져 고점 불꽃 위험이 있는지 평가한다.
+입력: MovingAverageSet, CurrentPrice, RecentCandleRange
+출력: MovingAverageDistanceRisk, DistanceScore
+소유권: 기준봉 판정부
+공용성: 백테스트/실시간 공용
+주의: 이격이 너무 큰 상태의 장대양봉은 기준봉이 아니라 마지막 트랩 후보로 본다.
 ```
 
 ### CalculateMadiSegment
@@ -252,6 +328,290 @@ ToKoreanProgressText(StrategyProgressSnapshot snapshot)
 주의: 손익비가 부족하면 신호가 좋아도 진입 금지다.
 ```
 
+### DetectTrendlineBreak
+
+```text
+역할: 하락추세 상단선 돌파 또는 상승추세 하단선 이탈을 감지한다.
+입력: 최근 스윙 고점/저점, 분봉 OHLCV
+출력: TrendlineBreak, TrendlinePrice, BreakTime
+소유권: 추세선 분석부
+공용성: 백테스트/실시간 공용
+주의: 추세선 돌파만으로 매수하지 않는다. 돌파 후 지지 확인이 필요하다.
+```
+
+### FindSignificantSwingPoints
+
+```text
+역할: 추세선을 만들 의미 있는 고점/저점을 찾는다.
+입력: OHLCV, LookAroundBars, VolumeAverage, MovingAverageSet, PreviousHighLowSet
+출력: SignificantSwingHigh[], SignificantSwingLow[]
+소유권: 추세선 분석부
+공용성: 백테스트/실시간 공용
+주의: 좌우 2~5봉 피크를 기본으로 하고, 거래량 증가/60이평 근처/전고전저 구조를 가중치로 더한다.
+```
+
+### BuildTrendLineFromSwings
+
+```text
+역할: 의미 있는 고점 또는 저점 2개 이상으로 상승/하락 추세선을 만든다.
+입력: SignificantSwingHigh[], SignificantSwingLow[], TrendDirection
+출력: TrendlineCandidate, TrendlineScore
+소유권: 추세선 분석부
+공용성: 백테스트/실시간 공용
+주의: 2점 연결을 기본으로 하고 3번째 접점 지지/저항이 있으면 신뢰도를 높인다.
+```
+
+### ClassifyTrendlineBreakGrade
+
+```text
+역할: 추세선 돌파를 종가 돌파/장중 돌파/종가 실패로 등급화한다.
+입력: TrendlineCandidate, CurrentBar, VolumeState
+출력: TrendlineBreakGrade.A/B/C
+소유권: 추세선 분석부
+공용성: 백테스트/실시간 공용
+주의: A=종가 기준 돌파, B=장중 거래량 동반 돌파, C=장중 돌파 후 종가 실패. C는 트랩 후보로 본다.
+```
+
+### EvaluateTrendlineRetest
+
+```text
+역할: 돌파한 추세선이 지지/저항으로 바뀌었는지 확인한다.
+입력: TrendlinePrice, 최근 봉 저가/고가/종가, 거래량
+출력: RetestSupported, RetestRejected, RetestPrice
+소유권: 추세선 분석부
+공용성: 백테스트/실시간 공용
+주의: 하락추세 돌파 후 지지는 매수 후보, 상승추세 이탈 후 저항은 청산 후보로 본다.
+```
+
+### Evaluate15m5mTrendlineContext
+
+```text
+역할: 15분봉 추세선은 방향 필터로, 5분봉 추세선은 진입 타이밍 필터로 나눠 평가한다.
+입력: TrendlineContext15m, TrendlineTiming5m, VolumeState, PullbackState
+출력: TrendlineTradeContext, NoBuyReasons
+소유권: 추세선 분석부
+공용성: 백테스트/실시간 공용
+주의: 15분이 하방 구조면 5분 돌파가 나와도 매수 금지 또는 약한 후보로 본다.
+```
+
+### DetectInsideTrendTrapBreakout
+
+```text
+역할: 추세 안에서 전저점 이탈 후 직전 고점을 빠르게 돌파하는 트랩 회복을 감지한다.
+입력: SwingLow, SwingHigh, CurrentPrice, VolumeState
+출력: TrapBreakoutDetected, TrapLow, TrapHigh
+소유권: 트랩/회복 분석부
+공용성: 백테스트/실시간 공용
+주의: 전저점 이탈 없이 단순 전고점 돌파만 있으면 강한 트랩으로 보지 않는다.
+```
+
+### DetectDelayedTrendBreakout
+
+```text
+역할: 추세선 돌파 후 시간 조정, 이평선 수렴, 60/120 골든크로스, 전고점 돌파가 이어지는 시간차 돌파를 감지한다.
+입력: TrendlineBreak, MA60, MA120, OutsideTrendHigh, VolumeState
+출력: DelayedBreakoutReady, MaConverged, Ma60CrossedMa120
+소유권: 추세선/이평 수렴 분석부
+공용성: 백테스트/실시간 공용
+주의: 시간차 돌파는 확인 매매에 가깝다. 매물 소화 시간이 부족하면 보수적으로 본다.
+```
+
+### EvaluateDirectionBias
+
+```text
+역할: 현재 시간틀의 방향이 상방/하방/중립 중 어디에 가까운지 평가한다.
+입력: OHLCV, VolumeMovingAverageSet, MovingAverageSet, MadiSegmentCandidate, CandleBodyStats
+출력: DirectionBias, DirectionScore, NoBuyReasons
+소유권: 방향 판단 공통 필터
+공용성: 백테스트/실시간 공용
+주의: 방향 판단은 손절보다 먼저다. 방향이 불명확하면 전략은 추적만 하고 진입하지 않는다.
+```
+
+### CalculateVolumeDirectionScore
+
+```text
+역할: 평상시 대비 거래량 증가와 거래량 이평 방향으로 거래 유입 점수를 계산한다.
+입력: Volume, VolumeMA5, VolumeMA20, VolumeMA60, AverageVolume
+출력: VolumeDirectionScore
+소유권: 방향 판단 공통 필터
+공용성: 백테스트/실시간 공용
+주의: 거래량 증가는 방향 발생 가능성이지 상승 확정이 아니다. 가격 유지와 마디 생존을 함께 본다.
+```
+
+### CalculateMovingAverageSlopeScore
+
+```text
+역할: 핵심 이평선의 기울기가 우하향에서 우상향으로 바뀌는지 계산한다.
+입력: MA20, MA60, MA120, MA240, CandleCloseSeries
+출력: MovingAverageSlopeScore, UpSlopeCount, DownSlopeCount
+소유권: 방향 판단 공통 필터
+공용성: 백테스트/실시간 공용
+주의: 선택 시간틀의 핵심 이평선이 돌아서야 방향 신뢰도가 올라간다.
+```
+
+### EvaluateMovingAverageAlignment
+
+```text
+역할: 이평선 정배열/역배열/전환 준비 상태를 판정한다.
+입력: MA5, MA10, MA20, MA60, MA120, MA240
+출력: MovingAverageAlignment, AlignmentScore
+소유권: 이평 방향 분석부
+공용성: 백테스트/실시간 공용
+주의: 정배열은 지지 가능성을 높이고, 역배열은 본전 매도 저항 가능성을 높인다.
+```
+
+### DetectMovingAverageConvergenceExpansion
+
+```text
+역할: 주요 이평선이 수렴한 뒤 다시 확산되는 초입을 감지한다.
+입력: MovingAverageSet, PreviousMovingAverageSet
+출력: MovingAverageConvergence, MovingAverageExpansion, ExpansionStart
+소유권: 이평 방향 분석부
+공용성: 백테스트/실시간 공용
+주의: 수렴 후 확산은 매수 급소 후보지만 거래량/기준마디/저항 돌파 없이 단독 사용하지 않는다.
+```
+
+### DetectMa5SlopeTurnUp
+
+```text
+역할: 5이평이 수평 또는 하락에서 우상향으로 고개 드는 시점을 찾는다.
+입력: MA5 series, CurrentPrice, VolumeState
+출력: Ma5SlopeTurnUp, SlopeStrength
+소유권: 이평 방향 분석부
+공용성: 백테스트/실시간 공용
+주의: 5선 고개듦은 단기 심리 변화다. 20/60 방향과 거래량 동반 여부를 같이 본다.
+```
+
+### CalculateMovingAveragePsychologyStrength
+
+```text
+역할: 이평선 기울기와 배열로 참여자 심리 강도를 계산한다.
+입력: MovingAverageSlopeSet, MovingAverageAlignment, PricePosition
+출력: MovingAveragePsychologyStrength
+소유권: 이평 방향 분석부
+공용성: 백테스트/실시간 공용
+주의: 기울기가 가팔라질수록 심리 강도가 커진다. 과도한 이격은 고점 트랩 위험으로 따로 감점한다.
+```
+
+### CalculateMovingAverageTurnPrice
+
+```text
+역할: MA(N)를 우상향으로 돌리기 위해 현재 봉 종가가 넘어야 할 비교봉 가격을 계산한다.
+입력: CandleCloseSeries, Period
+출력: MovingAverageTurnPrice, CompareCandleTime
+소유권: 이평 기울기 분석부
+공용성: 백테스트/실시간 공용
+공식: MovingAverageTurnPrice = Close[N bars ago]
+주의: 현재가가 이 가격을 넘으면 MA(N)는 우상향 전환 후보가 된다.
+```
+
+### EvaluateMovingAverageTurnSetup
+
+```text
+역할: 현재가가 MA5/20/60/120/240의 돌릴 가격을 얼마나 넘었는지 평가한다.
+입력: CurrentPrice, MovingAverageTurnPriceSet, VolumeState
+출력: MovingAverageTurnSetup, TurnedPeriods, NotYetTurnedPeriods
+소유권: 이평 기울기 분석부
+공용성: 백테스트/실시간 공용
+주의: 단기 MA만 돌고 장기 MA가 강하게 우하향이면 준비 중으로 본다. 거래량 동반 돌파 여부를 함께 본다.
+```
+
+### EvaluateTimePullForMovingAverage
+
+```text
+역할: 시간 조정으로 높은 비교봉이 빠지고, 낮은 비교봉이 들어와 이평선 전환 부담이 줄었는지 평가한다.
+입력: CandleCloseSeries, Period, CurrentPrice
+출력: TimePullReady, FutureTurnPriceTrend
+소유권: 이평 기울기 분석부
+공용성: 백테스트/실시간 공용
+주의: 시간 조정은 이평선을 쉽게 돌리기 위한 매물 소화 과정으로 본다.
+```
+
+### EvaluateMadiAliveScore
+
+```text
+역할: 기준마디가 허리 또는 핵심 지지 가격대를 지키고 있는지 점수화한다.
+입력: MadiSegmentCandidate, MadiWaistZoneCandidate, CurrentPrice, RecentCloseSeries
+출력: MadiAliveScore, WaistBroken, WaistRecovered
+소유권: 방향 판단 공통 필터
+공용성: 백테스트/실시간 공용
+주의: 허리 한 번 이탈은 트랩일 수 있다. 허리 아래 오래 머무르거나 반등 저항을 받으면 약화로 본다.
+```
+
+### CalculateLargeCandleScore
+
+```text
+역할: 평상시보다 캔들 몸통이 커졌는지, 장대봉이 연속되는지 계산한다.
+입력: CandleBodySize, AverageBodySize, VolumeState
+출력: LargeCandleScore
+소유권: 방향 판단 공통 필터
+공용성: 백테스트/실시간 공용
+주의: 장대봉은 힘 싸움 시작 신호다. 거래량과 마디 생존 없이 단독 매수 근거로 쓰지 않는다.
+```
+
+### DetectBollingerLowerRecovery
+
+```text
+역할: 볼린저밴드 하단 이탈 후 종가가 하단선을 회복하는 과매도 회복 신호를 감지한다.
+입력: Candle, BollingerBand(20,2), MovingAverageSet, TickSize
+출력: BollingerLowerRecovery, RecoveryScore
+소유권: 보조 필터 / 빠른 분봉 후보 탐색
+공용성: 백테스트/실시간 공용
+주의: 볼린저 하단 회복은 단독 매수 신호가 아니다. 거래량 재증가, 마디 생존, 손절 가능 가격이 함께 있어야 한다.
+```
+
+### DetectMa200RecoveryCross
+
+```text
+역할: 200이평이 상승 중이거나 상승 전환 준비 상태에서 종가가 200이평을 회복 돌파하는지 감지한다.
+입력: Candle, MA200, PreviousMA200, BollingerBand(20,2)
+출력: Ma200RecoveryCross, Ma200RecoveryScore
+소유권: 보조 필터 / 방향 회복 확인
+공용성: 백테스트/실시간 공용
+주의: 강의 수식의 정확 등식 조건은 코드에서 쓰지 않는다. 저가가 200이평 근처인지 `NearMa200Pullback` 오차 범위로 판정한다.
+```
+
+### EvaluateNearMa200Pullback
+
+```text
+역할: 저가가 200이평 근처까지 눌린 뒤 회복했는지 평가한다.
+입력: LowPrice, MA200, TickSize, AllowedDistancePercent
+출력: NearMa200Pullback, DistancePercent
+소유권: 보조 필터 / 눌림 위치 평가
+공용성: 백테스트/실시간 공용
+주의: `L = B * 1.01` 같은 정확 일치식은 실전에서 위험하다. 가격 단위와 종목 변동성을 반영한 근접 판정으로 바꾼다.
+```
+
+### DetectPreviousHighOnePercentBreakout
+
+```text
+역할: 현재 봉 종가가 전일고가보다 1% 이상 위에서 마감했는지 감지한다.
+입력: CurrentClose, PreviousDayHigh
+출력: PreviousHighOnePercentBreakout, BreakoutPercent
+소유권: 힘 확인 필터 / 후보 게이트 보조
+공용성: 백테스트/실시간 공용
+공식: CurrentClose >= PreviousDayHigh * 1.01
+주의: 장중 고가가 전일고가를 찍은 것만으로는 부족하다. 기본은 종가 기준이며, 장중 돌파는 보조 신호로만 둔다.
+```
+
+### Slot6HelperProgressSignals
+
+```text
+역할: Slot 6의 N분 기준봉 + 1분 안정형 트리거에서 보조 회복 신호를 Progress로 표시한다.
+현재 연결: Services/Strategies/IntradayFiveMinuteStableScalp/IntradayFiveMinuteStableScalpStrategySlot.cs
+현재 기본값: BaseMinute=5, TriggerMinute=1
+
+표시 신호:
+- PreviousDayHigh +1% touched
+- Bollinger lower recovery
+- MA200 pullback/recovery
+
+중요:
+이 세 신호는 현재 매수 하드조건이 아니다.
+매수 판단을 갑자기 바꾸지 않고, 리얼테스트에서 "같이 보이는지" 확인하기 위한 관찰 조건이다.
+검증 후 필요하면 Slot 6 안정형 조건으로 승격한다.
+```
+
 ### StrategyExitFirstPlanner
 
 ```text
@@ -272,7 +632,8 @@ Slot 1: SOR 10m MA60 + 3m Breakout
 Slot 2: SOR 15m MA60 + 5m Breakout
 Slot 3: SOR 10m MA60 + 5m Breakout
 Slot 5: Intraday 15m Base + 1m Trigger
-Slot 6: Intraday 5m Base + 1m Stable
+Slot 6: Intraday Nm Base + 1m Stable
+        현재 기본 N=5. 코드에서는 `BaseMinute`으로 분리해 두고, 향후 UI/config에서 N 값을 받도록 확장한다.
 ```
 
 Progress에는 `exit-first RR` 단계로 표시한다.
@@ -454,6 +815,180 @@ ReboundRejected:
 첫 이탈은 트랩일 수 있다.
 거래량이 작고 바로 회복하면 강한 이탈로 보지 않는다.
 거래량을 동반한 두 번째 이탈이나 기준가 회복 실패는 강한 경고로 본다.
+
+현재 구현:
+
+```text
+Services/Strategies/Core/StrategyExitBreakEvaluator.cs
+```
+
+`StrategyExitBreakEvaluator`는 강의의 손절/버림 기준을 Progress 매도 구간에서 읽을 수 있게 만든 공용 판정기다.
+현재는 실제 매도 주문을 직접 실행하지 않고, 보유 상태 전략의 `stop` 단계에 아래 상태를 표시한다.
+
+```text
+None             = 기준가 생존
+FirstBreak       = 첫 기준가 이탈
+TrapCandidate    = 거래량 작은 첫 이탈, 트랩 가능성
+Recovered        = 기준가 회복
+SecondBreak      = 두 번째 이탈
+StrongBreak      = 거래량 동반 강한 이탈
+ReboundRejected  = 기준가 아래에서 반등 실패
+```
+
+연결된 전략:
+
+```text
+Slot 1 SOR 10m MA60 + 3m Breakout:
+  10분봉 StopPrice 기준으로 판단
+
+Slot 2 SOR 15m MA60 + 5m Breakout:
+  15분봉 StopPrice 기준으로 판단
+
+Slot 3 SOR 10m MA60 + 5m Breakout:
+  10분봉 StopPrice 기준으로 판단
+
+Slot 5 Intraday 15m Base + 1m Trigger:
+  15분봉 base center/StopPrice 기준으로 판단
+
+Slot 6 Intraday 5m Base + 1m Stable:
+  1분봉 pullback/base StopPrice 기준으로 판단
+```
+
+중요:
+
+이 판정기는 아직 주문 실행기가 아니다.
+`ShouldExit`가 참이어도 곧바로 `KiwoomTradingClient`로 보내지 않는다.
+먼저 Progress, 스냅샷, 로그, 실제 차트 복기로 검증한다.
+
+### 선형회귀 매도 비교신호
+
+강좌 수식:
+
+```text
+A1 = LinearRegressionValue(C,50,0);
+A2 = LinearRegressionValue(A1,50,0);
+A3 = LinearRegressionValue(C,100,0);
+A4 = LinearRegressionValue(A3,100,0);
+
+eq1 = A1 - A2;
+eq2 = A3 - A4;
+
+VL  = A1 + eq1;
+VL1 = A3 + eq2;
+
+CROSSDOWN(C, VL) OR CROSSDOWN(C, VL1)
+```
+
+현재 구현:
+
+```text
+Services/Strategies/Core/StrategyLinearRegressionExitEvaluator.cs
+```
+
+역할:
+
+```text
+5분봉 단타 매매의 매도 신호 비교대상
+```
+
+주의:
+
+이 신호는 아직 실전 매도 조건이 아니다.
+백테스트에서 기존 손절/버림 기준과 비교하기 위한 보조 판정기로 둔다.
+50/100 선형회귀를 다시 한 번 회귀하기 때문에 최소 200봉 이상이 있어야 안정적으로 계산된다.
+
+판정:
+
+```text
+FastCrossDown:
+  이전 종가 >= VL
+  현재 종가 < VL
+
+SlowCrossDown:
+  이전 종가 >= VL1
+  현재 종가 < VL1
+
+ShouldExit:
+  FastCrossDown 또는 SlowCrossDown
+```
+
+### 실전형 분할익절/전량손절 운영세트
+
+와이즈 트레이딩룸 매도 예시는 아래 원칙으로 정리한다.
+
+```text
+수익은 분할
+손절은 전량
+1분봉은 조기 경고
+5분봉은 최종 손절 기준
+15분봉 훼손은 전량 청산 기준
+```
+
+현재 구현:
+
+```text
+Services/Strategies/Core/StrategyStagedExitEvaluator.cs
+```
+
+역할:
+
+```text
+15분 확인 → 5분 기준봉 → 1분 트리거 매수 이후의 매도 운영 평가기
+```
+
+입력:
+
+```text
+StrategyStagedExitInput:
+  ProfitRate
+  MinProfitRate
+  HighDrawdownRate
+  FirstScaleOutDone
+  SecondScaleOutDone
+  IsClosingTime
+  EntryPrice
+  CurrentPrice
+  FiveMinuteBaseLow
+
+MinuteBars:
+  1분봉
+  5분봉
+  15분봉
+```
+
+판정:
+
+```text
+StopAll:
+  평가손익률 <= -1.2%
+  또는 5분 기준봉 저가 이탈
+  또는 5분봉 약화 + 손실권
+  또는 15분봉 약화
+
+ReduceHalfWarning:
+  1분봉 약화 + 아직 1차 익절 전 수익권
+
+ScaleOutFirst:
+  +1.0% 도달 + 1차매도 미완료
+
+ScaleOutSecond:
+  +2.0% 도달 + 2차매도 미완료
+
+TrailAll:
+  +1.0% 이상 수익권 진입 후 매수후 고점 대비 -1.0% 밀림
+
+BreakEvenAll:
+  -1.0% 이하 손실을 본 뒤 본절 이상 회복
+
+CloseAll:
+  장마감 청산 시간
+```
+
+주의:
+
+이 평가는 아직 실전 자동매도 실행기가 아니다.
+백테스트, Progress, Paper, 실전 장부가 같은 매도 언어를 쓰도록 만드는 공통 계산기다.
+실제 매도 주문 연결은 포지션 장부에 `매수후 최고가`, `최저 손익률`, `1차/2차 매도 완료 여부`가 안정적으로 저장된 뒤에만 진행한다.
 
 ### 기준가
 
