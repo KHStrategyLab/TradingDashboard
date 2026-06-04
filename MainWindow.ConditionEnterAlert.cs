@@ -29,6 +29,7 @@ namespace TradingDashboard
         private bool ShouldSendConditionEnterAlert(WatchStockItem stock)
         {
             if (!_config.Telegram.Enabled ||
+                !_config.Telegram.ConditionEnterAlertsEnabled ||
                 string.IsNullOrWhiteSpace(_config.Telegram.BotToken) ||
                 string.IsNullOrWhiteSpace(_config.Telegram.DefaultChatId))
                 return false;

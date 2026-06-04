@@ -53,6 +53,7 @@ namespace TradingDashboard.Models
         public string DefaultChatId { get; set; } = string.Empty;
         public List<string> ChatIds { get; set; } = [];
         public bool Enabled { get; set; } = true;
+        public bool ConditionEnterAlertsEnabled { get; set; } = false;
     }
 
     public class DashboardSettings
