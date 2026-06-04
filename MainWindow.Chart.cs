@@ -410,7 +410,8 @@ namespace TradingDashboard
                     loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute1, 1).ConfigureAwait(false);
                     loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute3, 3).ConfigureAwait(false);
                     loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute5, 5).ConfigureAwait(false);
-                    Dispatcher.Invoke(() => AppendLog($"balance priority chart preload stock done: {stock.Code} / Day+1m+3m+5m"));
+                    string market = stock.UseNxtMarket ? "NXT" : "KRX";
+                    Dispatcher.Invoke(() => AppendLog($"balance priority chart preload stock done: {stock.Code} / {market} / Day+1m+3m+5m"));
                 }
                 catch (Exception ex)
                 {

@@ -833,13 +833,14 @@ namespace TradingDashboard
                         AppendLog($"strategy minute seed file saved: {stock.Code} / {market} / {item.Minute}m / {Math.Min(existingCandles.Count, targetCount):N0}bars");
                     }
 
-                    AppendLog($"strategy minute data cache fresh: {stock.Code} / {item.Minute}m / {existingCandles.Count:N0}bars / last {cacheLastBucket:HH:mm} / expected {expectedLatestBucket:HH:mm}");
+                    AppendLog($"strategy minute data cache fresh: {stock.Code} / {market} / {item.Minute}m / {existingCandles.Count:N0}bars / last {cacheLastBucket:HH:mm} / expected {expectedLatestBucket:HH:mm}");
                     totalLoaded += existingCandles.Count;
                     continue;
                 }
 
                 int fetchCount = CalculateStrategyMinuteFetchCount(existingCandles, item.Minute, targetCount, expectedLatestBucket);
                 StrategyMinuteDataLoadStatusText.Text = $"{stock.Name} {item.Minute}분 로드 중... ({existingCandles.Count:N0}/{targetCount:N0}, fetch {fetchCount:N0})";
+                string requestCode = useNxtMarket ? $"{NormalizeStockCode(stock.Code)}_NX" : NormalizeStockCode(stock.Code);
                 IReadOnlyList<DailyCandle> candles = await _kiwoomConditionService
                     .GetMinuteCandlesAsync(stock.Code, item.Minute, useNxtMarket, fetchCount)
                     .ConfigureAwait(true);
@@ -855,7 +856,7 @@ namespace TradingDashboard
                 }
 
                 totalLoaded += chartCandles.Count;
-                AppendLog($"strategy minute data cache fill: {stock.Code} / {item.Minute}m / fetched {candles.Count:N0} / merged {chartCandles.Count:N0}/{targetCount:N0}bars");
+                AppendLog($"strategy minute data cache fill: {stock.Code} / {market} / request {requestCode} / {item.Minute}m / fetched {candles.Count:N0} / merged {chartCandles.Count:N0}/{targetCount:N0}bars");
             }
 
             SaveStrategyAnchorForStock(stock, market);

@@ -299,13 +299,26 @@ namespace TradingDashboard
 
         private async Task<bool> IsBalanceNxtEligibleAsync(string code, CancellationToken cancellationToken)
         {
-            if (_watchStockByCode.TryGetValue(code, out WatchStockItem? watchStock) && watchStock.SupportsNxt)
+            code = NormalizeStockCode(code);
+            if (string.IsNullOrWhiteSpace(code))
+                return false;
+
+            if (_balanceNxtEligibleCodes.Contains(code))
                 return true;
+
+            if (_watchStockByCode.TryGetValue(code, out WatchStockItem? watchStock) && watchStock.SupportsNxt)
+            {
+                _balanceNxtEligibleCodes.Add(code);
+                return true;
+            }
 
             WatchStockItem? recentStock = _recentViewedStocks
                 .FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
             if (recentStock?.SupportsNxt == true)
+            {
+                _balanceNxtEligibleCodes.Add(code);
                 return true;
+            }
 
             WatchStockItem? enriched = await TrySearchListedStockQuietAsync(code, cancellationToken)
                 .ConfigureAwait(true);
@@ -316,6 +329,9 @@ namespace TradingDashboard
                 MergeBalanceStockMetadata(existing, enriched);
             else if (recentStock != null)
                 MergeBalanceStockMetadata(recentStock, enriched);
+
+            if (enriched.SupportsNxt)
+                _balanceNxtEligibleCodes.Add(code);
 
             return enriched.SupportsNxt;
         }
@@ -395,6 +411,8 @@ namespace TradingDashboard
                 }
 
                 stock ??= new WatchStockItem { Code = code };
+                if (_balanceNxtEligibleCodes.Contains(code))
+                    stock.SupportsNxt = true;
 
                 if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
                     stock.Name = holding.StockName;
@@ -434,6 +452,8 @@ namespace TradingDashboard
 
                 if (_watchStockByCode.TryGetValue(code, out WatchStockItem? existing))
                 {
+                    if (_balanceNxtEligibleCodes.Contains(code))
+                        existing.SupportsNxt = true;
                     if (recent != null)
                         MergeBalanceStockMetadata(existing, recent);
                     if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
@@ -444,6 +464,8 @@ namespace TradingDashboard
                 }
 
                 WatchStockItem stock = recent ?? new WatchStockItem { Code = code };
+                if (_balanceNxtEligibleCodes.Contains(code))
+                    stock.SupportsNxt = true;
                 if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
                     stock.Name = holding.StockName;
                 if (stock.CurrentPrice <= 0 && holding.CurrentPrice > 0)

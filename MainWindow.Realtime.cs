@@ -400,6 +400,9 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(code))
                 return false;
 
+            if (_balanceNxtEligibleCodes.Contains(code))
+                return true;
+
             if (_watchStockByCode.TryGetValue(code, out WatchStockItem? selected) && selected.SupportsNxt)
                 return true;
 
