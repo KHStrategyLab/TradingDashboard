@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -19,6 +20,9 @@ namespace TradingDashboard
         private const string StrategyControlBudgetKey = "AutoTradeBudget";
         private const string StrategyControlSlotCountKey = "AutoTradeSlotCount";
         private bool _isRevertingLockedStrategyToggle;
+        private bool _isRevertingStrategyControlToggle;
+        private bool _isEngineStartReady;
+        private int _engineStartDelayVersion;
         private bool _isInitializingStrategyControls = true;
 
         private void InitializeStrategySlots()
@@ -81,6 +85,16 @@ namespace TradingDashboard
             if (_isInitializingStrategyControls)
                 return;
 
+            if (_isRevertingStrategyControlToggle)
+                return;
+
+            if (TryRejectLiveOrdersEnable(sender))
+            {
+                SyncPaperTradingPreviewState();
+                UpdateStrategyControlBoard();
+                return;
+            }
+
             if (TryRejectEngineLockedStrategyChange(sender))
             {
                 SyncPaperTradingPreviewState();
@@ -88,13 +102,16 @@ namespace TradingDashboard
                 return;
             }
 
+            if (ReferenceEquals(sender, AutoTradingEnabledToggle))
+                UpdateEngineStartReadyState();
+
             SyncPaperTradingPreviewState();
             SaveStrategySwitchState(sender);
             LogStrategyToggleState(sender);
             UpdateStrategyControlBoard();
             UpdateStrategyExitStrategySelectorLocks();
             UpdateStrategyMinutePreloadControlLock();
-            if (ShouldStartRequiredStrategyMinutePreload(sender))
+            if (ShouldStartRequiredStrategyMinutePreloadImmediately(sender))
                 StartStrategyMinuteAutoPreload(_watchStocks, force: true, immediate: true);
             if (ShouldStartSelectedStrategyMinutePreload(sender))
                 TryStartStrategyMinutePreloadForSelectedStock();
@@ -156,10 +173,82 @@ namespace TradingDashboard
             return ReferenceEquals(sender, StrategyMinutePreloadToggle);
         }
 
-        private bool ShouldStartRequiredStrategyMinutePreload(object sender)
+        private bool ShouldStartRequiredStrategyMinutePreloadImmediately(object sender)
         {
             return ReferenceEquals(sender, AutoTradingEnabledToggle) &&
-                IsStrategyToggleOn(AutoTradingEnabledToggle);
+                IsStrategyEngineReady();
+        }
+
+        private bool TryRejectLiveOrdersEnable(object sender)
+        {
+            if (!ReferenceEquals(sender, LiveBuyEnabledToggle) ||
+                !IsStrategyToggleOn(LiveBuyEnabledToggle))
+                return false;
+
+            MessageBoxResult result = MessageBox.Show(
+                "실계좌 주문이 가능해집니다.\n\nEngine Start가 켜진 상태에서 전략 신호가 RiskGuard를 통과하면 실제 주문이 나갈 수 있습니다.\n\nLive Orders를 켤까요?",
+                "Live Orders 확인",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning,
+                MessageBoxResult.Cancel);
+
+            if (result == MessageBoxResult.OK)
+                return false;
+
+            _isRevertingStrategyControlToggle = true;
+            try
+            {
+                LiveBuyEnabledToggle.IsChecked = false;
+            }
+            finally
+            {
+                _isRevertingStrategyControlToggle = false;
+            }
+
+            AppendLog("strategy switch cancelled: Live Orders remains OFF");
+            try
+            {
+                global::System.Media.SystemSounds.Exclamation.Play();
+            }
+            catch
+            {
+                // Some Windows sound schemes may not provide a playable alert.
+            }
+
+            return true;
+        }
+
+        private void UpdateEngineStartReadyState()
+        {
+            if (!IsStrategyToggleOn(AutoTradingEnabledToggle))
+            {
+                _engineStartDelayVersion++;
+                _isEngineStartReady = false;
+                return;
+            }
+
+            _isEngineStartReady = false;
+            int version = ++_engineStartDelayVersion;
+            AppendLog("strategy switch: Engine Start arming in 1s");
+            _ = ArmEngineStartAfterDelayAsync(version);
+        }
+
+        private async Task ArmEngineStartAfterDelayAsync(int version)
+        {
+            await Task.Delay(1000);
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (version != _engineStartDelayVersion ||
+                    !IsStrategyToggleOn(AutoTradingEnabledToggle))
+                    return;
+
+                _isEngineStartReady = true;
+                AppendLog("strategy switch: Engine Start armed");
+                UpdateStrategyControlBoard();
+                UpdateStrategyProgressRows();
+                StartStrategyMinuteAutoPreload(_watchStocks, force: true, immediate: true);
+            });
         }
 
         private void SyncPaperTradingPreviewState()
@@ -260,7 +349,8 @@ namespace TradingDashboard
         {
             if (sender is not ToggleButton toggle ||
                 _isInitializingStrategyControls ||
-                _isRevertingLockedStrategyToggle)
+                _isRevertingLockedStrategyToggle ||
+                _isRevertingStrategyControlToggle)
                 return;
 
             AppendLog($"strategy switch: {GetStrategyToggleLogName(toggle)} {(IsStrategyToggleOn(toggle) ? "ON" : "OFF")}");
@@ -1204,9 +1294,12 @@ namespace TradingDashboard
                 AllowAdditionalBuy: IsStrategyToggleOn(DuplicateBuyPolicyToggle),
                 NotifyDuplicateSignal: IsStrategyToggleOn(DuplicateAlertPolicyToggle));
 
+        private bool IsStrategyEngineReady() =>
+            IsStrategyToggleOn(AutoTradingEnabledToggle) && _isEngineStartReady;
+
         private StrategyExecutionSettings GetStrategyExecutionSettings() =>
             new(
-                AutoTradingEnabled: IsStrategyToggleOn(AutoTradingEnabledToggle),
+                AutoTradingEnabled: IsStrategyEngineReady(),
                 LiveBuyEnabled: IsStrategyToggleOn(LiveBuyEnabledToggle),
                 Budget: ParseLongInput(AutoTradeBudgetTextBox?.Text),
                 SlotCount: Math.Max(0, (int)ParseLongInput(AutoTradeSlotCountTextBox?.Text)));
