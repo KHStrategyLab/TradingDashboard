@@ -104,27 +104,29 @@ namespace TradingDashboard.Services.Backtests
 
             foreach (BacktestSignalRow row in signals)
             {
-                row.RunId = string.IsNullOrWhiteSpace(row.RunId) ? config.RunId : row.RunId;
-                row.RunMode = string.IsNullOrWhiteSpace(row.RunMode) ? runMode : row.RunMode;
-                row.MarketMode = string.IsNullOrWhiteSpace(row.MarketMode) ? marketMode : row.MarketMode;
+                row.RunId = config.RunId;
+                row.RunMode = runMode;
+                row.MarketMode = marketMode;
                 row.Market = NormalizeMarketLabel(row.Market);
+                EnsureKnownMarket(row.Market, "signal", row.Code, row.SignalTime);
                 row.Status = string.IsNullOrWhiteSpace(row.Status) ? "Generated" : row.Status;
             }
 
             foreach (BacktestTradeRow row in trades)
             {
-                row.RunId = string.IsNullOrWhiteSpace(row.RunId) ? config.RunId : row.RunId;
-                row.RunMode = string.IsNullOrWhiteSpace(row.RunMode) ? runMode : row.RunMode;
-                row.MarketMode = string.IsNullOrWhiteSpace(row.MarketMode) ? marketMode : row.MarketMode;
+                row.RunId = config.RunId;
+                row.RunMode = runMode;
+                row.MarketMode = marketMode;
                 row.Market = NormalizeMarketLabel(row.Market);
+                EnsureKnownMarket(row.Market, "trade", row.Code, row.EntryTime);
                 row.Status = string.IsNullOrWhiteSpace(row.Status) ? "Completed" : row.Status;
             }
 
             foreach (BacktestRunSummary row in summaries)
             {
-                row.RunId = string.IsNullOrWhiteSpace(row.RunId) ? config.RunId : row.RunId;
-                row.RunMode = string.IsNullOrWhiteSpace(row.RunMode) ? runMode : row.RunMode;
-                row.MarketMode = string.IsNullOrWhiteSpace(row.MarketMode) ? marketMode : row.MarketMode;
+                row.RunId = config.RunId;
+                row.RunMode = runMode;
+                row.MarketMode = marketMode;
                 row.Market = string.IsNullOrWhiteSpace(row.Market) ? inferredMarket : NormalizeMarketLabel(row.Market);
                 row.Status = string.IsNullOrWhiteSpace(row.Status) ? "Completed" : row.Status;
             }
@@ -341,6 +343,15 @@ namespace TradingDashboard.Services.Backtests
             if (text.Contains("MIX", StringComparison.OrdinalIgnoreCase))
                 return "MIXED";
             return string.IsNullOrWhiteSpace(text) ? "UNKNOWN" : text;
+        }
+
+        private static void EnsureKnownMarket(string market, string rowType, string code, string time)
+        {
+            if (market is "KRX" or "NXT")
+                return;
+
+            throw new InvalidOperationException(
+                $"Backtest {rowType} row has unknown market. Code={code}, Time={time}, Market={market}");
         }
 
         private static string ResolveDefaultRootPath()

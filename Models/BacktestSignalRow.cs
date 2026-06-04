@@ -7,7 +7,7 @@ namespace TradingDashboard.Models
         public string MarketMode { get; set; } = string.Empty;
         public string StrategyCode { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
-        public string Market { get; set; } = "KRX";
+        public string Market { get; set; } = "UNKNOWN";
         public string Status { get; set; } = "Generated";
         public string SignalTime { get; set; } = string.Empty;
         public string SignalType { get; set; } = string.Empty;

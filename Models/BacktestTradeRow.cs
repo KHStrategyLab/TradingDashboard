@@ -8,7 +8,7 @@ namespace TradingDashboard.Models
         public string StrategyCode { get; set; } = string.Empty;
         public string ExitRuleCode { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
-        public string Market { get; set; } = "KRX";
+        public string Market { get; set; } = "UNKNOWN";
         public string Status { get; set; } = "Completed";
         public string EntryTime { get; set; } = string.Empty;
         public string ExitTime { get; set; } = string.Empty;
