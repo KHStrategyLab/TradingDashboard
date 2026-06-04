@@ -4895,12 +4895,86 @@
                     <TabItem Header="Etc">
                         <Grid Background="{StaticResource BgPanelBrush}">
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="1*"/>
                                 <RowDefinition Height="3*"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0"
                                     Margin="10"
+                                    Padding="10"
+                                    Background="{StaticResource BgInnerBrush}"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,12,0">
+                                        <TextBlock Text="Backtest"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="file run / no live order"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="10"/>
+                                    </StackPanel>
+
+                                    <ComboBox Grid.Column="1"
+                                              x:Name="BacktestModeComboBox"
+                                              Height="26"
+                                              VerticalAlignment="Center"
+                                              SelectedIndex="0"
+                                              Style="{StaticResource DarkMinuteComboBoxStyle}">
+                                        <ComboBoxItem Content="10m pullback + 5m breakout" Tag="--backtest-ten-pullback-five-breakout"/>
+                                        <ComboBoxItem Content="10m pullback + 5m breakout 3h" Tag="--backtest-ten-pullback-five-breakout-3h"/>
+                                        <ComboBoxItem Content="small base center 10m/3m" Tag="--backtest-small-base-center-10m-3m"/>
+                                        <ComboBoxItem Content="small base center 10m/3m + 1m" Tag="--backtest-small-base-center-10m-3m-1m"/>
+                                        <ComboBoxItem Content="small base center 15m/5m + 1m" Tag="--backtest-small-base-center-15m-5m-1m"/>
+                                        <ComboBoxItem Content="small base stoch A/B" Tag="--backtest-small-base-stoch-ab"/>
+                                        <ComboBoxItem Content="stoch quick reaction" Tag="--backtest-stoch-quick-reaction"/>
+                                    </ComboBox>
+
+                                    <Button Grid.Column="2"
+                                            x:Name="BacktestRunButton"
+                                            Content="Run"
+                                            Width="64"
+                                            Height="26"
+                                            VerticalAlignment="Center"
+                                            Margin="8,0,0,0"
+                                            Style="{StaticResource ToolbarButtonStyle}"
+                                            Click="BacktestRunButton_Click"/>
+
+                                    <Button Grid.Column="3"
+                                            x:Name="BacktestOpenResultsButton"
+                                            Content="Results"
+                                            Width="76"
+                                            Height="26"
+                                            VerticalAlignment="Center"
+                                            Margin="4,0,0,0"
+                                            Style="{StaticResource ToolbarButtonStyle}"
+                                            Click="BacktestOpenResultsButton_Click"/>
+
+                                    <TextBlock Grid.Column="4"
+                                               x:Name="BacktestStatusText"
+                                               Text="Ready. Backtest runs in a separate process and never submits live orders."
+                                               Foreground="{StaticResource TextSubBrush}"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Margin="12,0,0,0"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="1"
+                                    Margin="10,0,10,10"
                                     Padding="10"
                                     Background="{StaticResource BgInnerBrush}"
                                     BorderBrush="{StaticResource LineBrush}"
@@ -4944,7 +5018,7 @@
                                 </Grid>
                             </Border>
 
-                            <TextBlock Grid.Row="1"
+                            <TextBlock Grid.Row="2"
                                        Text="ETC panel"
                                        Style="{StaticResource PlaceholderTextStyle}"/>
                         </Grid>

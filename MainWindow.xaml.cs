@@ -2433,6 +2433,99 @@ namespace TradingDashboard
             }
         }
 
+        private async void BacktestRunButton_Click(object sender, RoutedEventArgs e)
+        {
+            string argument = ResolveSelectedBacktestArgument();
+            if (string.IsNullOrWhiteSpace(argument))
+            {
+                BacktestStatusText.Text = "Select a backtest mode first.";
+                return;
+            }
+
+            string? executablePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executablePath) || !File.Exists(executablePath))
+            {
+                BacktestStatusText.Text = "Backtest executable path not found.";
+                AppendLog("backtest run blocked: executable path not found");
+                return;
+            }
+
+            BacktestRunButton.IsEnabled = false;
+            BacktestStatusText.Text = $"Running {argument} ...";
+            AppendLog($"backtest run started: {argument}");
+
+            try
+            {
+                int exitCode = await Task.Run(() =>
+                {
+                    using Process? process = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = executablePath,
+                        Arguments = argument,
+                        WorkingDirectory = ResolveProjectRoot(),
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+
+                    if (process == null)
+                        return -1;
+
+                    process.WaitForExit();
+                    return process.ExitCode;
+                });
+
+                string latestSummary = ResolveBacktestLatestSummaryPath();
+                string resultText = File.Exists(latestSummary)
+                    ? $" / summary {System.IO.Path.GetFileName(latestSummary)}"
+                    : string.Empty;
+                BacktestStatusText.Text = $"Backtest finished: exit {exitCode}{resultText}";
+                AppendLog($"backtest run finished: {argument} / exit {exitCode}{resultText}");
+            }
+            catch (Exception ex)
+            {
+                BacktestStatusText.Text = $"Backtest error: {ex.GetType().Name}";
+                AppendLog($"backtest run error: {argument} / {ex.GetType().Name} / {ex.Message}");
+            }
+            finally
+            {
+                BacktestRunButton.IsEnabled = true;
+            }
+        }
+
+        private void BacktestOpenResultsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string directory = ResolveBacktestMetadataDirectory();
+                Directory.CreateDirectory(directory);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = directory,
+                    UseShellExecute = true
+                });
+                BacktestStatusText.Text = $"Results folder opened: {directory}";
+            }
+            catch (Exception ex)
+            {
+                BacktestStatusText.Text = $"Results open error: {ex.GetType().Name}";
+                AppendLog($"backtest results open error: {ex.Message}");
+            }
+        }
+
+        private string ResolveSelectedBacktestArgument()
+        {
+            if (BacktestModeComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+                return tag;
+
+            return string.Empty;
+        }
+
+        private static string ResolveBacktestMetadataDirectory() =>
+            System.IO.Path.Combine(ResolveProjectRoot(), "Storage", "Backtests", "DataStore", "metadata");
+
+        private static string ResolveBacktestLatestSummaryPath() =>
+            System.IO.Path.Combine(ResolveBacktestMetadataDirectory(), "last_strategy_run_summary.json");
+
         private async Task LoadMarketNewsThumbnailsAsync(IReadOnlyList<NewsItem> news)
         {
             using var gate = new SemaphoreSlim(3);
