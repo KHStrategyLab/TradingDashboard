@@ -4830,7 +4830,7 @@
 
                 <TextBlock Grid.Column="1"
                            x:Name="MarketTickerText"
-                            Text="KOSPI · KOSDAQ · Futures · FX · Signals"
+                           Text="KOSPI/KOSDAQ loading..."
                            FontSize="12"
                            Foreground="{StaticResource TextSubBrush}"
                            VerticalAlignment="Center"/>

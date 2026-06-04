@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -13,6 +14,13 @@ using TradingDashboard.Models;
 
 namespace TradingDashboard.Services
 {
+    public sealed record MarketIndexSnapshot(
+        string Code,
+        string Name,
+        decimal? Current,
+        decimal? DayChange,
+        decimal? ChangeRate);
+
     public sealed class KiwoomRestConditionService(KiwoomSettings settings, HttpClient? httpClient = null)
     {
         private readonly KiwoomSettings _settings = settings ?? new KiwoomSettings();
@@ -206,6 +214,56 @@ namespace TradingDashboard.Services
                 .ThenBy(item => item.Name, StringComparer.CurrentCulture)
                 .Take(Math.Max(1, takeCount))
                 .ToList();
+        }
+
+        public async Task<IReadOnlyList<MarketIndexSnapshot>> GetMarketIndexSnapshotsAsync(CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+
+            var result = new List<MarketIndexSnapshot>
+            {
+                await GetMarketIndexSnapshotAsync(token, "001", "KOSPI", cancellationToken).ConfigureAwait(false),
+                await GetMarketIndexSnapshotAsync(token, "101", "KOSDAQ", cancellationToken).ConfigureAwait(false)
+            };
+
+            return result;
+        }
+
+        private async Task<MarketIndexSnapshot> GetMarketIndexSnapshotAsync(
+            string token,
+            string indexCode,
+            string name,
+            CancellationToken cancellationToken)
+        {
+            JsonElement root = await PostApiRootAsync(
+                token,
+                "ka20001",
+                "/api/dostk/sect",
+                new
+                {
+                    mrkt_tp = indexCode,
+                    inds_cd = indexCode
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            JsonElement source = root;
+            JsonElement firstArray = FindFirstArray(root);
+            if (firstArray.ValueKind == JsonValueKind.Array && firstArray.GetArrayLength() > 0)
+                source = firstArray[0];
+
+            decimal? current = ParseDecimalSafe(ReadAnyDeep(source, "cur_prc", "now_prc", "indx", "close_pric", "price", "10"));
+            decimal? dayChange = ParseDecimalSafe(ReadAnyDeep(source, "pred_pre", "pre_vrss", "diff", "change", "11"));
+            decimal? changeRate = ParseDecimalSafe(ReadAnyDeep(source, "flu_rt", "updown_rt", "prdy_ctrt", "rate", "change_rate", "12"));
+
+            if (current is null)
+                current = ParseDecimalSafe(ReadAnyDeep(root, "cur_prc", "now_prc", "indx", "close_pric", "price", "10"));
+            if (dayChange is null)
+                dayChange = ParseDecimalSafe(ReadAnyDeep(root, "pred_pre", "pre_vrss", "diff", "change", "11"));
+            if (changeRate is null)
+                changeRate = ParseDecimalSafe(ReadAnyDeep(root, "flu_rt", "updown_rt", "prdy_ctrt", "rate", "change_rate", "12"));
+
+            return new MarketIndexSnapshot(indexCode, name, current, dayChange, changeRate);
         }
 
         public async Task<InvestorNetBuyMetrics> GetInvestorNetBuyMetricsAsync(
@@ -2153,6 +2211,28 @@ namespace TradingDashboard.Services
             while (clean.StartsWith("--", StringComparison.Ordinal))
                 clean = "-" + clean[2..];
             return long.TryParse(clean, out long parsed) ? parsed : 0;
+        }
+
+        private static decimal? ParseDecimalSafe(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            string clean = value
+                .Replace(",", "")
+                .Replace("%", "")
+                .Replace("+", "")
+                .Trim();
+            while (clean.StartsWith("--", StringComparison.Ordinal))
+                clean = "-" + clean[2..];
+
+            if (decimal.TryParse(clean, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal invariant))
+                return invariant;
+
+            if (decimal.TryParse(clean, NumberStyles.Number, CultureInfo.CurrentCulture, out decimal current))
+                return current;
+
+            return null;
         }
 
         private static long ResolvePreviousClosePrice(JsonElement root)

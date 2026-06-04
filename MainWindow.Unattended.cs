@@ -30,7 +30,8 @@ namespace TradingDashboard
             _ = Task.Run(() => RunRealtimeWatchdogAsync(token), token);
             _ = Task.Run(() => RunDailyStartupRefreshSchedulerAsync(token), token);
             _ = Task.Run(() => RunStrategyDebugSnapshotSchedulerAsync(token), token);
-            AppendLog("unattended monitor started: WS watchdog / daily 07:30 refresh / strategy snapshot 3m");
+            _ = Task.Run(() => RunMarketIndexRefreshSchedulerAsync(token), token);
+            AppendLog("unattended monitor started: WS watchdog / daily 07:30 refresh / strategy snapshot 3m / market index 60s");
         }
 
         private void StopUnattendedOperations()

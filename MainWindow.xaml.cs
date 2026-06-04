@@ -381,6 +381,7 @@ namespace TradingDashboard
 
             MarkDailyStartupRefreshCompletedByStartup();
             StartUnattendedOperations();
+            _ = RefreshMarketIndexTickerAsync("startup", force: true);
 
             if (WatchListBox.SelectedItem is not ListBoxItem)
             {
