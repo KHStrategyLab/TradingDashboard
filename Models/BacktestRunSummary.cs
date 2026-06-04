@@ -3,6 +3,10 @@ namespace TradingDashboard.Models
     public sealed class BacktestRunSummary
     {
         public string RunId { get; set; } = string.Empty;
+        public string RunMode { get; set; } = string.Empty;
+        public string MarketMode { get; set; } = string.Empty;
+        public string Market { get; set; } = string.Empty;
+        public string Status { get; set; } = "Completed";
         public string StrategyCode { get; set; } = string.Empty;
         public string ExitRuleCode { get; set; } = string.Empty;
         public int SignalCount { get; set; }

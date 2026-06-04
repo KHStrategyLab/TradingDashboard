@@ -46,7 +46,8 @@ namespace TradingDashboard.Services.Backtests
             List<BacktestSignalRow> signalRows = [.. signals ?? []];
             List<BacktestTradeRow> tradeRows = [.. trades ?? []];
             List<BacktestRunSummary> summaryRows = [.. summaries ?? []];
-            BacktestRunConfig resolvedConfig = BuildRunConfig(resolvedRunId, summaryRows, runConfig);
+            BacktestRunConfig resolvedConfig = BuildRunConfig(resolvedRunId, signalRows, tradeRows, summaryRows, runConfig);
+            ApplyRunMetadata(resolvedConfig, signalRows, tradeRows, summaryRows);
 
             File.WriteAllText(Path.Combine(directory, "signals.csv"), BuildSignalsCsv(signalRows), Encoding.UTF8);
             File.WriteAllText(Path.Combine(directory, "trades.csv"), BuildTradesCsv(tradeRows), Encoding.UTF8);
@@ -61,12 +62,20 @@ namespace TradingDashboard.Services.Backtests
 
         private static BacktestRunConfig BuildRunConfig(
             string runId,
+            IReadOnlyCollection<BacktestSignalRow> signals,
+            IReadOnlyCollection<BacktestTradeRow> trades,
             IReadOnlyCollection<BacktestRunSummary> summaries,
             BacktestRunConfig? config)
         {
             BacktestRunConfig resolved = config ?? new BacktestRunConfig();
             resolved.RunId = runId;
             resolved.BacktestMode = string.IsNullOrWhiteSpace(resolved.BacktestMode) ? "SOR_ON" : resolved.BacktestMode;
+            resolved.RunMode = string.IsNullOrWhiteSpace(resolved.RunMode) ? resolved.BacktestMode : resolved.RunMode;
+            resolved.MarketMode = string.IsNullOrWhiteSpace(resolved.MarketMode)
+                ? InferMarketMode(signals.Select(item => item.Market)
+                    .Concat(trades.Select(item => item.Market))
+                    .Concat(summaries.Select(item => item.Market)))
+                : resolved.MarketMode;
             resolved.OrderMode = string.IsNullOrWhiteSpace(resolved.OrderMode) ? "None" : resolved.OrderMode;
             resolved.ExecutionType = string.IsNullOrWhiteSpace(resolved.ExecutionType) ? "BacktestOnly" : resolved.ExecutionType;
             resolved.LiveOrder = false;
@@ -81,6 +90,44 @@ namespace TradingDashboard.Services.Backtests
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(item => item, StringComparer.Ordinal)];
             return resolved;
+        }
+
+        private static void ApplyRunMetadata(
+            BacktestRunConfig config,
+            IReadOnlyList<BacktestSignalRow> signals,
+            IReadOnlyList<BacktestTradeRow> trades,
+            IReadOnlyList<BacktestRunSummary> summaries)
+        {
+            string runMode = string.IsNullOrWhiteSpace(config.RunMode) ? config.BacktestMode : config.RunMode;
+            string marketMode = string.IsNullOrWhiteSpace(config.MarketMode) ? "UNKNOWN" : config.MarketMode;
+            string inferredMarket = InferMarket(signals.Select(item => item.Market).Concat(trades.Select(item => item.Market)));
+
+            foreach (BacktestSignalRow row in signals)
+            {
+                row.RunId = string.IsNullOrWhiteSpace(row.RunId) ? config.RunId : row.RunId;
+                row.RunMode = string.IsNullOrWhiteSpace(row.RunMode) ? runMode : row.RunMode;
+                row.MarketMode = string.IsNullOrWhiteSpace(row.MarketMode) ? marketMode : row.MarketMode;
+                row.Market = NormalizeMarketLabel(row.Market);
+                row.Status = string.IsNullOrWhiteSpace(row.Status) ? "Generated" : row.Status;
+            }
+
+            foreach (BacktestTradeRow row in trades)
+            {
+                row.RunId = string.IsNullOrWhiteSpace(row.RunId) ? config.RunId : row.RunId;
+                row.RunMode = string.IsNullOrWhiteSpace(row.RunMode) ? runMode : row.RunMode;
+                row.MarketMode = string.IsNullOrWhiteSpace(row.MarketMode) ? marketMode : row.MarketMode;
+                row.Market = NormalizeMarketLabel(row.Market);
+                row.Status = string.IsNullOrWhiteSpace(row.Status) ? "Completed" : row.Status;
+            }
+
+            foreach (BacktestRunSummary row in summaries)
+            {
+                row.RunId = string.IsNullOrWhiteSpace(row.RunId) ? config.RunId : row.RunId;
+                row.RunMode = string.IsNullOrWhiteSpace(row.RunMode) ? runMode : row.RunMode;
+                row.MarketMode = string.IsNullOrWhiteSpace(row.MarketMode) ? marketMode : row.MarketMode;
+                row.Market = string.IsNullOrWhiteSpace(row.Market) ? inferredMarket : NormalizeMarketLabel(row.Market);
+                row.Status = string.IsNullOrWhiteSpace(row.Status) ? "Completed" : row.Status;
+            }
         }
 
         private static string BuildSummaryJson(string runId, IReadOnlyList<BacktestRunSummary> summaries)
@@ -98,14 +145,17 @@ namespace TradingDashboard.Services.Backtests
         private static string BuildSignalsCsv(IEnumerable<BacktestSignalRow> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("RunId,StrategyCode,Code,Market,SignalTime,SignalType,Price,Reason");
+            sb.AppendLine("RunId,RunMode,MarketMode,StrategyCode,Code,Market,Status,SignalTime,SignalType,Price,Reason");
             foreach (BacktestSignalRow row in rows)
             {
                 AppendCsvLine(sb,
                     row.RunId,
+                    row.RunMode,
+                    row.MarketMode,
                     row.StrategyCode,
                     row.Code,
                     row.Market,
+                    row.Status,
                     row.SignalTime,
                     row.SignalType,
                     row.Price.ToString(CultureInfo.InvariantCulture),
@@ -118,15 +168,18 @@ namespace TradingDashboard.Services.Backtests
         private static string BuildTradesCsv(IEnumerable<BacktestTradeRow> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("RunId,StrategyCode,ExitRuleCode,Code,Market,EntryTime,ExitTime,EntryPrice,ExitPrice,MaxHigh,MinLow,StopPrice,Quantity,ProfitRate,ProfitAmount,MAE,MFE,RiskRate,MaxR,MinR,HoldingMinutes,EntryReason,ExitReason");
+            sb.AppendLine("RunId,RunMode,MarketMode,StrategyCode,ExitRuleCode,Code,Market,Status,EntryTime,ExitTime,EntryPrice,ExitPrice,MaxHigh,MinLow,StopPrice,Quantity,ProfitRate,ProfitAmount,MAE,MFE,RiskRate,MaxR,MinR,HoldingMinutes,EntryReason,ExitReason");
             foreach (BacktestTradeRow row in rows)
             {
                 AppendCsvLine(sb,
                     row.RunId,
+                    row.RunMode,
+                    row.MarketMode,
                     row.StrategyCode,
                     row.ExitRuleCode,
                     row.Code,
                     row.Market,
+                    row.Status,
                     row.EntryTime,
                     row.ExitTime,
                     row.EntryPrice.ToString(CultureInfo.InvariantCulture),
@@ -153,10 +206,15 @@ namespace TradingDashboard.Services.Backtests
         private static string BuildSummaryCsv(IEnumerable<BacktestRunSummary> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("StrategyCode,ExitRuleCode,SignalCount,TradeCount,WinRate,AvgProfit,AvgLoss,Expectancy,TotalProfit,MaxDrawdown,MAE,MFE,AvgHoldingMinutes,ConsecutiveLosses,FeeAdjustedProfit,SlippageAdjustedProfit");
+            sb.AppendLine("RunId,RunMode,MarketMode,Market,Status,StrategyCode,ExitRuleCode,SignalCount,TradeCount,WinRate,AvgProfit,AvgLoss,Expectancy,TotalProfit,MaxDrawdown,MAE,MFE,AvgHoldingMinutes,ConsecutiveLosses,FeeAdjustedProfit,SlippageAdjustedProfit");
             foreach (BacktestRunSummary row in rows)
             {
                 AppendCsvLine(sb,
+                    row.RunId,
+                    row.RunMode,
+                    row.MarketMode,
+                    row.Market,
+                    row.Status,
                     row.StrategyCode,
                     row.ExitRuleCode,
                     row.SignalCount.ToString(CultureInfo.InvariantCulture),
@@ -181,7 +239,7 @@ namespace TradingDashboard.Services.Backtests
         private static string BuildSamplesCsv(IReadOnlyList<BacktestTradeRow> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("SampleType,RunId,StrategyCode,ExitRuleCode,Code,Market,EntryTime,ExitTime,EntryPrice,ExitPrice,ProfitRate,MAE,MFE,MaxR,MinR,HoldingMinutes,EntryReason,ExitReason");
+            sb.AppendLine("SampleType,RunId,RunMode,MarketMode,StrategyCode,ExitRuleCode,Code,Market,Status,EntryTime,ExitTime,EntryPrice,ExitPrice,ProfitRate,MAE,MFE,MaxR,MinR,HoldingMinutes,EntryReason,ExitReason");
 
             IEnumerable<BacktestTradeRow> good = rows
                 .Where(row => row.ProfitRate > 0)
@@ -202,10 +260,13 @@ namespace TradingDashboard.Services.Backtests
                 AppendCsvLine(sb,
                     sampleType,
                     row.RunId,
+                    row.RunMode,
+                    row.MarketMode,
                     row.StrategyCode,
                     row.ExitRuleCode,
                     row.Code,
                     row.Market,
+                    row.Status,
                     row.EntryTime,
                     row.ExitTime,
                     row.EntryPrice.ToString(CultureInfo.InvariantCulture),
@@ -235,6 +296,51 @@ namespace TradingDashboard.Services.Backtests
                 return text;
 
             return $"\"{text.Replace("\"", "\"\"")}\"";
+        }
+
+        private static string InferMarketMode(IEnumerable<string> markets)
+        {
+            string[] distinct = [.. markets
+                .Select(NormalizeMarketLabel)
+                .Where(item => item is "KRX" or "NXT")
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(item => item, StringComparer.Ordinal)];
+
+            return distinct switch
+            {
+                ["KRX"] => "KRX_ONLY",
+                ["NXT"] => "NXT_ONLY",
+                ["KRX", "NXT"] => "MARKET_SPLIT",
+                _ => "UNKNOWN"
+            };
+        }
+
+        private static string InferMarket(IEnumerable<string> markets)
+        {
+            string[] distinct = [.. markets
+                .Select(NormalizeMarketLabel)
+                .Where(item => item is "KRX" or "NXT")
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(item => item, StringComparer.Ordinal)];
+
+            return distinct.Length switch
+            {
+                0 => "UNKNOWN",
+                1 => distinct[0],
+                _ => "MIXED"
+            };
+        }
+
+        private static string NormalizeMarketLabel(string market)
+        {
+            string text = (market ?? string.Empty).Trim().ToUpperInvariant();
+            if (text.Contains("NXT", StringComparison.OrdinalIgnoreCase))
+                return "NXT";
+            if (text.Contains("KRX", StringComparison.OrdinalIgnoreCase))
+                return "KRX";
+            if (text.Contains("MIX", StringComparison.OrdinalIgnoreCase))
+                return "MIXED";
+            return string.IsNullOrWhiteSpace(text) ? "UNKNOWN" : text;
         }
 
         private static string ResolveDefaultRootPath()

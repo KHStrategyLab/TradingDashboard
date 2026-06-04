@@ -7,6 +7,8 @@ namespace TradingDashboard.Models
     {
         public string RunId { get; set; } = string.Empty;
         public string BacktestMode { get; set; } = "SOR_ON";
+        public string RunMode { get; set; } = string.Empty;
+        public string MarketMode { get; set; } = string.Empty;
         public string OrderMode { get; set; } = "None";
         public bool LiveOrder { get; set; }
         public string ExecutionType { get; set; } = "BacktestOnly";

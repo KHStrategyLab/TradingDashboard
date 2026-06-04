@@ -155,9 +155,36 @@ Every strategy execution creates a new `RunId`.
 
 Multiple strategies and exit rules must be runnable against the same dataset.
 
+Backtest result rows must carry execution labels separately from the reusable source data.
+The source dataset keeps the existing hierarchical file layout, while each run result records
+`RunId`, `RunMode`, `MarketMode`, `Market`, and `Status` so a result from another PC cannot be
+mistaken for a KRX-only run.
+
+Required source-data keys:
+
+```text
+Daily:  Code + Market + Date
+Minute: Code + Market + TimeFrame + BarTime
+```
+
+Current implementation note:
+
+```text
+TimeFrame = Minute
+BarTime   = DateTime
+```
+
+Do not collapse KRX and NXT into one file or one result label. KRX/NXT can share a run, but the
+result must say so through `MarketMode = MARKET_SPLIT` or another explicit run mode.
+
 Required comparison fields:
 
 ```text
+RunId
+RunMode
+MarketMode
+Market
+Status
 StrategyCode
 ExitRuleCode
 SignalCount
