@@ -87,7 +87,7 @@ namespace TradingDashboard.Services
                 return false;
 
             long tradingValue = Math.Max(candidate.TradingValue, candidate.TodayTradingValue);
-            return tradingValue >= 100_000_000_000 &&
+            return tradingValue >= 70_000_000_000 &&
                 candidate.ChangeRate >= 25m &&
                 candidate.TodayClose > 0;
         }

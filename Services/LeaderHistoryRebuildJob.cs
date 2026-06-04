@@ -9,7 +9,7 @@ namespace TradingDashboard.Services
 {
     public sealed class LeaderHistoryRebuildJob
     {
-        private const long MinTradingValue = 100_000_000_000;
+        private const long MinTradingValue = 70_000_000_000;
         private const decimal MinChangeRate = 25m;
         private const long LargeTradingValue = 300_000_000_000;
         private const decimal LargeTradeMinChangeRate = 20m;

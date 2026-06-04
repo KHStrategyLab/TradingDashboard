@@ -220,7 +220,7 @@ namespace TradingDashboard.Services.Backtests
             decimal avg20 = bars.Skip(index - 20).Take(20).Average(bar => (decimal)bar.Close);
             double std20 = StdDev(bars.Skip(index - 20).Take(20).Select(bar => (double)bar.Close));
             decimal upper = avg20 + (decimal)(std20 * 2.0);
-            return baseCandle.BaseTradingValue >= 100_000_000_000 &&
+            return baseCandle.BaseTradingValue >= 70_000_000_000 &&
                 baseCandle.BaseClose > upper &&
                 baseCandle.BaseClose > previous.High &&
                 baseCandle.BaseClose >= previous.High * 1.10m;

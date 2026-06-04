@@ -46,7 +46,7 @@ namespace TradingDashboard.Services.Strategies
                 context.IsOwned ? "position tracking" : hasSignal ? "buy signal candidate" : "10min MA60 / 5min breakout tracking",
                 [
                     StrategyProgressCalculator.Step("condition", "condition", hasStock),
-                    StrategyProgressCalculator.Step("gate", "100B/20% gate", gatePassed),
+                    StrategyProgressCalculator.Step("gate", "70B/25% or 300B/20 gate", gatePassed),
                     StrategyProgressCalculator.Step("base-price", "KRX base", hasBasePrice),
                     StrategyProgressCalculator.Step("minute-data", minuteDataText, hasMinuteChart),
                     StrategyProgressCalculator.Step("ma60-pullback", "10m MA60 pullback", minuteCheck.Ma60Recovery),

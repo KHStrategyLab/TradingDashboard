@@ -9,7 +9,7 @@ namespace TradingDashboard.Services
 {
     public sealed class CandidateLedgerRebuildJob
     {
-        private const long DefaultMinTradingValue = 100_000_000_000;
+        private const long DefaultMinTradingValue = 70_000_000_000;
         private const decimal DefaultMinChangeRate = 25m;
         private const long DefaultLargeTradingValue = 300_000_000_000;
         private const decimal DefaultLargeTradeMinChangeRate = 20m;
@@ -160,8 +160,8 @@ namespace TradingDashboard.Services
                 Market = market,
                 CandidateTime = $"{date}000000",
                 CandidateDate = date,
-                ConditionName = "DataStore recent 6D NXT-first 100B+25% or 300B+20%",
-                ConditionId = "DATASTORE_RECENT6_NXTFIRST_100B25_OR_300B20",
+                ConditionName = "DataStore recent 6D NXT-first 70B+25% or 300B+20%",
+                ConditionId = "DATASTORE_RECENT6_NXTFIRST_70B25_OR_300B20",
                 Source = "DataStoreRebuild",
                 SorMode = "SOR_READY",
                 CurrentPrice = today.Close,

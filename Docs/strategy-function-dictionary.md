@@ -155,7 +155,7 @@ ToKoreanProgressText(StrategyProgressSnapshot snapshot)
 ### FindGateBaseCandle
 
 ```text
-역할: 최근 10거래일 안에서 후보 게이트 기준봉을 찾는다.
+역할: 최근 6거래일 안에서 후보 게이트 기준봉을 찾는다.
 입력: 일봉 OHLCV, 거래대금, 등락률
 출력: GateBaseCandle 정보, D+ offset
 소유권: 후보 게이트

@@ -62,7 +62,7 @@ namespace TradingDashboard.Services
             }
             if (valueB >= 1_000m)
             {
-                reasons.Add("trading value 100B+");
+                reasons.Add("trading value 70B+");
                 return 9m;
             }
 

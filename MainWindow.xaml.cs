@@ -30,7 +30,7 @@ namespace TradingDashboard
         private const int DuplicateStockSelectionBlockMs = 200;
         private const string KrxPreviousCloseBasePriceSource = "KRX_PREV_CLOSE";
         private const int GateBaseCandleLookbackCount = 6;
-        private const long GateBaseCandleMinTradeValue = 100_000_000_000;
+        private const long GateBaseCandleMinTradeValue = 70_000_000_000;
         private const double GateBaseCandleMinChangeRate = 25.0;
         private const long GateBaseCandleLargeTradeValue = 300_000_000_000;
         private const double GateBaseCandleLargeTradeMinChangeRate = 20.0;
@@ -38,7 +38,7 @@ namespace TradingDashboard
         private const double GateBaseCandleMaxUpperTailPercent = 20.0;
         private const double GateBaseCandleMinCloseLocationPercent = 80.0;
         private const int GateBaseCandleBollingerPeriod = 20;
-        private const string GateBaseCandleRuleVersion = "NXT_FIRST_100B25_OR_300B20_PREVHIGH10_BB_TAIL_CLOSE_COUNT_TODAY_20260602";
+        private const string GateBaseCandleRuleVersion = "NXT_FIRST_70B25_OR_300B20_PREVHIGH10_BB_TAIL_CLOSE_COUNT_TODAY_20260604";
         private const double ChartRightPadding = 25d;
         private readonly AppConfig _config;
         private readonly NaverNewsService _newsService;
@@ -494,7 +494,7 @@ namespace TradingDashboard
                     true,
                     "Checking base-candle gate...",
                     $"{stocks.Count} stocks received from {conditionLabel}",
-                    "Discarding stocks without a recent 100B/25% or 300B/20% + prev-high+10/BB candle");
+                    "Discarding stocks without a recent 70B/25% or 300B/20% + prev-high+10/BB candle");
                 List<WatchStockItem> gatedStocks = await FilterWatchlistByBaseCandleGateAsync(stocks);
 
                 SetStartupLoading(
@@ -547,7 +547,7 @@ namespace TradingDashboard
                     continue;
                 }
 
-                AppendLog($"gate discard: {stock.Name} ({stock.Code}) / no 10-day 100B+25% or 300B+20% + prev-high+10+BB candle");
+                AppendLog($"gate discard: {stock.Name} ({stock.Code}) / no 6-day 70B+25% or 300B+20% + prev-high+10+BB candle");
             }
 
             return result;
