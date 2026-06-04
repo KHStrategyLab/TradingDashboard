@@ -2552,6 +2552,54 @@
                                             CornerRadius="6"
                                             Padding="10"
                                             Margin="0,0,0,8"
+                                            ToolTip="DAY / Fast practice lane&#x0a;5m base candle waist support, 10/15m context, then 1m MA5/MA60 + volume expansion trigger&#x0a;Stable mode: no blind breakout; exit-first RR must pass before order handoff">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Slot 6 · DAY 5m Base + 1m Stable"
+                                                           Foreground="{StaticResource TextMainBrush}"
+                                                           FontSize="14"
+                                                           FontWeight="Bold"
+                                                           TextWrapping="Wrap"
+                                                           MaxHeight="38"/>
+                                                <ToggleButton x:Name="StrategySlotFiveMinuteStableToggle"
+                                                              Grid.Column="1"
+                                                              Style="{StaticResource StrategySlotSwitchOnlyStyle}"
+                                                              Checked="StrategySlotToggle_Changed"
+                                                              Unchecked="StrategySlotToggle_Changed"
+                                                              IsChecked="False"/>
+                                            </Grid>
+                                            <Grid Margin="0,5,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="매도"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="10"
+                                                           VerticalAlignment="Center"/>
+                                                <ComboBox x:Name="StrategySlotFiveMinuteStableExitComboBox"
+                                                          Grid.Column="1"
+                                                          Width="150"
+                                                          MinHeight="22"
+                                                          FontSize="10"
+                                                          HorizontalAlignment="Left"
+                                                          Margin="8,0,0,0"
+                                                          Style="{StaticResource StrategySlotExitComboBoxStyle}"
+                                                          SelectionChanged="StrategySlotExitStrategyComboBox_SelectionChanged"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border BorderBrush="{StaticResource LineSoftBrush}"
+                                            BorderThickness="1"
+                                            Background="{StaticResource BgInnerBrush}"
+                                            CornerRadius="6"
+                                            Padding="10"
+                                            Margin="0,0,0,8"
                                             ToolTip="SOR / KRX 기준가 고정&#x0a;Daily MA60 open zone, 15min MA60 pullback, then 5min 20-bar breakout&#x0a;Stop: 15min MA60 loss or pullback low · Target: +3%, then trail">
                                         <StackPanel>
                                             <Grid>
@@ -2994,6 +3042,12 @@
                                                       Style="{StaticResource StrategyFilterChipStyle}"/>
                                         <ToggleButton x:Name="ProgressFilterIntradayScalpToggle"
                                                       Content="DAY 15m+1m"
+                                                      IsChecked="True"
+                                                      Checked="StrategyProgressFilter_Changed"
+                                                      Unchecked="StrategyProgressFilter_Changed"
+                                                      Style="{StaticResource StrategyFilterChipStyle}"/>
+                                        <ToggleButton x:Name="ProgressFilterFiveMinuteStableToggle"
+                                                      Content="DAY 5m+1m"
                                                       IsChecked="True"
                                                       Checked="StrategyProgressFilter_Changed"
                                                       Unchecked="StrategyProgressFilter_Changed"

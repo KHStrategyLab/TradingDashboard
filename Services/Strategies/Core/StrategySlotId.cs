@@ -6,6 +6,7 @@ namespace TradingDashboard.Services.Strategies
         ThreeMinutePullback,
         SorTenMinuteFiveMinuteBreakout,
         IntradayFifteenMinuteScalp,
+        IntradayFiveMinuteStableScalp,
         ThemeDisclosureAssist
     }
 }

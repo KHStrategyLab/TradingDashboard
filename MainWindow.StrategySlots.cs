@@ -243,6 +243,7 @@ namespace TradingDashboard
             ReferenceEquals(toggle, StrategySlotPullbackToggle) ||
             ReferenceEquals(toggle, StrategySlotMiddleToggle) ||
             ReferenceEquals(toggle, StrategySlotIntradayScalpToggle) ||
+            ReferenceEquals(toggle, StrategySlotFiveMinuteStableToggle) ||
             ReferenceEquals(toggle, StrategySlotThemeAssistToggle) ||
             ReferenceEquals(toggle, DuplicateBuyPolicyToggle) ||
             ReferenceEquals(toggle, DuplicateAlertPolicyToggle);
@@ -252,6 +253,7 @@ namespace TradingDashboard
             ReferenceEquals(comboBox, StrategySlotPullbackExitComboBox) ||
             ReferenceEquals(comboBox, StrategySlotMiddleExitComboBox) ||
             ReferenceEquals(comboBox, StrategySlotIntradayScalpExitComboBox) ||
+            ReferenceEquals(comboBox, StrategySlotFiveMinuteStableExitComboBox) ||
             ReferenceEquals(comboBox, StrategySlotThemeAssistExitComboBox);
 
         private void LogStrategyToggleState(object sender)
@@ -280,6 +282,8 @@ namespace TradingDashboard
                 return "Slot 3 SOR 10m+5m";
             if (ReferenceEquals(toggle, StrategySlotIntradayScalpToggle))
                 return "Slot 5 Intraday 15m+1m";
+            if (ReferenceEquals(toggle, StrategySlotFiveMinuteStableToggle))
+                return "Slot 6 DAY 5m+1m Stable";
             if (ReferenceEquals(toggle, StrategySlotThemeAssistToggle))
                 return "Assist Theme";
             if (ReferenceEquals(toggle, DuplicateBuyPolicyToggle))
@@ -300,6 +304,8 @@ namespace TradingDashboard
                 return "Progress Filter 10m+5m";
             if (ReferenceEquals(toggle, ProgressFilterIntradayScalpToggle))
                 return "Progress Filter Intraday";
+            if (ReferenceEquals(toggle, ProgressFilterFiveMinuteStableToggle))
+                return "Progress Filter 5m+1m Stable";
             if (ReferenceEquals(toggle, ProgressFilterThemeAssistToggle))
                 return "Progress Filter Theme";
             if (ReferenceEquals(toggle, ProgressFilterUnownedToggle))
@@ -360,6 +366,11 @@ namespace TradingDashboard
                 IsStrategyToggleOn(StrategySlotIntradayScalpToggle),
                 ResolveStrategySlotExitStrategyCode(StrategySlotId.IntradayFifteenMinuteScalp)),
             new(
+                StrategySlotId.IntradayFiveMinuteStableScalp,
+                "DAY 5m Base + 1m Stable",
+                IsStrategyToggleOn(StrategySlotFiveMinuteStableToggle),
+                ResolveStrategySlotExitStrategyCode(StrategySlotId.IntradayFiveMinuteStableScalp)),
+            new(
                 StrategySlotId.ThemeDisclosureAssist,
                 "Theme / Disclosure Assist",
                 IsStrategyToggleOn(StrategySlotThemeAssistToggle),
@@ -418,6 +429,7 @@ namespace TradingDashboard
             SetSwitchStateFromStore(ProgressFilterPullbackToggle, "ProgressFilterPullback", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterMiddleToggle, "ProgressFilterMiddle", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterIntradayScalpToggle, "ProgressFilterIntradayScalp", defaultValue: true);
+            SetSwitchStateFromStore(ProgressFilterFiveMinuteStableToggle, "ProgressFilterFiveMinuteStable", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterThemeAssistToggle, "ProgressFilterThemeAssist", defaultValue: false);
             SetSwitchStateFromStore(ProgressFilterUnownedToggle, "ProgressFilterUnowned", defaultValue: true);
             SetSwitchStateFromStore(ProgressFilterOwnedToggle, "ProgressFilterOwned", defaultValue: false);
@@ -537,6 +549,8 @@ namespace TradingDashboard
                 key = "ProgressFilterMiddle";
             else if (ReferenceEquals(toggle, ProgressFilterIntradayScalpToggle))
                 key = "ProgressFilterIntradayScalp";
+            else if (ReferenceEquals(toggle, ProgressFilterFiveMinuteStableToggle))
+                key = "ProgressFilterFiveMinuteStable";
             else if (ReferenceEquals(toggle, ProgressFilterThemeAssistToggle))
                 key = "ProgressFilterThemeAssist";
             else if (ReferenceEquals(toggle, ProgressFilterUnownedToggle))
@@ -558,6 +572,7 @@ namespace TradingDashboard
             SetStrategySlotToggleFromConfig(StrategySlotPullbackToggle, StrategySlotId.ThreeMinutePullback);
             SetStrategySlotToggleFromConfig(StrategySlotMiddleToggle, StrategySlotId.SorTenMinuteFiveMinuteBreakout);
             SetStrategySlotToggleFromConfig(StrategySlotIntradayScalpToggle, StrategySlotId.IntradayFifteenMinuteScalp);
+            SetStrategySlotToggleFromConfig(StrategySlotFiveMinuteStableToggle, StrategySlotId.IntradayFiveMinuteStableScalp);
             SetStrategySlotToggleFromConfig(StrategySlotThemeAssistToggle, StrategySlotId.ThemeDisclosureAssist);
         }
 
@@ -614,7 +629,8 @@ namespace TradingDashboard
 
         private static bool GetDefaultStrategySlotEnabled(StrategySlotId slotId) =>
             slotId != StrategySlotId.ThemeDisclosureAssist &&
-            slotId != StrategySlotId.IntradayFifteenMinuteScalp;
+            slotId != StrategySlotId.IntradayFifteenMinuteScalp &&
+            slotId != StrategySlotId.IntradayFiveMinuteStableScalp;
 
         private bool TryResolveStrategySlotId(ToggleButton toggle, out StrategySlotId slotId)
         {
@@ -639,6 +655,12 @@ namespace TradingDashboard
             if (ReferenceEquals(toggle, StrategySlotIntradayScalpToggle))
             {
                 slotId = StrategySlotId.IntradayFifteenMinuteScalp;
+                return true;
+            }
+
+            if (ReferenceEquals(toggle, StrategySlotFiveMinuteStableToggle))
+            {
+                slotId = StrategySlotId.IntradayFiveMinuteStableScalp;
                 return true;
             }
 
@@ -676,6 +698,10 @@ namespace TradingDashboard
                 StrategySlotId.IntradayFifteenMinuteScalp,
                 normalExitStrategies);
             SetExitStrategyComboBox(
+                StrategySlotFiveMinuteStableExitComboBox,
+                StrategySlotId.IntradayFiveMinuteStableScalp,
+                normalExitStrategies);
+            SetExitStrategyComboBox(
                 StrategySlotThemeAssistExitComboBox,
                 StrategySlotId.ThemeDisclosureAssist,
                 assistExitStrategies.Count > 0 ? assistExitStrategies : StrategyExitStrategyRegistry.GetDescriptors(includeManualOnly: true));
@@ -702,6 +728,7 @@ namespace TradingDashboard
             SetStrategyExitStrategySelectorLock(StrategySlotPullbackExitComboBox, StrategySlotPullbackToggle);
             SetStrategyExitStrategySelectorLock(StrategySlotMiddleExitComboBox, StrategySlotMiddleToggle);
             SetStrategyExitStrategySelectorLock(StrategySlotIntradayScalpExitComboBox, StrategySlotIntradayScalpToggle);
+            SetStrategyExitStrategySelectorLock(StrategySlotFiveMinuteStableExitComboBox, StrategySlotFiveMinuteStableToggle);
             SetStrategyExitStrategySelectorLock(StrategySlotThemeAssistExitComboBox, StrategySlotThemeAssistToggle);
         }
 
@@ -1405,6 +1432,11 @@ namespace TradingDashboard
                         if (!HasFreshIntradayScalpMinutes(snapshots))
                             return false;
                         break;
+                    case StrategySlotId.IntradayFiveMinuteStableScalp:
+                        hasMinuteStrategy = true;
+                        if (!HasFreshFiveMinuteStableMinutes(snapshots))
+                            return false;
+                        break;
                 }
             }
 
@@ -1427,6 +1459,16 @@ namespace TradingDashboard
             IsStrategyMinuteFrameFresh(snapshots.Get(1)) &&
             IsStrategyMinuteFrameFresh(snapshots.Get(3)) &&
             IsStrategyMinuteFrameFresh(snapshots.Get(5)) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(15));
+
+        private bool HasFreshFiveMinuteStableMinutes(StrategyMinuteSnapshotSet snapshots) =>
+            snapshots.Get(1)?.IsReady == true &&
+            snapshots.Get(5)?.IsReady == true &&
+            snapshots.Get(10)?.IsReady == true &&
+            snapshots.Get(15)?.IsReady == true &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(1)) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(5)) &&
+            IsStrategyMinuteFrameFresh(snapshots.Get(10)) &&
             IsStrategyMinuteFrameFresh(snapshots.Get(15));
 
         private bool IsStrategyMinuteFrameFresh(StrategyMinuteFrameSnapshot? frame)
@@ -1493,6 +1535,9 @@ namespace TradingDashboard
                     case StrategySlotId.IntradayFifteenMinuteScalp:
                         parts.Add(FormatIntradayScalpReadiness(snapshots));
                         break;
+                    case StrategySlotId.IntradayFiveMinuteStableScalp:
+                        parts.Add(FormatFiveMinuteStableReadiness(snapshots));
+                        break;
                 }
             }
 
@@ -1515,6 +1560,17 @@ namespace TradingDashboard
                 set.Get(minute)?.IsReady == true ? $"{minute}m ready" : $"{minute}m wait";
 
             return $"DAY:{ReadyText(snapshots, 1)} / {ReadyText(snapshots, 3)} / {ReadyText(snapshots, 5)} / {ReadyText(snapshots, 15)}";
+        }
+
+        private static string FormatFiveMinuteStableReadiness(StrategyMinuteSnapshotSet? snapshots)
+        {
+            if (snapshots == null)
+                return "DAY:1/5/10/15 wait";
+
+            static string ReadyText(StrategyMinuteSnapshotSet set, int minute) =>
+                set.Get(minute)?.IsReady == true ? $"{minute}m ready" : $"{minute}m wait";
+
+            return $"DAY:{ReadyText(snapshots, 1)} / {ReadyText(snapshots, 5)} / {ReadyText(snapshots, 10)} / {ReadyText(snapshots, 15)}";
         }
 
         private bool IsStrategyMinutePreloadEnabled() =>
@@ -1830,6 +1886,7 @@ namespace TradingDashboard
                 StrategySlotId.ThreeMinutePullback => IsStrategyToggleOn(ProgressFilterPullbackToggle),
                 StrategySlotId.SorTenMinuteFiveMinuteBreakout => IsStrategyToggleOn(ProgressFilterMiddleToggle),
                 StrategySlotId.IntradayFifteenMinuteScalp => IsStrategyToggleOn(ProgressFilterIntradayScalpToggle),
+                StrategySlotId.IntradayFiveMinuteStableScalp => IsStrategyToggleOn(ProgressFilterFiveMinuteStableToggle),
                 StrategySlotId.ThemeDisclosureAssist => IsStrategyToggleOn(ProgressFilterThemeAssistToggle),
                 _ => false
             };

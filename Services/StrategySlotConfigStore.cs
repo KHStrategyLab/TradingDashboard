@@ -91,7 +91,9 @@ namespace TradingDashboard.Services
         }
 
         private static bool GetDefaultEnabledForSlot(StrategySlotId slotId) =>
-            slotId != StrategySlotId.ThemeDisclosureAssist;
+            slotId != StrategySlotId.ThemeDisclosureAssist &&
+            slotId != StrategySlotId.IntradayFifteenMinuteScalp &&
+            slotId != StrategySlotId.IntradayFiveMinuteStableScalp;
 
         private static List<StrategySlotConfigEntry> CreateDefaults() =>
             MergeDefaults([]);

@@ -272,6 +272,7 @@ Slot 1: SOR 10m MA60 + 3m Breakout
 Slot 2: SOR 15m MA60 + 5m Breakout
 Slot 3: SOR 10m MA60 + 5m Breakout
 Slot 5: Intraday 15m Base + 1m Trigger
+Slot 6: Intraday 5m Base + 1m Stable
 ```
 
 Progress에는 `exit-first RR` 단계로 표시한다.
