@@ -24,6 +24,7 @@ namespace TradingDashboard
         private const string StrategyChartSnapshotModeStrategy15Minute = "STRATEGY_15M_VIEW";
         private const int StrategyDebugChartMinute = 15;
         private const int StrategyDebugChartCandleCount = 120;
+        private static readonly bool StrategyDebugSellTestEnabled = false;
 
         private void SaveSelectedStrategyMinuteSnapshotButton_Click(object sender, RoutedEventArgs e)
         {
@@ -187,6 +188,9 @@ namespace TradingDashboard
         {
             string code = NormalizeStockCode(stock.Code);
             string normalizedMarket = NormalizeIdentityMarket(market);
+            if (!StrategyDebugSellTestEnabled)
+                return StrategyFiveMinuteOneMinuteSellTestEvaluation.NotReady(normalizedMarket, "sell test disabled");
+
             if (string.IsNullOrWhiteSpace(code))
                 return StrategyFiveMinuteOneMinuteSellTestEvaluation.NotReady(normalizedMarket, "stock code missing");
 
