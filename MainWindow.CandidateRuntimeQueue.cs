@@ -19,7 +19,7 @@ namespace TradingDashboard
             {
                 Code = code,
                 Name = string.IsNullOrWhiteSpace(stock.Name) ? code : stock.Name,
-                Market = stock.SupportsNxt && IsNxtMarketWindow() ? "NXT" : "KRX",
+                Market = ShouldUseNxtDataForStock(stock) ? "NXT" : "KRX",
                 CandidateDate = now[..8],
                 CandidateTime = now,
                 Source = source,

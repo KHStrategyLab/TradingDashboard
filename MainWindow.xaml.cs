@@ -1368,7 +1368,7 @@ namespace TradingDashboard
             if (displayMarket is "KRX" or "NXT")
                 return displayMarket;
 
-            if (stock?.SupportsNxt == true && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow()))
+            if (stock?.SupportsNxt == true && (IsNxtVenueDataWindow() || IsNxtFrozenWindow()))
                 return "NXT";
 
             return "KRX";
@@ -3056,7 +3056,7 @@ namespace TradingDashboard
                 return candidateMarket;
             }
 
-            if (stock?.SupportsNxt == true && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow()))
+            if (stock?.SupportsNxt == true && (IsNxtVenueDataWindow() || IsNxtFrozenWindow()))
                 return "NXT";
 
             return "KRX";

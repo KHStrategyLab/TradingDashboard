@@ -196,6 +196,12 @@ namespace TradingDashboard
                    (now >= new TimeSpan(15, 40, 0) && now < new TimeSpan(20, 0, 0));
         }
 
+        private static bool IsNxtVenueDataWindow()
+        {
+            TimeSpan now = DateTime.Now.TimeOfDay;
+            return now >= new TimeSpan(8, 0, 0) && now < new TimeSpan(20, 0, 0);
+        }
+
         private bool ShouldUseNxtMarketNow()
         {
             DateTime now = DateTime.Now;
@@ -285,8 +291,12 @@ namespace TradingDashboard
             if (TryResolveCandidateMarketForStock(stockCode, out string candidateMarket))
                 return string.Equals(candidateMarket, "NXT", StringComparison.Ordinal);
 
+            // DO NOT CHANGE WITHOUT GUIDE UPDATE:
+            // NXT-supported holdings/recent stocks use NXT venue data while NXT is open
+            // so minute candles, quotes, and realtime ticks stay on the same market path.
+            // KRX previous close remains the locked color/base-price anchor.
             return IsNxtSupportedStock(stockCode)
-                && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow());
+                && (IsNxtVenueDataWindow() || IsNxtFrozenWindow());
         }
 
         private bool ShouldUseNxtDataForStock(WatchStockItem stock)

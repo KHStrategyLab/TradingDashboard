@@ -1434,7 +1434,7 @@ namespace TradingDashboard
             if (frame == null || !frame.IsReady)
                 return false;
 
-            if (IsNxtStrategyMinuteFrame(frame) && ShouldUseNxtMarketNow())
+            if (IsNxtStrategyMinuteFrame(frame) && IsNxtVenueDataWindow())
                 return IsNxtStrategyMinuteFrameFresh(frame);
 
             DateTime latest = frame.CurrentBarTime > frame.LastCompletedBarTime

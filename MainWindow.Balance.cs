@@ -229,7 +229,7 @@ namespace TradingDashboard
             IReadOnlyList<KiwoomHolding> holdings,
             CancellationToken cancellationToken)
         {
-            if (holdings.Count == 0 || (!ShouldUseNxtMarketNow() && !IsNxtFrozenWindow()))
+            if (holdings.Count == 0 || (!IsNxtVenueDataWindow() && !IsNxtFrozenWindow()))
                 return holdings;
 
             List<KiwoomHolding> corrected = new(holdings.Count);
@@ -540,7 +540,7 @@ namespace TradingDashboard
             if (string.IsNullOrWhiteSpace(code) || currentPrice <= 0 || _balanceHoldings.Count == 0)
                 return;
 
-            bool shouldUseNxtPrice = IsNxtSupportedStock(code) && (ShouldUseNxtMarketNow() || IsNxtFrozenWindow());
+            bool shouldUseNxtPrice = IsNxtSupportedStock(code) && (IsNxtVenueDataWindow() || IsNxtFrozenWindow());
             bool isNxtTick = IsNxtRealtimeCode(rawCode);
             if (shouldUseNxtPrice != isNxtTick)
                 return;

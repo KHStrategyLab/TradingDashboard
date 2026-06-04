@@ -1562,8 +1562,137 @@ namespace TradingDashboard
             DrawVolumeMovingAverage(canvas, candles.Count, visibleStartIndex, 20, (Brush)FindResource("Ma20Brush"), chartW, h, maxVol, 1.25);
             DrawVolumeMovingAverage(canvas, candles.Count, visibleStartIndex, 60, (Brush)FindResource("Ma60Brush"), chartW, h, maxVol, 1.25);
             DrawVolumeMaLegend(canvas);
+            DrawBottomTimeAxis(canvas, candles, chartW, h);
             DrawRightVolumeAxis(canvas, chartW + ChartRightPadding, axisWidth, h, maxVol);
             _volumeChartRenderState = new ChartRenderState(candles.Count, visibleStartIndex, chartW, h, 0, 0, gap, barW, maxVol, 0);
+        }
+
+        private void DrawBottomTimeAxis(Canvas canvas, IReadOnlyList<ChartCandle> candles, double chartW, double h)
+        {
+            if (candles == null || candles.Count == 0 || chartW <= 0 || h <= 20)
+                return;
+
+            double gap = chartW / candles.Count;
+            double lastLabelX = -1000;
+            double minDistance = IsShortMinuteTimeAxis(_currentChartDataPeriod) ? 58 : 72;
+
+            for (int i = 0; i < candles.Count; i++)
+            {
+                if (!TryBuildBottomTimeAxisLabel(candles, i, _currentChartDataPeriod, out string label))
+                    continue;
+
+                double x = i * gap + gap / 2;
+                if (x - lastLabelX < minDistance && i != 0)
+                    continue;
+
+                canvas.Children.Add(new Line
+                {
+                    X1 = x,
+                    X2 = x,
+                    Y1 = h - 16,
+                    Y2 = h - 10,
+                    Stroke = _whiteBrush,
+                    StrokeThickness = 1,
+                    Opacity = 0.28
+                });
+
+                var text = new TextBlock
+                {
+                    Text = label,
+                    FontSize = 10,
+                    Foreground = _whiteBrush,
+                    Opacity = 0.72
+                };
+                Canvas.SetLeft(text, Math.Max(0, Math.Min(chartW - 38, x - 18)));
+                Canvas.SetTop(text, Math.Max(0, h - 15));
+                canvas.Children.Add(text);
+                lastLabelX = x;
+            }
+        }
+
+        private static bool TryBuildBottomTimeAxisLabel(IReadOnlyList<ChartCandle> candles, int index, ChartPeriod period, out string label)
+        {
+            label = string.Empty;
+            if (candles == null || index < 0 || index >= candles.Count ||
+                !TryParseChartDateTime(candles[index].Date, out DateTime current))
+            {
+                return false;
+            }
+
+            DateTime? previous = index > 0 && TryParseChartDateTime(candles[index - 1].Date, out DateTime prev)
+                ? prev
+                : null;
+
+            if (IsShortMinuteTimeAxis(period))
+            {
+                if (index == 0 || previous == null || current.Date != previous.Value.Date)
+                {
+                    label = current.ToString("MM.dd");
+                    return true;
+                }
+
+                if (current.Hour != previous.Value.Hour)
+                {
+                    label = current.ToString("HH:mm");
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (index == 0 || previous == null || current.Date != previous.Value.Date)
+            {
+                label = period switch
+                {
+                    ChartPeriod.Monthly => current.ToString("yyyy.MM"),
+                    ChartPeriod.Weekly => current.ToString("MM.dd"),
+                    ChartPeriod.Daily => current.ToString("MM.dd"),
+                    _ => current.ToString("MM.dd")
+                };
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsShortMinuteTimeAxis(ChartPeriod period) =>
+            period is ChartPeriod.Minute1 or ChartPeriod.Minute3 or ChartPeriod.Minute5;
+
+        private static bool TryParseChartDateTime(string chartDate, out DateTime dateTime)
+        {
+            string digits = new([.. (chartDate ?? string.Empty).Where(char.IsDigit)]);
+            if (digits.Length >= 14)
+            {
+                return DateTime.TryParseExact(
+                    digits[..14],
+                    "yyyyMMddHHmmss",
+                    null,
+                    System.Globalization.DateTimeStyles.None,
+                    out dateTime);
+            }
+
+            if (digits.Length >= 12)
+            {
+                return DateTime.TryParseExact(
+                    digits[..12],
+                    "yyyyMMddHHmm",
+                    null,
+                    System.Globalization.DateTimeStyles.None,
+                    out dateTime);
+            }
+
+            if (digits.Length >= 8)
+            {
+                return DateTime.TryParseExact(
+                    digits[..8],
+                    "yyyyMMdd",
+                    null,
+                    System.Globalization.DateTimeStyles.None,
+                    out dateTime);
+            }
+
+            dateTime = default;
+            return false;
         }
 
         private double ResolveVisibleVolumeMovingAverageMax(int visibleCount, int visibleStartIndex, params int[] periods)
