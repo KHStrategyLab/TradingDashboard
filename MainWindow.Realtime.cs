@@ -362,7 +362,8 @@ namespace TradingDashboard
                     TryNormalizeCandidateMarket(selected.GateBaseCandleMarket, out market))
                     return true;
 
-                List<string> recentMarkets = [.. _recentViewedStocks
+                List<string> recentMarkets = [.. _holdingWatchStocks
+                    .Concat(_recentViewedStocks)
                     .Where(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal) &&
                         TryNormalizeCandidateMarket(item.GateBaseCandleMarket, out _))
                     .Select(item => NormalizeIdentityMarket(item.GateBaseCandleMarket))
@@ -423,7 +424,7 @@ namespace TradingDashboard
                 return true;
             }
 
-            if (_recentViewedStocks.Any(item =>
+            if (_holdingWatchStocks.Concat(_recentViewedStocks).Any(item =>
                 string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal) &&
                 item.SupportsNxt))
             {

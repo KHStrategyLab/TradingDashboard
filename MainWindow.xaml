@@ -1699,6 +1699,147 @@
                     </ListBox>
                         </TabItem>
 
+                        <TabItem x:Name="HoldingWatchTab"
+                                 Header="Holdings"
+                                 IsSelected="True">
+                            <Grid>
+                                <ListBox x:Name="HoldingWatchListBox"
+                                         SelectionChanged="WatchListBox_SelectionChanged"
+                                         Background="{StaticResource BgPanelBrush}"
+                                         BorderThickness="0"
+                                         Foreground="{StaticResource WhiteValueBrush}"
+                                         ItemContainerStyle="{StaticResource WatchListBoxItemStyle}"
+                                         ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Height="48"
+                                                    BorderBrush="{StaticResource LineSoftBrush}"
+                                                    BorderThickness="0,0,0,1"
+                                                    Padding="10,6">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="26"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Canvas Grid.Column="0"
+                                                            Width="18"
+                                                            Height="34"
+                                                            Margin="0,1,8,0"
+                                                            VerticalAlignment="Center">
+                                                        <Canvas.Style>
+                                                            <Style TargetType="Canvas">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding MiniDailyHasCandle}" Value="False">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Canvas.Style>
+                                                        <Line Canvas.Top="{Binding MiniDailyWickTop}"
+                                                              X1="9"
+                                                              X2="9"
+                                                              Y1="0"
+                                                              Y2="{Binding MiniDailyWickHeight}"
+                                                              Stroke="{Binding MiniDailyBrush}"
+                                                              StrokeThickness="1.2"/>
+                                                        <Rectangle Canvas.Left="5"
+                                                                   Canvas.Top="{Binding MiniDailyBodyTop}"
+                                                                   Width="8"
+                                                                   Height="{Binding MiniDailyBodyHeight}"
+                                                                   Fill="{Binding MiniDailyBrush}"
+                                                                   RadiusX="1"
+                                                                   RadiusY="1"/>
+                                                    </Canvas>
+                                                    <StackPanel Grid.Column="1">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0"
+                                                                       Text="{Binding Name}"
+                                                                       FontSize="14"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="{StaticResource WhiteValueBrush}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <Border Grid.Column="1"
+                                                                    Margin="5,1,0,0"
+                                                                    Padding="4,0"
+                                                                    MinWidth="30"
+                                                                    Height="14"
+                                                                    CornerRadius="3"
+                                                                    BorderBrush="{StaticResource PaletteBlueGray}"
+                                                                    BorderThickness="1"
+                                                                    Background="#1C232B"
+                                                                    VerticalAlignment="Center">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding MarketBadgeText}" Value="">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding MarketBadgeText}"
+                                                                           FontSize="8"
+                                                                           FontWeight="Bold"
+                                                                           Foreground="{StaticResource PaletteBlueGray}"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"
+                                                                           TextAlignment="Center"/>
+                                                            </Border>
+                                                            <Border Grid.Column="2"
+                                                                    Margin="5,1,0,0"
+                                                                    Padding="4,0"
+                                                                    MinWidth="34"
+                                                                    Height="14"
+                                                                    CornerRadius="3"
+                                                                    BorderBrush="{StaticResource PaletteRed}"
+                                                                    BorderThickness="1"
+                                                                    Background="#351818"
+                                                                    VerticalAlignment="Center">
+                                                                <TextBlock Text="HOLD"
+                                                                           FontSize="8"
+                                                                           FontWeight="Bold"
+                                                                           Foreground="{StaticResource PaletteRed}"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"
+                                                                           TextAlignment="Center"/>
+                                                            </Border>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding VolumeText}"
+                                                                   FontSize="11"
+                                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                                   Margin="0,3,0,0"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2"
+                                                                HorizontalAlignment="Right">
+                                                        <TextBlock Text="{Binding CurrentPriceText}"
+                                                                   FontSize="14"
+                                                                   FontWeight="Bold"
+                                                                   Foreground="{Binding PriceBrush}"
+                                                                   TextAlignment="Right"/>
+                                                        <TextBlock Text="{Binding ChangeRateText}"
+                                                                   FontSize="11"
+                                                                   Foreground="{Binding PriceBrush}"
+                                                                   Margin="0,3,0,0"
+                                                                   TextAlignment="Right"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </TabItem>
+
                         <TabItem Header="Recent Views">
                             <Grid>
                             <ListBox x:Name="RecentWatchListBox"
@@ -2535,6 +2676,50 @@
                                 </StackPanel>
                             </ToggleButton>
 
+                            <Border BorderBrush="{StaticResource LineSoftBrush}"
+                                    BorderThickness="1"
+                                    Background="#101010"
+                                    CornerRadius="5"
+                                    Padding="7,5"
+                                    Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock x:Name="StrategyDetailTitleText"
+                                                   Text="Selected Stock Strategy State"
+                                                   Foreground="{StaticResource TextMainBrush}"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="StrategySlotSummaryText"
+                                                   Text="Base candle -, continuity -, pullback -, stop -, target -"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="9"
+                                                   Margin="0,2,0,0"
+                                                   TextWrapping="Wrap"
+                                                   MaxHeight="28"/>
+                                        <TextBlock x:Name="StrategyDetailDocumentText"
+                                                   Text=""
+                                                   Foreground="{StaticResource TextSubBrush}"
+                                                   FontSize="9"
+                                                   Margin="0,2,0,0"
+                                                   TextWrapping="Wrap"
+                                                   MaxHeight="24"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               x:Name="StrategySlotStateText"
+                                               Text="WAIT"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="10"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               Margin="8,0,0,0"/>
+                                </Grid>
+                            </Border>
+
                             <Border Grid.Row="3"
                                     BorderBrush="{StaticResource LineBrush}"
                                     BorderThickness="1"
@@ -3015,47 +3200,6 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Grid.Row="5"
-                                    BorderBrush="{StaticResource LineBrush}"
-                                    BorderThickness="1,1,1,1"
-                                    Background="{StaticResource BgInnerBrush}"
-                                    CornerRadius="6"
-                                    Padding="10"
-                                    Margin="0,10,0,0">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock x:Name="StrategyDetailTitleText"
-                                                   Text="Selected Stock Strategy State"
-                                                   Foreground="{StaticResource TextMainBrush}"
-                                                   FontSize="12"
-                                                   FontWeight="SemiBold"/>
-                                        <TextBlock x:Name="StrategySlotSummaryText"
-                                                   Text="Base candle -, continuity -, pullback -, stop -, target -"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="11"
-                                                   Margin="0,4,0,0"
-                                                   TextWrapping="Wrap"/>
-                                        <TextBlock x:Name="StrategyDetailDocumentText"
-                                                   Text=""
-                                                   Foreground="{StaticResource TextSubBrush}"
-                                                   FontSize="10"
-                                                   Margin="0,6,0,0"
-                                                   TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="1"
-                                               x:Name="StrategySlotStateText"
-                                               Text="WAIT"
-                                               Foreground="{StaticResource TextMutedBrush}"
-                                               FontSize="12"
-                                               FontWeight="Bold"
-                                               VerticalAlignment="Center"
-                                               Margin="10,0,0,0"/>
-                                </Grid>
-                            </Border>
                                 </StackPanel>
                             </ScrollViewer>
 

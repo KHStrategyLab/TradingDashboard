@@ -218,6 +218,7 @@ namespace TradingDashboard
                 return;
 
             WatchStockItem? stock = _watchStocks
+                .Concat(_holdingWatchStocks)
                 .Concat(_recentViewedStocks)
                 .FirstOrDefault(item => string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase));
 
@@ -246,12 +247,13 @@ namespace TradingDashboard
                 ApplyWatchStockDisplayPrice(stock, holding.CurrentPrice, ResolveCachedPriceMarket(stock), "balance holding open");
 
             await EnsureRealtime0BTrackingAsync(stock, "balance");
-            AddRecentViewedStock(stock);
-            if (ReferenceEquals(RecentWatchListBox.SelectedItem, stock))
+            UpsertHoldingWatchStock(stock);
+            HoldingWatchTab.IsSelected = true;
+            if (ReferenceEquals(HoldingWatchListBox.SelectedItem, stock))
                 await LoadNewsForSelectedStockAsync(stock);
             else
-                RecentWatchListBox.SelectedItem = stock;
-            FocusSelectedRecentStock();
+                HoldingWatchListBox.SelectedItem = stock;
+            FocusSelectedHoldingStock();
         }
 
         private void RefreshDecoratedBalanceRows()

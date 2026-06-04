@@ -75,9 +75,11 @@ namespace TradingDashboard
         private readonly Brush _hogaCurrentPriceBorderBrush;
         private readonly Brush _hogaCurrentPriceBackgroundBrush;
         private readonly ObservableCollection<WatchStockItem> _watchStocks = [];
+        private readonly ObservableCollection<WatchStockItem> _holdingWatchStocks = [];
         private readonly ObservableCollection<WatchStockItem> _recentViewedStocks = [];
         private readonly ObservableCollection<StockMasterItem> _stockSearchSuggestions = [];
         private bool _stockSearchAutocompleteSuppressed;
+        private bool _isSyncingStockListSelection;
         private readonly ObservableCollection<TradePrint> _recentTrades = [];
         private readonly ObservableCollection<HogaLevel> _sellHogaLevels = [];
         private readonly ObservableCollection<HogaLevel> _buyHogaLevels = [];
@@ -245,6 +247,7 @@ namespace TradingDashboard
             LoadManualPositionLedger();
             LoadPaperPositionLedger();
             WatchListBox.ItemsSource = _watchStocks;
+            HoldingWatchListBox.ItemsSource = _holdingWatchStocks;
             RecentWatchListBox.ItemsSource = _recentViewedStocks;
             StockSearchSuggestionListBox.ItemsSource = _stockSearchSuggestions;
             RecentTradeListBox.ItemsSource = _recentTrades;
@@ -383,7 +386,14 @@ namespace TradingDashboard
             StartUnattendedOperations();
             _ = RefreshMarketIndexTickerAsync("startup", force: true);
 
-            if (WatchListBox.SelectedItem is not ListBoxItem)
+            if (_holdingWatchStocks.Count > 0)
+            {
+                ResetStartupChartPeriodToDaily();
+                HoldingWatchTab.IsSelected = true;
+                HoldingWatchListBox.SelectedIndex = 0;
+                FocusSelectedHoldingStock();
+            }
+            else if (WatchListBox.SelectedItem is not ListBoxItem)
             {
                 ResetStartupChartPeriodToDaily();
                 WatchListBox.SelectedIndex = 0;
@@ -970,7 +980,8 @@ namespace TradingDashboard
 
                 WatchStockItem? stock = _watchStockByCode.TryGetValue(code, out WatchStockItem? tracked)
                     ? tracked
-                    : _recentViewedStocks.FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
+                    : _holdingWatchStocks.FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal)) ??
+                      _recentViewedStocks.FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
 
                 if (stock == null)
                     continue;
@@ -1568,7 +1579,29 @@ namespace TradingDashboard
             if (sender is not ListBox listBox || listBox.SelectedItem is null)
                 return;
 
+            SyncActiveStockListSelection(listBox);
             await LoadNewsForSelectedStockAsync(listBox.SelectedItem);
+        }
+
+        private void SyncActiveStockListSelection(ListBox activeListBox)
+        {
+            if (_isSyncingStockListSelection)
+                return;
+
+            _isSyncingStockListSelection = true;
+            try
+            {
+                if (!ReferenceEquals(activeListBox, WatchListBox))
+                    WatchListBox.SelectedItem = null;
+                if (!ReferenceEquals(activeListBox, HoldingWatchListBox))
+                    HoldingWatchListBox.SelectedItem = null;
+                if (!ReferenceEquals(activeListBox, RecentWatchListBox))
+                    RecentWatchListBox.SelectedItem = null;
+            }
+            finally
+            {
+                _isSyncingStockListSelection = false;
+            }
         }
 
         private void RecentWatchListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -1768,7 +1801,10 @@ namespace TradingDashboard
             HideStockSearchSuggestions();
             StockSearchTextBox.Text = selected.Name;
             await SearchAndOpenStockAsync(selected.Code);
-            FocusSelectedRecentStock();
+            if (IsHoldingStockCode(selected.Code))
+                FocusSelectedHoldingStock();
+            else
+                FocusSelectedRecentStock();
         }
 
         private async Task SearchAndOpenStockAsync(string? forcedQuery = null)
@@ -1781,6 +1817,7 @@ namespace TradingDashboard
             try
             {
                 WatchStockItem? existing = _watchStocks
+                    .Concat(_holdingWatchStocks)
                     .Concat(_recentViewedStocks)
                     .FirstOrDefault(stock =>
                         string.Equals(stock.Code, query, StringComparison.OrdinalIgnoreCase) ||
@@ -1800,11 +1837,25 @@ namespace TradingDashboard
                 }
 
                 await EnsureRealtime0BTrackingAsync(stock, "search");
-                AddRecentViewedStock(stock);
-                if (ReferenceEquals(RecentWatchListBox.SelectedItem, stock))
-                    await LoadNewsForSelectedStockAsync(stock);
+                if (IsHoldingStockCode(stock.Code))
+                {
+                    UpsertHoldingWatchStock(stock);
+                    HoldingWatchTab.IsSelected = true;
+                    if (ReferenceEquals(HoldingWatchListBox.SelectedItem, stock))
+                        await LoadNewsForSelectedStockAsync(stock);
+                    else
+                        HoldingWatchListBox.SelectedItem = stock;
+                    FocusSelectedHoldingStock();
+                }
                 else
-                    RecentWatchListBox.SelectedItem = stock;
+                {
+                    AddRecentViewedStock(stock);
+                    if (ReferenceEquals(RecentWatchListBox.SelectedItem, stock))
+                        await LoadNewsForSelectedStockAsync(stock);
+                    else
+                        RecentWatchListBox.SelectedItem = stock;
+                    FocusSelectedRecentStock();
+                }
             }
             catch (Exception ex)
             {
@@ -1835,6 +1886,21 @@ namespace TradingDashboard
             }
 
             RecentWatchListBox.Focus();
+        }
+
+        private void FocusSelectedHoldingStock()
+        {
+            if (HoldingWatchListBox.SelectedItem is null)
+                return;
+
+            HoldingWatchListBox.UpdateLayout();
+            if (HoldingWatchListBox.ItemContainerGenerator.ContainerFromItem(HoldingWatchListBox.SelectedItem) is ListBoxItem item)
+            {
+                item.Focus();
+                return;
+            }
+
+            HoldingWatchListBox.Focus();
         }
 
         private void CancelStockSearchSuggestion()
@@ -1921,7 +1987,10 @@ namespace TradingDashboard
             if (selectedItem is WatchStockItem recentStock)
             {
                 await EnsureRealtime0BTrackingAsync(recentStock, "select");
-                AddRecentViewedStock(recentStock);
+                if (IsHoldingStockCode(recentStock.Code))
+                    UpsertHoldingWatchStock(recentStock);
+                else
+                    AddRecentViewedStock(recentStock);
             }
 
             StartSelectedChartRender();
@@ -2023,6 +2092,42 @@ namespace TradingDashboard
             _recentViewedStocks.Insert(0, stock);
             while (_recentViewedStocks.Count > 30)
                 _recentViewedStocks.RemoveAt(_recentViewedStocks.Count - 1);
+        }
+
+        private void UpsertHoldingWatchStock(WatchStockItem stock)
+        {
+            if (stock == null || string.IsNullOrWhiteSpace(stock.Code))
+                return;
+
+            string code = NormalizeStockCode(stock.Code);
+            string identityKey = BuildWatchStockIdentityKey(stock);
+            if (_watchStockByIdentity.TryGetValue(identityKey, out WatchStockItem? tracked) ||
+                _watchStockByCode.TryGetValue(code, out tracked))
+            {
+                MergeBalanceStockMetadata(stock, tracked);
+            }
+
+            for (int i = 0; i < _holdingWatchStocks.Count; i++)
+            {
+                if (string.Equals(BuildWatchStockIdentityKey(_holdingWatchStocks[i]), identityKey, StringComparison.Ordinal) ||
+                    string.Equals(NormalizeStockCode(_holdingWatchStocks[i].Code), code, StringComparison.Ordinal))
+                {
+                    MergeBalanceStockMetadata(stock, _holdingWatchStocks[i]);
+                    _holdingWatchStocks[i] = stock;
+                    return;
+                }
+            }
+
+            _holdingWatchStocks.Add(stock);
+        }
+
+        private bool IsHoldingStockCode(string? stockCode)
+        {
+            string code = NormalizeStockCode(stockCode ?? string.Empty);
+            return !string.IsNullOrWhiteSpace(code) &&
+                _balanceHoldings.Any(item =>
+                    item.HoldingQuantity > 0 &&
+                    string.Equals(NormalizeStockCode(item.StockCode), code, StringComparison.Ordinal));
         }
 
         private void RemoveRecentViewedStock(WatchStockItem stock)

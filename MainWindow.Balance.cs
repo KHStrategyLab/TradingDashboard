@@ -106,7 +106,7 @@ namespace TradingDashboard
                 _balanceHoldings.Clear();
                 foreach (KiwoomHolding holding in snapshot.Holdings.OrderByDescending(x => Math.Abs(x.EvaluationAmount)))
                     _balanceHoldings.Add(DecorateHoldingPositionTag(holding));
-                await AddBalanceHoldingsToRecentViewsAsync(snapshot.Holdings, cancellationToken);
+                await PrepareBalanceHoldingsTrackingAsync(snapshot.Holdings, cancellationToken);
                 UpdateStrategyProgressRows();
 
                 BalanceTotalPurchaseText.Text = $"{snapshot.TotalPurchaseAmount:N0}";
@@ -352,7 +352,9 @@ namespace TradingDashboard
                 return true;
             }
 
-            WatchStockItem? recentStock = _recentViewedStocks
+            WatchStockItem? recentStock = _holdingWatchStocks
+                .FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal)) ??
+                _recentViewedStocks
                 .FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
             if (recentStock?.SupportsNxt == true)
             {
@@ -415,15 +417,16 @@ namespace TradingDashboard
             };
         }
 
-        private async Task AddBalanceHoldingsToRecentViewsAsync(IEnumerable<KiwoomHolding> holdings, CancellationToken cancellationToken)
+        private async Task PrepareBalanceHoldingsTrackingAsync(IEnumerable<KiwoomHolding> holdings, CancellationToken cancellationToken)
         {
             List<KiwoomHolding> orderedHoldings = [.. (holdings ?? [])
                 .Where(item => item.HoldingQuantity > 0 && !string.IsNullOrWhiteSpace(item.StockCode))
                 .OrderByDescending(item => Math.Abs(item.EvaluationAmount))];
             int newlyTracked = 0;
             int prepared = 0;
+            _holdingWatchStocks.Clear();
 
-            for (int i = orderedHoldings.Count - 1; i >= 0; i--)
+            for (int i = 0; i < orderedHoldings.Count; i++)
             {
                 KiwoomHolding holding = orderedHoldings[i];
                 string code = NormalizeStockCode(holding.StockCode);
@@ -432,7 +435,8 @@ namespace TradingDashboard
 
                 WatchStockItem? stock = _watchStockByCode.TryGetValue(code, out WatchStockItem? existing)
                     ? existing
-                    : _recentViewedStocks.FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
+                    : _holdingWatchStocks.FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal)) ??
+                      _recentViewedStocks.FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
 
                 if (stock == null || !stock.SupportsNxt)
                 {
@@ -462,7 +466,7 @@ namespace TradingDashboard
                 if (await EnsureRealtime0BTrackingAsync(stock, "balance", registerImmediately: false))
                     newlyTracked++;
                 prepared++;
-                AddRecentViewedStock(stock);
+                UpsertHoldingWatchStock(stock);
             }
 
             if (prepared == 0)
@@ -487,15 +491,18 @@ namespace TradingDashboard
                 if (string.IsNullOrWhiteSpace(code))
                     continue;
 
+                WatchStockItem? holdingStock = _holdingWatchStocks
+                    .FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
                 WatchStockItem? recent = _recentViewedStocks
                     .FirstOrDefault(item => string.Equals(NormalizeStockCode(item.Code), code, StringComparison.Ordinal));
+                WatchStockItem? trackedStock = holdingStock ?? recent;
 
                 if (_watchStockByCode.TryGetValue(code, out WatchStockItem? existing))
                 {
                     if (_balanceNxtEligibleCodes.Contains(code))
                         existing.SupportsNxt = true;
-                    if (recent != null)
-                        MergeBalanceStockMetadata(existing, recent);
+                    if (trackedStock != null)
+                        MergeBalanceStockMetadata(existing, trackedStock);
                     if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
                         existing.Name = holding.StockName;
                     if (existing.CurrentPrice <= 0 && holding.CurrentPrice > 0)
@@ -503,7 +510,7 @@ namespace TradingDashboard
                     continue;
                 }
 
-                WatchStockItem stock = recent ?? new WatchStockItem { Code = code };
+                WatchStockItem stock = trackedStock ?? new WatchStockItem { Code = code };
                 if (_balanceNxtEligibleCodes.Contains(code))
                     stock.SupportsNxt = true;
                 if (string.IsNullOrWhiteSpace(stock.Name) && !string.IsNullOrWhiteSpace(holding.StockName))
@@ -512,6 +519,7 @@ namespace TradingDashboard
                     ApplyWatchStockDisplayPrice(stock, holding.CurrentPrice, ResolveCachedPriceMarket(stock), "balance tracking map");
 
                 _watchStockByCode[code] = stock;
+                UpsertHoldingWatchStock(stock);
                 added++;
             }
 

@@ -1907,6 +1907,9 @@ namespace TradingDashboard
             if (WatchListBox?.SelectedItem is WatchStockItem watchStock)
                 return watchStock;
 
+            if (HoldingWatchListBox?.SelectedItem is WatchStockItem holdingStock)
+                return holdingStock;
+
             if (RecentWatchListBox?.SelectedItem is WatchStockItem recentStock)
                 return recentStock;
 

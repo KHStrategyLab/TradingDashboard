@@ -130,7 +130,7 @@ namespace TradingDashboard
 
         private IReadOnlyList<WatchStockItem> BuildStrategyDebugSnapshotTargets()
         {
-            List<WatchStockItem> source = [.. _watchStocks, .. _recentViewedStocks, .. _watchStockByIdentity.Values];
+            List<WatchStockItem> source = [.. _holdingWatchStocks, .. _watchStocks, .. _recentViewedStocks, .. _watchStockByIdentity.Values];
             return [.. source
                 .Where(stock => stock != null && !string.IsNullOrWhiteSpace(stock.Code))
                 .GroupBy(stock => BuildWatchStockIdentityKey(stock), StringComparer.Ordinal)
