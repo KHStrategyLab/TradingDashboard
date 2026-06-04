@@ -2,6 +2,11 @@
 
 # AGENTS.md
 
+## 먼저 읽을 문서
+
+- 새 Codex 창, 다른 PC, 실행테스트 담당자는 먼저 `Docs/codex-handoff-guide.md`를 읽고 현재 역할과 금지선을 확인한다.
+- 상세 개발 원칙은 이 문서와 `Docs/trading-dashboard-development-manual.md`를 함께 따른다.
+
 ## 역할
 
 이 저장소는 TradingDashboard / Kiwoom 기반 주식 매매 보조 프로그램이다.

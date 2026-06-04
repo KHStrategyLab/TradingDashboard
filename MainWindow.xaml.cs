@@ -2107,6 +2107,8 @@ namespace TradingDashboard
                 MergeBalanceStockMetadata(stock, tracked);
             }
 
+            ApplyCachedMiniDailyCandleToStock(stock);
+
             for (int i = 0; i < _holdingWatchStocks.Count; i++)
             {
                 if (string.Equals(BuildWatchStockIdentityKey(_holdingWatchStocks[i]), identityKey, StringComparison.Ordinal) ||

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using TradingDashboard.Models;
 using TradingDashboard.Services;
@@ -185,14 +186,7 @@ namespace TradingDashboard
                 !IsStrategyToggleOn(LiveBuyEnabledToggle))
                 return false;
 
-            MessageBoxResult result = MessageBox.Show(
-                "실계좌 주문이 가능해집니다.\n\nEngine Start가 켜진 상태에서 전략 신호가 RiskGuard를 통과하면 실제 주문이 나갈 수 있습니다.\n\nLive Orders를 켤까요?",
-                "Live Orders 확인",
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Warning,
-                MessageBoxResult.Cancel);
-
-            if (result == MessageBoxResult.OK)
+            if (ShowLiveOrdersKeyboardWarning())
                 return false;
 
             _isRevertingStrategyControlToggle = true;
@@ -206,16 +200,85 @@ namespace TradingDashboard
             }
 
             AppendLog("strategy switch cancelled: Live Orders remains OFF");
-            try
-            {
-                global::System.Media.SystemSounds.Exclamation.Play();
-            }
-            catch
-            {
-                // Some Windows sound schemes may not provide a playable alert.
-            }
-
             return true;
+        }
+
+        private bool ShowLiveOrdersKeyboardWarning()
+        {
+            Window warning = new()
+            {
+                Title = "Live Orders",
+                Owner = this,
+                Width = 760,
+                Height = 430,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.None,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = new SolidColorBrush(Color.FromRgb(18, 18, 18)),
+                Foreground = new SolidColorBrush(Color.FromRgb(238, 242, 247)),
+                ShowInTaskbar = false
+            };
+
+            Border frame = new()
+            {
+                Padding = new Thickness(42, 38, 42, 38),
+                BorderThickness = new Thickness(0),
+                Background = new SolidColorBrush(Color.FromRgb(28, 28, 28))
+            };
+
+            StackPanel panel = new()
+            {
+                Orientation = Orientation.Vertical
+            };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "LIVE ORDERS WARNING",
+                FontSize = 34,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 77, 90)),
+                Margin = new Thickness(0, 0, 0, 28)
+            });
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Real account orders can be sent when Engine Start is ON and a strategy signal passes RiskGuard.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 22,
+                LineHeight = 34,
+                Margin = new Thickness(0, 0, 0, 46)
+            });
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Enter = ON    /    Esc = Cancel",
+                FontSize = 24,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 191, 73))
+            });
+
+            frame.Child = panel;
+            warning.Content = frame;
+            warning.PreviewKeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    warning.DialogResult = true;
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Escape)
+                {
+                    warning.DialogResult = false;
+                    e.Handled = true;
+                }
+            };
+            warning.Loaded += (_, _) =>
+            {
+                warning.Activate();
+                warning.Focus();
+            };
+
+            return warning.ShowDialog() == true;
         }
 
         private void UpdateEngineStartReadyState()

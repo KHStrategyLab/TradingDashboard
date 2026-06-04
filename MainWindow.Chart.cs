@@ -411,6 +411,7 @@ namespace TradingDashboard
                     loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute3, 3).ConfigureAwait(false);
                     loadedSets += await PreloadBalancePriorityChartPeriodAsync(stock, ChartPeriod.Minute5, 5).ConfigureAwait(false);
                     string market = stock.UseNxtMarket ? "NXT" : "KRX";
+                    Dispatcher.Invoke(() => ApplyBalancePriorityMiniDailyCandle(stock));
                     Dispatcher.Invoke(() => AppendLog($"balance priority chart preload stock done: {stock.Code} / {market} / Day+1m+3m+5m"));
                 }
                 catch (Exception ex)
@@ -420,6 +421,15 @@ namespace TradingDashboard
             }
 
             Dispatcher.Invoke(() => AppendReadyLog($"balance priority chart preload READY: {stocks.Count}stocks / {loadedSets}sets / {sw.ElapsedMilliseconds:N0}ms"));
+        }
+
+        private void ApplyBalancePriorityMiniDailyCandle(ChartPreloadStock preloadStock)
+        {
+            string market = preloadStock.UseNxtMarket ? "NXT" : "KRX";
+            if (!TryGetWatchStockForMarket(preloadStock.Code, market, out WatchStockItem? stock) || stock == null)
+                return;
+
+            ApplyCachedMiniDailyCandleToStock(stock);
         }
 
         private async Task<int> PreloadBalancePriorityChartPeriodAsync(ChartPreloadStock stock, ChartPeriod period, int minute)
