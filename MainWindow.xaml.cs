@@ -65,6 +65,7 @@ namespace TradingDashboard
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
         private readonly Queue<LogLineEntry> _logLines = new();
+        private readonly object _screenLogFileLock = new();
         private readonly Brush _upColorBrush;
         private readonly Brush _downColorBrush;
         private readonly Brush _aggressiveBuyQtyBrush;
@@ -3081,6 +3082,7 @@ namespace TradingDashboard
             }
 
             string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            AppendScreenLogFileLine(line);
             _logLines.Enqueue(new LogLineEntry(line, LogLineKind.Normal));
 
             while (_logLines.Count > MaxLogLines)
@@ -3100,6 +3102,7 @@ namespace TradingDashboard
             }
 
             string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            AppendScreenLogFileLine(line);
             _logLines.Enqueue(new LogLineEntry(line, LogLineKind.Ready));
 
             while (_logLines.Count > MaxLogLines)
@@ -3119,6 +3122,7 @@ namespace TradingDashboard
             }
 
             string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            AppendScreenLogFileLine(line);
             _logLines.Enqueue(new LogLineEntry(line, LogLineKind.Hot));
 
             while (_logLines.Count > MaxLogLines)
@@ -3138,6 +3142,40 @@ namespace TradingDashboard
                 LeftLogTextBox.Document.Blocks.Add(CreateLogParagraph(entry, normalLogBrush));
 
             LeftLogTextBox.ScrollToEnd();
+        }
+
+        private void AppendScreenLogFileLine(string line)
+        {
+            try
+            {
+                string path = ResolveScreenLogFilePath();
+                string? directory = System.IO.Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(directory))
+                    Directory.CreateDirectory(directory);
+
+                lock (_screenLogFileLock)
+                {
+                    File.AppendAllText(path, line + Environment.NewLine, Encoding.UTF8);
+                }
+            }
+            catch
+            {
+                // File logging is verification-only. It must never block UI, realtime data, or orders.
+            }
+        }
+
+        private static string ResolveScreenLogFilePath()
+        {
+            string root = ResolveProjectRoot();
+            return System.IO.Path.Combine(root, "Storage", "Logs", $"trading-dashboard-{DateTime.Now:yyyyMMdd}.log");
+        }
+
+        private static string ResolveProjectRoot()
+        {
+            string? projectPath = SearchUpwards(AppContext.BaseDirectory, "TradingDashboard.csproj");
+            return projectPath != null
+                ? Directory.GetParent(projectPath)?.FullName ?? AppContext.BaseDirectory
+                : AppContext.BaseDirectory;
         }
 
         private static Paragraph CreateLogParagraph(LogLineEntry entry, Brush normalLogBrush)
