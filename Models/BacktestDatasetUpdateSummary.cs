@@ -3,6 +3,7 @@ namespace TradingDashboard.Models
     public sealed class BacktestDatasetUpdateSummary
     {
         public string RunId { get; set; } = string.Empty;
+        public string MarketMode { get; set; } = string.Empty;
         public int CandidateCount { get; set; }
         public int DailyDownloadCount { get; set; }
         public int DailyReusedCount { get; set; }

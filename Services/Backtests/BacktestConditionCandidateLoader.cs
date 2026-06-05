@@ -41,35 +41,64 @@ namespace TradingDashboard.Services.Backtests
             if (_settings.MaxConditionCandidates > 0)
                 stocks = [.. stocks.Take(_settings.MaxConditionCandidates)];
 
-            return [.. stocks
-                .Where(item => !string.IsNullOrWhiteSpace(item.Code))
-                .Select(item =>
-                {
-                    string code = BacktestDataStore.NormalizeCode(item.Code);
-                    bool supportsNxt = stockMasterByCode.TryGetValue(code, out StockMasterItem? master) && master.SupportsNxt;
-                    string market = BacktestMarketModeHelper.IsSorMixed(_settings) && supportsNxt
-                        ? "NXT"
-                        : "KRX";
-                    return new BacktestCandidate
-                    {
-                        Code = code,
-                        Name = string.IsNullOrWhiteSpace(item.Name) && master != null ? master.Name : item.Name,
-                        Market = market,
-                        CandidateDate = today,
-                        NxtEnabled = supportsNxt,
-                        StrategyCode = "BASE_CANDLE",
-                        Source = "KIWOOM_CONDITION",
-                        SourceName = sourceName,
-                        Memo = supportsNxt
-                            ? $"condition {conditionSeq}: {conditionName} / SOR mixed NXT eligible / base market {market}"
-                            : $"condition {conditionSeq}: {conditionName}",
-                        ImportedAt = importedAt
-                    };
-                })
+            bool marketSplit = BacktestMarketModeHelper.IsMarketSplit(_settings);
+            bool nxtOnly = BacktestMarketModeHelper.IsNxtOnly(_settings);
+            bool sorMixed = BacktestMarketModeHelper.IsSorMixed(_settings);
+
+            var candidates = new List<BacktestCandidate>();
+            foreach ((string rawCode, string rawName) in stocks.Where(item => !string.IsNullOrWhiteSpace(item.Code)))
+            {
+                string code = BacktestDataStore.NormalizeCode(rawCode);
+                bool supportsNxt = stockMasterByCode.TryGetValue(code, out StockMasterItem? master) && master.SupportsNxt;
+                string name = string.IsNullOrWhiteSpace(rawName) && master != null ? master.Name : rawName;
+
+                if (!nxtOnly)
+                    candidates.Add(CreateCandidate(code, name, "KRX", supportsNxt, today, conditionSeq, conditionName, sourceName, importedAt, sorMixed));
+
+                if ((marketSplit || nxtOnly) && supportsNxt)
+                    candidates.Add(CreateCandidate(code, name, "NXT", supportsNxt, today, conditionSeq, conditionName, sourceName, importedAt, sorMixed));
+            }
+
+            return [.. candidates
                 .Where(item => !string.IsNullOrWhiteSpace(item.Code))
                 .GroupBy(item => $"{item.Code}|{item.Market}|{item.CandidateDate}", StringComparer.Ordinal)
                 .Select(group => group.First())
-                .OrderBy(item => item.Code)];
+                .OrderBy(item => item.Code)
+                .ThenBy(item => item.Market)];
+
+            static BacktestCandidate CreateCandidate(
+                string code,
+                string name,
+                string market,
+                bool supportsNxt,
+                string candidateDate,
+                string conditionSeq,
+                string conditionName,
+                string sourceName,
+                DateTime importedAt,
+                bool sorMixed)
+            {
+                string normalizedMarket = BacktestDataStore.NormalizeMarket(market);
+                string memo = normalizedMarket == "NXT"
+                    ? $"condition {conditionSeq}: {conditionName} / NXT market data candidate"
+                    : $"condition {conditionSeq}: {conditionName}";
+                if (sorMixed && supportsNxt)
+                    memo += " / SOR mixed NXT eligible";
+
+                return new BacktestCandidate
+                {
+                    Code = code,
+                    Name = name,
+                    Market = normalizedMarket,
+                    CandidateDate = candidateDate,
+                    NxtEnabled = supportsNxt,
+                    StrategyCode = "BASE_CANDLE",
+                    Source = "KIWOOM_CONDITION",
+                    SourceName = sourceName,
+                    Memo = memo,
+                    ImportedAt = importedAt
+                };
+            }
         }
     }
 }

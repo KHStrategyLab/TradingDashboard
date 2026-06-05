@@ -5,6 +5,7 @@ namespace TradingDashboard.Models
     public sealed class BacktestMinuteDataStoreSummary
     {
         public string RunId { get; set; } = string.Empty;
+        public string MarketMode { get; set; } = string.Empty;
         public int BaseCandleCount { get; set; }
         public int StockMarketCount { get; set; }
         public int MinuteSetCount { get; set; }

@@ -47,6 +47,7 @@ namespace TradingDashboard.Services.Backtests
             var summary = new BacktestMinuteDataStoreSummary
             {
                 RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                MarketMode = BacktestMarketModeHelper.NormalizeMarketMode(_settings),
                 BaseCandleCount = baseCandles.Count,
                 StockMarketCount = groups.Count,
                 MinuteSetCount = groups.Count * intervals.Length

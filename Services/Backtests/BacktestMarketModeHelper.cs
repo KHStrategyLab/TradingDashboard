@@ -16,6 +16,27 @@ namespace TradingDashboard.Services.Backtests
                 mode.Contains("MIXED", StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsMarketSplit(BacktestSettings? settings)
+        {
+            string mode = (settings?.MarketMode ?? string.Empty).Trim();
+            return mode.Contains("SPLIT", StringComparison.OrdinalIgnoreCase) ||
+                mode.Contains("BOTH", StringComparison.OrdinalIgnoreCase) ||
+                mode.Contains("ALL", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsNxtOnly(BacktestSettings? settings)
+        {
+            string mode = (settings?.MarketMode ?? string.Empty).Trim();
+            return mode.Contains("NXT", StringComparison.OrdinalIgnoreCase) &&
+                mode.Contains("ONLY", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string NormalizeMarketMode(BacktestSettings? settings)
+        {
+            string mode = (settings?.MarketMode ?? string.Empty).Trim().ToUpperInvariant();
+            return string.IsNullOrWhiteSpace(mode) ? "MARKET_SPLIT" : mode;
+        }
+
         public static async Task<IReadOnlyDictionary<string, StockMasterItem>> LoadStockMasterByCodeAsync(CancellationToken cancellationToken = default)
         {
             var store = new StockMasterCacheStore();

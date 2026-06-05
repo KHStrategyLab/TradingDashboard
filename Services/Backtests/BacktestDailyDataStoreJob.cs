@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -40,8 +41,16 @@ namespace TradingDashboard.Services.Backtests
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            int nxtEligibleCount = candidates.Count(item => item.NxtEnabled);
+            int nxtEligibleCount = candidates
+                .Where(item => item.NxtEnabled)
+                .Select(item => BacktestDataStore.NormalizeCode(item.Code))
+                .Distinct(StringComparer.Ordinal)
+                .Count();
+            int krxCandidateCount = candidates.Count(item => string.Equals(BacktestDataStore.NormalizeMarket(item.Market), "KRX", StringComparison.Ordinal));
+            int nxtCandidateCount = candidates.Count(item => string.Equals(BacktestDataStore.NormalizeMarket(item.Market), "NXT", StringComparison.Ordinal));
+            summary.MarketMode = BacktestMarketModeHelper.NormalizeMarketMode(_settings);
             summary.Logs.Insert(0, $"condition candidates loaded: {_settings.CandidateConditionIndex} / {candidates.Count}stocks / NXT eligible {nxtEligibleCount} / mode {_settings.MarketMode}");
+            summary.Logs.Insert(1, $"condition candidates by market: KRX {krxCandidateCount} / NXT {nxtCandidateCount}");
             return summary;
         }
     }

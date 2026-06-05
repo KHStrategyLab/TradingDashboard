@@ -177,6 +177,8 @@ BarTime   = DateTime
 Do not collapse KRX and NXT into one file or one result label. KRX/NXT can share a run, but the
 result must say so through `MarketMode = MARKET_SPLIT` or another explicit run mode.
 
+`MARKET_SPLIT` is the default DataStore collection mode. The candidate loader keeps KRX rows and adds NXT rows only for `SupportsNxt` stocks, so source data is stored and verified as `Code + Market + Date/BarTime`. `KRX_ONLY` is only for old KRX-only comparisons. `SOR_MIXED` is a separate mirror mode for experiments where a KRX base candle is reused as an NXT execution anchor; it is not the same thing as verifying a real NXT base candle.
+
 Required comparison fields:
 
 ```text

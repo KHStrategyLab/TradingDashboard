@@ -75,7 +75,7 @@
     "CandidateConditionIndex": 23,
     "CandidateConditionName": "120일내_20퍼_500억",
     "CandidateSourceName": "120일내_20퍼_500억",
-    "MarketMode": "KRX_ONLY",
+    "MarketMode": "MARKET_SPLIT",
     "MaxConditionCandidates": 0,
     "MinuteMarketFilter": "",
     "MaxMinuteStockMarketGroups": 0,

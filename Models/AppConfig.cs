@@ -111,7 +111,7 @@ namespace TradingDashboard.Models
         public int CandidateConditionIndex { get; set; } = 23;
         public string CandidateConditionName { get; set; } = "120일내_20퍼_500억";
         public string CandidateSourceName { get; set; } = "120일내_20퍼_500억";
-        public string MarketMode { get; set; } = "KRX_ONLY";
+        public string MarketMode { get; set; } = "MARKET_SPLIT";
         public int MaxConditionCandidates { get; set; }
         public string MinuteMarketFilter { get; set; } = string.Empty;
         public int MaxMinuteStockMarketGroups { get; set; }

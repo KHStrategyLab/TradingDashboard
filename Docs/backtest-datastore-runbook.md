@@ -25,6 +25,7 @@ Preferred candidate input is Kiwoom condition search number 23:
 ```text
 Backtest.CandidateConditionIndex = 23
 Backtest.CandidateConditionName = 120일내_20퍼_500억
+Backtest.MarketMode = MARKET_SPLIT
 ```
 
 Until the operator-only condition loader is wired, use the existing TradingDashboard watchlist/search-condition cache.
@@ -36,6 +37,10 @@ BacktestDailyDataStoreJob.RunAsync(...)
 ```
 
 This loads condition 23 candidates, saves the candidate snapshot, downloads or reuses daily bars, and re-verifies base candles.
+
+`MARKET_SPLIT` is the default backtest data mode. It keeps every KRX candidate as KRX and adds an extra NXT candidate for stocks whose stock-master row says `SupportsNxt = true`. Daily and minute files are therefore separated by `Code + Market`, not by code alone.
+
+`KRX_ONLY` remains available for old KRX-only tests. `SOR_MIXED` remains a special experiment mode that can mirror KRX base-candle events into NXT execution rows; do not treat that as real NXT daily-candle verification.
 
 Operator command:
 
