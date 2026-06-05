@@ -49,6 +49,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-ten-pullback-five-breakout-signal-exit", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunTenPullbackFiveBreakoutSignalExitBacktest();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-center-10m-3m", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunSmallBaseCenterPullbackBacktest(baseMinute: 10, entryMinute: 3, useOneMinuteTrigger: false);
@@ -189,6 +197,27 @@ namespace TradingDashboard
                 {
                     RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
                     Error = $"backtest strategy failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunTenPullbackFiveBreakoutSignalExitBacktest()
+        {
+            try
+            {
+                var backtest = new TenMinutePullbackFiveMinuteBreakoutSignalExitBacktest();
+                BacktestRunResult result = backtest.Run(maxHoldingMinutes: 180);
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest signal-exit strategy failed: {ex.GetType().Name}: {ex.Message}"
                 };
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 1;

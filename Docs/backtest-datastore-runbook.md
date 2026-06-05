@@ -184,6 +184,7 @@ Operator command:
 ```powershell
 dotnet run -- --backtest-ten-pullback-five-breakout
 dotnet run -- --backtest-ten-pullback-five-breakout-3h
+dotnet run -- --backtest-ten-pullback-five-breakout-signal-exit
 ```
 
 Strategy:
@@ -215,6 +216,14 @@ Record MaxHigh, MinLow, MFE, MAE, and the holding-window exit close.
 ```
 
 This is a signal-quality test, not a live strategy.
+
+Signal-exit variant:
+
+```text
+--backtest-ten-pullback-five-breakout-signal-exit keeps the same entry signal but closes each virtual position on the first simple exit signal.
+It checks hard stop, 5-minute base-low break, 15-minute MA5 damage, 5-minute weakness while losing, 1-minute MA5 profit protection, break-even recovery, trailing after profit, and max 180-minute holding.
+It writes a normal run folder only. It must not rewrite source DataStore files and must not connect to Live Orders.
+```
 
 ## Small Base Center Pullback Test
 
