@@ -582,6 +582,26 @@ C > A
 AND CROSSUP(C, B)
 ```
 
+프로그램 백테스트에서는 이 순수 보조 수식과, 일봉 기준봉 이후 문맥을 붙인 수식을 분리한다.
+
+```text
+순수 보조 수식:
+MA200_BBLower_Rebound
+dotnet run -- --backtest-ma200-bblower-rebound
+
+일봉 기준봉 이후 회복 수식:
+DAILY_BASE_MA200_BBLOWER_RECOVERY_5M
+dotnet run -- --backtest-daily-base-ma200-bblower-recovery-5m
+```
+
+두 번째 수식은 다음 조건을 추가한다.
+
+```text
+검증된 일봉 기준봉 이후 D+0~D+6 구간
+5분봉 거래대금 30억 이상
+5분봉 거래대금이 직전 20봉 평균의 1.2배 이상
+```
+
 우리 방식으로 해석하면 다음과 같다.
 
 ```text

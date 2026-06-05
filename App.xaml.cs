@@ -191,6 +191,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-daily-base-ma200-bblower-recovery-5m", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunDailyBaseMa200BbLowerRecoveryBacktest();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-ma240-lower-deviation-rebound", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunMa240LowerDeviationReboundBacktest();
@@ -557,6 +565,27 @@ namespace TradingDashboard
                 {
                     RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
                     Error = $"backtest MA200 BBLower rebound failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunDailyBaseMa200BbLowerRecoveryBacktest()
+        {
+            try
+            {
+                var backtest = new DailyBaseMa200BbLowerRecoveryBacktest();
+                BacktestRunResult result = backtest.Run();
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest daily-base MA200 BBLower recovery failed: {ex.GetType().Name}: {ex.Message}"
                 };
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 1;
