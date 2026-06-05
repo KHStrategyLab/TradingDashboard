@@ -16,22 +16,22 @@ dotnet run --project .\TradingDashboard.csproj -- --backtest-small-base-center-5
 - Strategy: `SMALL_BASE_MA60_CENTER_PULLBACK`
 - Entry frame: 5-minute base candle, 1-minute trigger
 - Base threshold: 0.8% body rise and 500,000,000 KRW base-bar trading value
-- Exit rule: `SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_TRAIL_MAX180`
+- Exit rule: `SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_STRUCTURE_MAX180`
 
 Representative exit conditions:
 
-- hard stop at -1.2%
 - 5-minute base low break
 - 15-minute MA5 flow damage
-- base-frame MA5 weakness while losing
-- 1-minute MA5 profit protection
-- break-even recovery
-- trailing after profit
+- base-frame MA5 structural weakness
+- 1-minute MA5 down-cross
 - max 180-minute holding
+
+Fixed N% loss, break-even recovery, and N% trailing exits are intentionally excluded.
+The purpose is to test whether the sell signal is structurally usable, not whether a fixed-percent stop can cut loss.
 
 ## Smoke Result
 
-Observed before deleting the generated Run folder:
+Observed before deleting the generated Run folder from the structural-exit smoke pass:
 
 - Signals: 266
 - Trades: 133
@@ -40,9 +40,13 @@ Observed before deleting the generated Run folder:
 - NXT signals: 38 BUY / 38 SELL
 - RunMode: `SOR_ON`
 - MarketMode: `MARKET_SPLIT`
+- ExitRuleCode: `SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_STRUCTURE_MAX180`
+- WinRate: 39.10%
+- Expectancy: -0.0504%
+- AvgHoldingMinutes: 4.80
 - Build: 0 warnings / 0 errors
 
-The result confirms that the path runs end-to-end and preserves KRX/NXT market labels.
+The smoke pass confirmed that the path runs end-to-end and preserves KRX/NXT market labels.
 Profitability is intentionally not judged from this smoke run.
 
 ## Next Comparison Candidates

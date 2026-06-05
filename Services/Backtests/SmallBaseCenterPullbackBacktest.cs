@@ -33,7 +33,7 @@ namespace TradingDashboard.Services.Backtests
         {
             int resolvedTriggerMinute = triggerMinute > 0 ? triggerMinute : entryMinute;
             int holdingBars = Math.Max(1, observationMinutes / Math.Max(1, resolvedTriggerMinute));
-            string exitRuleCode = useSignalExit ? "SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_TRAIL_MAX180" : $"OBSERVE_{observationMinutes}M_R";
+            string exitRuleCode = useSignalExit ? "SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_STRUCTURE_MAX180" : $"OBSERVE_{observationMinutes}M_R";
             string runId = _runStore.CreateRunId(useSignalExit
                 ? $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_signal_exit{observationMinutes}"
                 : $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_hold{observationMinutes}");
@@ -241,7 +241,6 @@ namespace TradingDashboard.Services.Backtests
             long entryPrice = entryBar.Close;
             long maxHigh = entryBar.High;
             long minLow = entryBar.Low;
-            decimal minProfitRate = 0m;
 
             for (int i = entryIndex + 1; i < oneBars.Count; i++)
             {
@@ -258,8 +257,6 @@ namespace TradingDashboard.Services.Backtests
                 minLow = Math.Min(minLow, current.Low);
 
                 decimal profitRate = entryPrice > 0 ? (current.Close - entryPrice) / (decimal)entryPrice * 100m : 0m;
-                decimal highDrawdownRate = maxHigh > 0 ? (maxHigh - current.Close) / (decimal)maxHigh * 100m : 0m;
-                minProfitRate = Math.Min(minProfitRate, profitRate);
 
                 bool oneWeak = TryGetLatestMinuteState(oneStateByTime, current.DateTime, out MinuteState oneState) &&
                     oneState.PreviousClose >= oneState.PreviousMa5 &&
@@ -274,8 +271,6 @@ namespace TradingDashboard.Services.Backtests
                     group.Market,
                     current,
                     profitRate,
-                    minProfitRate,
-                    highDrawdownRate,
                     oneWeak,
                     baseMinuteWeak,
                     fifteenWeak,
@@ -399,8 +394,6 @@ namespace TradingDashboard.Services.Backtests
             string market,
             BacktestMinuteBar current,
             decimal profitRate,
-            decimal minProfitRate,
-            decimal highDrawdownRate,
             bool oneWeak,
             bool baseMinuteWeak,
             bool fifteenWeak,
@@ -408,26 +401,17 @@ namespace TradingDashboard.Services.Backtests
             int maxHoldingMinutes,
             int holdingMinutes)
         {
-            if (profitRate <= -1.2m)
-                return $"hard stop {profitRate:0.##}% <= -1.2%";
-
             if (baseLowBroken)
                 return $"5m base low broken at {current.Close:N0}";
 
             if (fifteenWeak)
                 return "15m MA5 flow damaged";
 
-            if (baseMinuteWeak && profitRate < 0)
-                return $"base-frame MA5 weak while loss {profitRate:0.##}%";
+            if (baseMinuteWeak)
+                return $"base-frame MA5 structural weakness, pnl {profitRate:0.##}%";
 
-            if (profitRate >= 1.0m && highDrawdownRate >= 1.0m)
-                return $"trail stop after profit: pnl {profitRate:0.##}%, high drawdown {highDrawdownRate:0.##}%";
-
-            if (oneWeak && profitRate > 0)
-                return $"1m MA5 down-cross protect profit {profitRate:0.##}%";
-
-            if (minProfitRate <= -1.0m && profitRate >= 0)
-                return $"break-even recovery: min {minProfitRate:0.##}%, now {profitRate:0.##}%";
+            if (oneWeak)
+                return $"1m MA5 down-cross, pnl {profitRate:0.##}%";
 
             if (holdingMinutes >= maxHoldingMinutes)
                 return $"max holding {maxHoldingMinutes}m reached ({market})";

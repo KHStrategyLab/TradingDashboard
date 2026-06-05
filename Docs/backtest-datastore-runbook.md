@@ -221,7 +221,8 @@ Signal-exit variant:
 
 ```text
 --backtest-ten-pullback-five-breakout-signal-exit keeps the same entry signal but closes each virtual position on the first simple exit signal.
-It checks hard stop, 5-minute base-low break, 15-minute MA5 damage, 5-minute weakness while losing, 1-minute MA5 profit protection, break-even recovery, trailing after profit, and max 180-minute holding.
+It checks structural exit signals only: 5-minute base-low break, 15-minute MA5 damage, 5-minute MA5 weakness, 1-minute MA5 down-cross, and max 180-minute holding.
+Fixed N% loss, break-even recovery, and N% trailing exits are intentionally excluded from signal-exit backtests.
 It writes a normal run folder only. It must not rewrite source DataStore files and must not connect to Live Orders.
 ```
 
@@ -276,17 +277,17 @@ Base candle: completed 5-minute bar
 Trigger candle: completed 1-minute bar
 Small base rise >= 0.8%
 Small base trading value >= 500,000,000 KRW
-Exit rule: SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_TRAIL_MAX180
+Exit rule: SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_STRUCTURE_MAX180
 
-Representative hybrid exit:
-hard stop -1.2%
+Representative structural exit:
 5-minute base low break
 15-minute MA5 flow damage
-base-frame MA5 weakness while losing
-1-minute MA5 profit protection
-break-even recovery
-trailing after profit
+base-frame MA5 structural weakness
+1-minute MA5 down-cross
 max 180-minute holding
+
+Fixed N% loss, break-even recovery, and N% trailing exits are intentionally excluded.
+The purpose is to test whether a sell signal is structurally usable, not whether a fixed-percent stop can cut loss.
 
 This command writes only a normal Run folder.
 It must not rewrite source DataStore files or connect to Live Orders.
