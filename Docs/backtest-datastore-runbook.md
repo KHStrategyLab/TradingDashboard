@@ -233,6 +233,7 @@ First-priority smoke test:
 dotnet run -- --backtest-small-base-center-10m-3m
 dotnet run -- --backtest-small-base-center-10m-3m-1m
 dotnet run -- --backtest-small-base-center-15m-5m-1m
+dotnet run -- --backtest-small-base-center-5m-1m-signal-exit
 ```
 
 Strategy:
@@ -264,6 +265,31 @@ Small base trading value >= 1,000,000,000 KRW
 1-minute trigger close > open
 1-minute trigger close > previous 1-minute high
 1-minute trigger volume >= previous 20-bar average volume * 1.2
+```
+
+5-minute base / 1-minute trigger smoke variant:
+
+```text
+--backtest-small-base-center-5m-1m-signal-exit
+
+Base candle: completed 5-minute bar
+Trigger candle: completed 1-minute bar
+Small base rise >= 0.8%
+Small base trading value >= 500,000,000 KRW
+Exit rule: SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_TRAIL_MAX180
+
+Representative hybrid exit:
+hard stop -1.2%
+5-minute base low break
+15-minute MA5 flow damage
+base-frame MA5 weakness while losing
+1-minute MA5 profit protection
+break-even recovery
+trailing after profit
+max 180-minute holding
+
+This command writes only a normal Run folder.
+It must not rewrite source DataStore files or connect to Live Orders.
 ```
 
 Version roles:

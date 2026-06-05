@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using TradingDashboard.Models;
 
@@ -27,12 +28,15 @@ namespace TradingDashboard.Services.Backtests
             decimal baseRisePercent = 1.0m,
             long baseTradingValueWon = 1_000_000_000,
             decimal entryVolumeMultiplier = 1.2m,
-            decimal triggerVolumeMultiplier = 1.2m)
+            decimal triggerVolumeMultiplier = 1.2m,
+            bool useSignalExit = false)
         {
             int resolvedTriggerMinute = triggerMinute > 0 ? triggerMinute : entryMinute;
             int holdingBars = Math.Max(1, observationMinutes / Math.Max(1, resolvedTriggerMinute));
-            string exitRuleCode = $"OBSERVE_{observationMinutes}M_R";
-            string runId = _runStore.CreateRunId($"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_hold{observationMinutes}");
+            string exitRuleCode = useSignalExit ? "SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_TRAIL_MAX180" : $"OBSERVE_{observationMinutes}M_R";
+            string runId = _runStore.CreateRunId(useSignalExit
+                ? $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_signal_exit{observationMinutes}"
+                : $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_hold{observationMinutes}");
             List<BacktestSignalRow> signals = [];
             List<BacktestTradeRow> trades = [];
 
@@ -59,11 +63,24 @@ namespace TradingDashboard.Services.Backtests
                     : [.. _dataStore.LoadMinuteBars(group.Code, group.Market, resolvedTriggerMinute)
                         .Where(bar => IsAfterBase(bar.DateTime, group.BaseDate))
                         .OrderBy(bar => bar.DateTime)];
+                List<BacktestMinuteBar> oneBars = useSignalExit && resolvedTriggerMinute == 1
+                    ? triggerBars
+                    : [];
+                List<BacktestMinuteBar> fifteenBars = useSignalExit
+                    ? [.. _dataStore.LoadMinuteBars(group.Code, group.Market, 15)
+                        .Where(bar => IsAfterBase(bar.DateTime, group.BaseDate))
+                        .OrderBy(bar => bar.DateTime)]
+                    : [];
 
                 if (baseBars.Count < 61 || entryBars.Count < 22 || triggerBars.Count < 22 + holdingBars)
                     continue;
+                if (useSignalExit && (oneBars.Count < 25 || fifteenBars.Count < 6))
+                    continue;
 
                 Dictionary<string, BaseState> baseStates = BuildBaseStateMap(baseBars, baseRisePercent, baseTradingValueWon);
+                Dictionary<string, MinuteState> oneStateByTime = useSignalExit ? BuildMinuteStateMap(oneBars, 5) : [];
+                Dictionary<string, MinuteState> baseMinuteStateByTime = useSignalExit ? BuildMinuteStateMap(baseBars, 5) : [];
+                Dictionary<string, MinuteState> fifteenStateByTime = useSignalExit ? BuildMinuteStateMap(fifteenBars, 5) : [];
                 var usedBaseTimes = new HashSet<string>(StringComparer.Ordinal);
 
                 for (int i = 21; i < triggerBars.Count - holdingBars; i++)
@@ -85,22 +102,35 @@ namespace TradingDashboard.Services.Backtests
                     if (!IsTriggerEntry(triggerBar, previousTrigger, avgTriggerVolume20, triggerVolumeMultiplier))
                         continue;
 
-                    List<BacktestMinuteBar> holdingWindow = ResolveHoldingBars(triggerBars, i, holdingBars);
-                    if (holdingWindow.Count < holdingBars)
-                        continue;
-
                     long entryPrice = triggerBar.Close;
                     long stopPrice = baseState.Low;
                     long riskWon = entryPrice - stopPrice;
                     if (entryPrice <= 0 || riskWon <= 0)
                         continue;
 
-                    long maxHigh = holdingWindow.Max(bar => bar.High);
-                    long minLow = holdingWindow.Min(bar => bar.Low);
-                    BacktestMinuteBar exitBar = holdingWindow.Last();
+                    if (!TryResolveExit(
+                        group,
+                        triggerBar,
+                        triggerBars,
+                        i,
+                        holdingBars,
+                        useSignalExit,
+                        baseState,
+                        oneBars,
+                        oneStateByTime,
+                        baseMinuteStateByTime,
+                        fifteenStateByTime,
+                        observationMinutes,
+                        out ExitResult exit))
+                    {
+                        continue;
+                    }
+
+                    long maxHigh = exit.MaxHigh;
+                    long minLow = exit.MinLow;
                     decimal mfe = (maxHigh - entryPrice) / (decimal)entryPrice * 100m;
                     decimal mae = (minLow - entryPrice) / (decimal)entryPrice * 100m;
-                    decimal exitRate = (exitBar.Close - entryPrice) / (decimal)entryPrice * 100m;
+                    decimal exitRate = (exit.ExitPrice - entryPrice) / (decimal)entryPrice * 100m;
                     decimal riskRate = riskWon / (decimal)entryPrice * 100m;
                     decimal maxR = (maxHigh - entryPrice) / (decimal)riskWon;
                     decimal minR = (minLow - entryPrice) / (decimal)riskWon;
@@ -118,6 +148,21 @@ namespace TradingDashboard.Services.Backtests
                         Reason = reason
                     });
 
+                    if (useSignalExit)
+                    {
+                        signals.Add(new BacktestSignalRow
+                        {
+                            RunId = runId,
+                            StrategyCode = StrategyCode,
+                            Code = group.Code,
+                            Market = group.Market,
+                            SignalTime = exit.ExitTime,
+                            SignalType = "SELL",
+                            Price = exit.ExitPrice,
+                            Reason = exit.ExitReason
+                        });
+                    }
+
                     trades.Add(new BacktestTradeRow
                     {
                         RunId = runId,
@@ -126,23 +171,23 @@ namespace TradingDashboard.Services.Backtests
                         Code = group.Code,
                         Market = group.Market,
                         EntryTime = triggerBar.DateTime,
-                        ExitTime = exitBar.DateTime,
+                        ExitTime = exit.ExitTime,
                         EntryPrice = entryPrice,
-                        ExitPrice = exitBar.Close,
+                        ExitPrice = exit.ExitPrice,
                         MaxHigh = maxHigh,
                         MinLow = minLow,
                         StopPrice = stopPrice,
                         Quantity = 1,
                         ProfitRate = exitRate,
-                        ProfitAmount = exitBar.Close - entryPrice,
+                        ProfitAmount = exit.ExitPrice - entryPrice,
                         Mae = mae,
                         Mfe = mfe,
                         RiskRate = riskRate,
                         MaxR = maxR,
                         MinR = minR,
-                        HoldingMinutes = observationMinutes,
+                        HoldingMinutes = exit.HoldingMinutes,
                         EntryReason = reason,
-                        ExitReason = $"{observationMinutes}-minute signal-quality window"
+                        ExitReason = exit.ExitReason
                     });
 
                     usedBaseTimes.Add(baseState.Time);
@@ -152,6 +197,106 @@ namespace TradingDashboard.Services.Backtests
             BacktestRunSummary summary = BuildSummary(runId, exitRuleCode, signals, trades);
             string outputDirectory = _runStore.SaveRun(runId, signals, trades, [summary]);
             return new BacktestRunResult(runId, outputDirectory, signals.Count, trades.Count, summary);
+        }
+
+        private static bool TryResolveExit(
+            BaseGroup group,
+            BacktestMinuteBar entryBar,
+            IReadOnlyList<BacktestMinuteBar> triggerBars,
+            int signalIndex,
+            int holdingBars,
+            bool useSignalExit,
+            BaseState baseState,
+            IReadOnlyList<BacktestMinuteBar> oneBars,
+            IReadOnlyDictionary<string, MinuteState> oneStateByTime,
+            IReadOnlyDictionary<string, MinuteState> baseMinuteStateByTime,
+            IReadOnlyDictionary<string, MinuteState> fifteenStateByTime,
+            int maxHoldingMinutes,
+            out ExitResult result)
+        {
+            result = default;
+
+            if (!useSignalExit)
+            {
+                List<BacktestMinuteBar> holdingWindow = ResolveHoldingBars(triggerBars, signalIndex, holdingBars);
+                if (holdingWindow.Count < holdingBars)
+                    return false;
+
+                BacktestMinuteBar exitBar = holdingWindow.Last();
+                result = new ExitResult(
+                    exitBar.DateTime,
+                    exitBar.Close,
+                    holdingWindow.Max(bar => bar.High),
+                    holdingWindow.Min(bar => bar.Low),
+                    maxHoldingMinutes,
+                    $"{maxHoldingMinutes}-minute signal-quality window");
+                return true;
+            }
+
+            int entryIndex = FindTimeIndex(oneBars, entryBar.DateTime);
+            if (entryIndex < 0 || entryIndex + 1 >= oneBars.Count)
+                return false;
+
+            string entryDate = entryBar.DateTime.Length >= 8 ? entryBar.DateTime[..8] : string.Empty;
+            long entryPrice = entryBar.Close;
+            long maxHigh = entryBar.High;
+            long minLow = entryBar.Low;
+            decimal minProfitRate = 0m;
+
+            for (int i = entryIndex + 1; i < oneBars.Count; i++)
+            {
+                BacktestMinuteBar current = oneBars[i];
+                string currentDate = current.DateTime.Length >= 8 ? current.DateTime[..8] : string.Empty;
+                if (!string.Equals(entryDate, currentDate, StringComparison.Ordinal))
+                    break;
+
+                int holdingMinutes = ResolveHoldingMinutes(entryBar.DateTime, current.DateTime, i - entryIndex);
+                if (holdingMinutes <= 0)
+                    continue;
+
+                maxHigh = Math.Max(maxHigh, current.High);
+                minLow = Math.Min(minLow, current.Low);
+
+                decimal profitRate = entryPrice > 0 ? (current.Close - entryPrice) / (decimal)entryPrice * 100m : 0m;
+                decimal highDrawdownRate = maxHigh > 0 ? (maxHigh - current.Close) / (decimal)maxHigh * 100m : 0m;
+                minProfitRate = Math.Min(minProfitRate, profitRate);
+
+                bool oneWeak = TryGetLatestMinuteState(oneStateByTime, current.DateTime, out MinuteState oneState) &&
+                    oneState.PreviousClose >= oneState.PreviousMa5 &&
+                    oneState.Close < oneState.Ma5;
+                bool baseMinuteWeak = TryGetLatestMinuteState(baseMinuteStateByTime, current.DateTime, out MinuteState baseFrameState) &&
+                    baseFrameState.Close < baseFrameState.Ma5;
+                bool fifteenWeak = TryGetLatestMinuteState(fifteenStateByTime, current.DateTime, out MinuteState fifteenState) &&
+                    fifteenState.Close < fifteenState.Ma5;
+                bool baseLowBroken = baseState.Low > 0 && current.Close <= baseState.Low;
+
+                string? exitReason = ResolveSignalExitReason(
+                    group.Market,
+                    current,
+                    profitRate,
+                    minProfitRate,
+                    highDrawdownRate,
+                    oneWeak,
+                    baseMinuteWeak,
+                    fifteenWeak,
+                    baseLowBroken,
+                    maxHoldingMinutes,
+                    holdingMinutes);
+
+                if (string.IsNullOrWhiteSpace(exitReason))
+                    continue;
+
+                result = new ExitResult(
+                    current.DateTime,
+                    current.Close,
+                    maxHigh,
+                    minLow,
+                    holdingMinutes,
+                    exitReason);
+                return true;
+            }
+
+            return false;
         }
 
         private static Dictionary<string, BaseState> BuildBaseStateMap(
@@ -250,6 +395,104 @@ namespace TradingDashboard.Services.Backtests
             return true;
         }
 
+        private static string? ResolveSignalExitReason(
+            string market,
+            BacktestMinuteBar current,
+            decimal profitRate,
+            decimal minProfitRate,
+            decimal highDrawdownRate,
+            bool oneWeak,
+            bool baseMinuteWeak,
+            bool fifteenWeak,
+            bool baseLowBroken,
+            int maxHoldingMinutes,
+            int holdingMinutes)
+        {
+            if (profitRate <= -1.2m)
+                return $"hard stop {profitRate:0.##}% <= -1.2%";
+
+            if (baseLowBroken)
+                return $"5m base low broken at {current.Close:N0}";
+
+            if (fifteenWeak)
+                return "15m MA5 flow damaged";
+
+            if (baseMinuteWeak && profitRate < 0)
+                return $"base-frame MA5 weak while loss {profitRate:0.##}%";
+
+            if (profitRate >= 1.0m && highDrawdownRate >= 1.0m)
+                return $"trail stop after profit: pnl {profitRate:0.##}%, high drawdown {highDrawdownRate:0.##}%";
+
+            if (oneWeak && profitRate > 0)
+                return $"1m MA5 down-cross protect profit {profitRate:0.##}%";
+
+            if (minProfitRate <= -1.0m && profitRate >= 0)
+                return $"break-even recovery: min {minProfitRate:0.##}%, now {profitRate:0.##}%";
+
+            if (holdingMinutes >= maxHoldingMinutes)
+                return $"max holding {maxHoldingMinutes}m reached ({market})";
+
+            return null;
+        }
+
+        private static Dictionary<string, MinuteState> BuildMinuteStateMap(IReadOnlyList<BacktestMinuteBar> bars, int maPeriod)
+        {
+            var result = new Dictionary<string, MinuteState>(StringComparer.Ordinal);
+            int period = Math.Max(2, maPeriod);
+            for (int i = period - 1; i < bars.Count; i++)
+            {
+                BacktestMinuteBar current = bars[i];
+                decimal ma = bars.Skip(i - period + 1).Take(period).Average(bar => (decimal)bar.Close);
+                long previousClose = i > 0 ? bars[i - 1].Close : current.Close;
+                decimal previousMa = i > period - 1
+                    ? bars.Skip(i - period).Take(period).Average(bar => (decimal)bar.Close)
+                    : ma;
+
+                result[current.DateTime] = new MinuteState(current.DateTime, current.Close, ma, previousClose, previousMa);
+            }
+
+            return result;
+        }
+
+        private static bool TryGetLatestMinuteState(
+            IReadOnlyDictionary<string, MinuteState> states,
+            string time,
+            out MinuteState state)
+        {
+            state = default;
+            string? key = states.Keys
+                .Where(item => string.CompareOrdinal(item, time) <= 0)
+                .OrderBy(item => item)
+                .LastOrDefault();
+            if (string.IsNullOrWhiteSpace(key))
+                return false;
+
+            state = states[key];
+            return state.Ma5 > 0;
+        }
+
+        private static int FindTimeIndex(IReadOnlyList<BacktestMinuteBar> bars, string dateTime)
+        {
+            for (int i = 0; i < bars.Count; i++)
+            {
+                if (string.CompareOrdinal(bars[i].DateTime, dateTime) >= 0)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static int ResolveHoldingMinutes(string entryTime, string exitTime, int fallbackBars)
+        {
+            if (DateTime.TryParseExact(entryTime, "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime entry) &&
+                DateTime.TryParseExact(exitTime, "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime exit))
+            {
+                return Math.Max(1, (int)Math.Round((exit - entry).TotalMinutes));
+            }
+
+            return Math.Max(1, fallbackBars);
+        }
+
         private static List<BacktestMinuteBar> ResolveHoldingBars(IReadOnlyList<BacktestMinuteBar> bars, int signalIndex, int count)
         {
             if (signalIndex < 0 || signalIndex >= bars.Count)
@@ -324,6 +567,19 @@ namespace TradingDashboard.Services.Backtests
         }
 
         private sealed record BaseGroup(string Code, string Market, string BaseDate);
+        private readonly record struct ExitResult(
+            string ExitTime,
+            long ExitPrice,
+            long MaxHigh,
+            long MinLow,
+            int HoldingMinutes,
+            string ExitReason);
+        private readonly record struct MinuteState(
+            string Time,
+            long Close,
+            decimal Ma5,
+            long PreviousClose,
+            decimal PreviousMa5);
         private readonly record struct BaseState(
             string Time,
             long Open,

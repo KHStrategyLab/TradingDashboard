@@ -81,6 +81,20 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-center-5m-1m-signal-exit", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunSmallBaseCenterPullbackBacktest(
+                    baseMinute: 5,
+                    entryMinute: 1,
+                    useOneMinuteTrigger: true,
+                    baseRisePercent: 0.8m,
+                    baseTradingValueWon: 500_000_000,
+                    useSignalExit: true);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-small-base-stoch-ab", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunSmallBaseStochasticAbBacktest();
@@ -224,7 +238,13 @@ namespace TradingDashboard
             }
         }
 
-        private static int RunSmallBaseCenterPullbackBacktest(int baseMinute, int entryMinute, bool useOneMinuteTrigger)
+        private static int RunSmallBaseCenterPullbackBacktest(
+            int baseMinute,
+            int entryMinute,
+            bool useOneMinuteTrigger,
+            decimal baseRisePercent = 1.0m,
+            long baseTradingValueWon = 1_000_000_000,
+            bool useSignalExit = false)
         {
             try
             {
@@ -233,7 +253,10 @@ namespace TradingDashboard
                     baseMinute: baseMinute,
                     entryMinute: entryMinute,
                     triggerMinute: useOneMinuteTrigger ? 1 : 0,
-                    observationMinutes: 180);
+                    observationMinutes: 180,
+                    baseRisePercent: baseRisePercent,
+                    baseTradingValueWon: baseTradingValueWon,
+                    useSignalExit: useSignalExit);
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 0;
             }
