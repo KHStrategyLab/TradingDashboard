@@ -145,14 +145,14 @@ Use 15m flow damage as a full-exit condition.
 Current rule summary:
 
 ```text
-+1.0%        -> first scale-out, 30%
-+2.0%        -> second scale-out, 50%
-high -1.0%   -> trail the rest
--1.2%        -> full stop
-5m base low  -> full stop
-15m weak     -> full stop
-min -1%, now >= 0 -> break-even full exit
-closing time -> full exit
+5m base low break -> full structural exit
+15m weak          -> full structural exit
+5m weak           -> full structural exit
+1m weak           -> partial structural warning/reduction
+closing time      -> full exit
+
+Fixed N% loss, fixed N% target, break-even recovery, and high-to-low N% trailing
+are excluded from prepared sell formulas.
 ```
 
 This evaluator is not wired to live orders yet.

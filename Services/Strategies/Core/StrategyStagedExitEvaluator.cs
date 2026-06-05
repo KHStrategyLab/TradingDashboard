@@ -6,19 +6,13 @@ namespace TradingDashboard.Services.Strategies
     public enum StrategyStagedExitAction
     {
         None,
-        ScaleOutFirst,
-        ScaleOutSecond,
         ReduceHalfWarning,
-        TrailAll,
         StopAll,
-        BreakEvenAll,
         CloseAll
     }
 
     public sealed record StrategyStagedExitInput(
         double ProfitRate,
-        double MinProfitRate,
-        double HighDrawdownRate,
         bool FirstScaleOutDone,
         bool SecondScaleOutDone,
         bool IsClosingTime,
@@ -27,7 +21,7 @@ namespace TradingDashboard.Services.Strategies
         long FiveMinuteBaseLow = 0)
     {
         public static StrategyStagedExitInput Empty { get; } =
-            new(0, 0, 0, false, false, false);
+            new(0, false, false, false);
     }
 
     public sealed record StrategyStagedExitEvaluation(
@@ -52,13 +46,7 @@ namespace TradingDashboard.Services.Strategies
             StrategyStagedExitInput input,
             IReadOnlyList<StrategyMinuteBar> oneMinuteBars,
             IReadOnlyList<StrategyMinuteBar> fiveMinuteBars,
-            IReadOnlyList<StrategyMinuteBar> fifteenMinuteBars,
-            double hardStopRate = -1.2,
-            double firstTargetRate = 1.0,
-            double secondTargetRate = 2.0,
-            double trailingStartRate = 1.0,
-            double trailingDrawdownRate = 1.0,
-            double breakEvenRecoveryFloor = -1.0)
+            IReadOnlyList<StrategyMinuteBar> fifteenMinuteBars)
         {
             bool hasPositionPrice = input.EntryPrice > 0 || input.CurrentPrice > 0 || Math.Abs(input.ProfitRate) > 0.0001;
             if (!hasPositionPrice)
@@ -68,19 +56,6 @@ namespace TradingDashboard.Services.Strategies
             bool fiveMinuteWeak = IsCloseBelowMa5(fiveMinuteBars);
             bool fifteenMinuteWeak = IsCloseBelowMa5(fifteenMinuteBars);
             bool fiveMinuteBaseLowBroken = IsFiveMinuteBaseLowBroken(input, fiveMinuteBars);
-
-            if (input.ProfitRate <= hardStopRate)
-            {
-                return Build(
-                    StrategyStagedExitAction.StopAll,
-                    true,
-                    100,
-                    oneMinuteWeak,
-                    fiveMinuteWeak,
-                    fifteenMinuteWeak,
-                    fiveMinuteBaseLowBroken,
-                    $"hard stop {input.ProfitRate:0.##}% <= {hardStopRate:0.##}%");
-            }
 
             if (fiveMinuteBaseLowBroken)
             {
@@ -93,19 +68,6 @@ namespace TradingDashboard.Services.Strategies
                     fifteenMinuteWeak,
                     fiveMinuteBaseLowBroken,
                     $"5m base low broken: current {input.CurrentPrice:N0} / base low {input.FiveMinuteBaseLow:N0}");
-            }
-
-            if (fiveMinuteWeak && input.ProfitRate < 0)
-            {
-                return Build(
-                    StrategyStagedExitAction.StopAll,
-                    true,
-                    100,
-                    oneMinuteWeak,
-                    fiveMinuteWeak,
-                    fifteenMinuteWeak,
-                    fiveMinuteBaseLowBroken,
-                    $"5m flow weak while loss {input.ProfitRate:0.##}%");
             }
 
             if (fifteenMinuteWeak)
@@ -121,7 +83,20 @@ namespace TradingDashboard.Services.Strategies
                     "15m flow damaged");
             }
 
-            if (oneMinuteWeak && input.ProfitRate < firstTargetRate && input.ProfitRate > 0)
+            if (fiveMinuteWeak)
+            {
+                return Build(
+                    StrategyStagedExitAction.StopAll,
+                    true,
+                    100,
+                    oneMinuteWeak,
+                    fiveMinuteWeak,
+                    fifteenMinuteWeak,
+                    fiveMinuteBaseLowBroken,
+                    $"5m structural weakness, pnl {input.ProfitRate:0.##}%");
+            }
+
+            if (oneMinuteWeak)
             {
                 return Build(
                     StrategyStagedExitAction.ReduceHalfWarning,
@@ -131,59 +106,7 @@ namespace TradingDashboard.Services.Strategies
                     fiveMinuteWeak,
                     fifteenMinuteWeak,
                     fiveMinuteBaseLowBroken,
-                    $"1m trigger weak, consider 30~50% reduction: pnl {input.ProfitRate:0.##}%");
-            }
-
-            if (input.ProfitRate >= firstTargetRate && !input.FirstScaleOutDone)
-            {
-                return Build(
-                    StrategyStagedExitAction.ScaleOutFirst,
-                    false,
-                    30,
-                    oneMinuteWeak,
-                    fiveMinuteWeak,
-                    fifteenMinuteWeak,
-                    fiveMinuteBaseLowBroken,
-                    $"+{firstTargetRate:0.##}% first scale-out");
-            }
-
-            if (input.ProfitRate >= secondTargetRate && !input.SecondScaleOutDone)
-            {
-                return Build(
-                    StrategyStagedExitAction.ScaleOutSecond,
-                    false,
-                    50,
-                    oneMinuteWeak,
-                    fiveMinuteWeak,
-                    fifteenMinuteWeak,
-                    fiveMinuteBaseLowBroken,
-                    $"+{secondTargetRate:0.##}% second scale-out");
-            }
-
-            if (input.ProfitRate >= trailingStartRate && input.HighDrawdownRate >= trailingDrawdownRate)
-            {
-                return Build(
-                    StrategyStagedExitAction.TrailAll,
-                    true,
-                    100,
-                    oneMinuteWeak,
-                    fiveMinuteWeak,
-                    fifteenMinuteWeak,
-                    fiveMinuteBaseLowBroken,
-                    $"trail stop: pnl {input.ProfitRate:0.##}%, high drawdown {input.HighDrawdownRate:0.##}%");
-            }
-
-            if (input.MinProfitRate <= breakEvenRecoveryFloor && input.ProfitRate >= 0)
-            {
-                return Build(
-                    StrategyStagedExitAction.BreakEvenAll,
-                    true,
-                    100,
-                    oneMinuteWeak,
-                    fiveMinuteWeak,
-                    fifteenMinuteWeak,
-                    fiveMinuteBaseLowBroken,
-                    $"break-even recovery: min {input.MinProfitRate:0.##}%, now {input.ProfitRate:0.##}%");
+                    $"1m trigger weak, consider structural reduction: pnl {input.ProfitRate:0.##}%");
             }
 
             if (input.IsClosingTime)
@@ -207,7 +130,7 @@ namespace TradingDashboard.Services.Strategies
                 fiveMinuteWeak,
                 fifteenMinuteWeak,
                 fiveMinuteBaseLowBroken,
-                $"hold: pnl {input.ProfitRate:0.##}%, high drawdown {input.HighDrawdownRate:0.##}%");
+                $"hold: pnl {input.ProfitRate:0.##}%");
         }
 
         public static string ToProgressLabel(StrategyStagedExitEvaluation evaluation)
@@ -217,12 +140,8 @@ namespace TradingDashboard.Services.Strategies
 
             string action = evaluation.Action switch
             {
-                StrategyStagedExitAction.ScaleOutFirst => "scale 1",
-                StrategyStagedExitAction.ScaleOutSecond => "scale 2",
                 StrategyStagedExitAction.ReduceHalfWarning => "1m weak reduce",
-                StrategyStagedExitAction.TrailAll => "trail all",
                 StrategyStagedExitAction.StopAll => "stop all",
-                StrategyStagedExitAction.BreakEvenAll => "breakeven all",
                 StrategyStagedExitAction.CloseAll => "close all",
                 _ => "hold"
             };

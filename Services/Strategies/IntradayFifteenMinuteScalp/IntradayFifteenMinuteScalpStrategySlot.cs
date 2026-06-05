@@ -209,9 +209,9 @@ namespace TradingDashboard.Services.Strategies
                 ],
                 [
                     StrategyProgressCalculator.Step("stop", StrategyExitBreakEvaluator.ToProgressLabel(exitBreak), context.IsOwned && exitBreak.ShouldExit),
-                    StrategyProgressCalculator.Step("target1", "+1.5 scale", false),
-                    StrategyProgressCalculator.Step("target2", "+2.7 scale", false),
-                    StrategyProgressCalculator.Step("trail", "+1 trail", false),
+                    StrategyProgressCalculator.Step("target1", "structure scale", false),
+                    StrategyProgressCalculator.Step("target2", "structure add-exit", false),
+                    StrategyProgressCalculator.Step("trail", "structure follow", false),
                     StrategyProgressCalculator.Step("timecut", "420s time cut", false),
                     StrategyProgressCalculator.Step("exit", "exit done", false)
                 ],

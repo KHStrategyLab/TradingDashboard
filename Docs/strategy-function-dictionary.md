@@ -941,8 +941,6 @@ Services/Strategies/Core/StrategyStagedExitEvaluator.cs
 ```text
 StrategyStagedExitInput:
   ProfitRate
-  MinProfitRate
-  HighDrawdownRate
   FirstScaleOutDone
   SecondScaleOutDone
   IsClosingTime
@@ -960,25 +958,12 @@ MinuteBars:
 
 ```text
 StopAll:
-  평가손익률 <= -1.2%
-  또는 5분 기준봉 저가 이탈
-  또는 5분봉 약화 + 손실권
+  5분 기준봉 저가 이탈
+  또는 5분봉 구조 약화
   또는 15분봉 약화
 
 ReduceHalfWarning:
-  1분봉 약화 + 아직 1차 익절 전 수익권
-
-ScaleOutFirst:
-  +1.0% 도달 + 1차매도 미완료
-
-ScaleOutSecond:
-  +2.0% 도달 + 2차매도 미완료
-
-TrailAll:
-  +1.0% 이상 수익권 진입 후 매수후 고점 대비 -1.0% 밀림
-
-BreakEvenAll:
-  -1.0% 이하 손실을 본 뒤 본절 이상 회복
+  1분봉 구조 약화
 
 CloseAll:
   장마감 청산 시간
@@ -988,6 +973,8 @@ CloseAll:
 
 이 평가는 아직 실전 자동매도 실행기가 아니다.
 백테스트, Progress, Paper, 실전 장부가 같은 매도 언어를 쓰도록 만드는 공통 계산기다.
+고정 N% 손절, 고정 N% 목표, 본절회복, 고점대비 N% 트레일링은 매도수식에 넣지 않는다.
+매도수식은 팔만한 구조 신호인지, 안 팔 이유가 아직 남아 있는지를 판단한다.
 실제 매도 주문 연결은 포지션 장부에 `매수후 최고가`, `최저 손익률`, `1차/2차 매도 완료 여부`가 안정적으로 저장된 뒤에만 진행한다.
 
 ### 기준가
