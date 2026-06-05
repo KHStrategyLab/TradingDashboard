@@ -26,6 +26,7 @@ namespace TradingDashboard.Services.Backtests
         public async Task<BacktestMinuteDataStoreSummary> RunAsync(CancellationToken cancellationToken = default)
         {
             int mirroredBaseCandles = await MirrorKrxBaseCandlesForSorMixedAsync(cancellationToken).ConfigureAwait(false);
+            int mirroredAlBaseCandles = MirrorKrxBaseCandlesForAlIntegrated();
             IReadOnlyList<BacktestBaseCandle> baseCandles = _dataStore.LoadBaseCandles();
             List<BaseCandleGroup> groups = [.. baseCandles
                 .Where(item => item != null && !string.IsNullOrWhiteSpace(item.Code) && !string.IsNullOrWhiteSpace(item.BaseCandleDate))
@@ -35,6 +36,8 @@ namespace TradingDashboard.Services.Backtests
                     BacktestDataStore.NormalizeMarket(group.First().Market),
                     group.Min(item => BacktestDataStore.NormalizeDate(item.BaseCandleDate)) ?? DateTime.Today.ToString("yyyyMMdd"),
                     group.Count()))
+                .Where(item => string.IsNullOrWhiteSpace(_settings.MinuteCodeFilter) ||
+                    string.Equals(item.Code, BacktestDataStore.NormalizeCode(_settings.MinuteCodeFilter), StringComparison.Ordinal))
                 .Where(item => BacktestMarketModeHelper.PassesMarketFilter(item.Market, _settings.MinuteMarketFilter))
                 .OrderBy(item => item.Code)
                 .ThenBy(item => item.Market)];
@@ -54,8 +57,14 @@ namespace TradingDashboard.Services.Backtests
             };
             if (mirroredBaseCandles > 0)
                 summary.Logs.Add($"base candles mirrored for SOR/NXT execution before minute download: {mirroredBaseCandles}events");
-            if (!string.IsNullOrWhiteSpace(_settings.MinuteMarketFilter) || _settings.MaxMinuteStockMarketGroups > 0)
-                summary.Logs.Add($"minute datastore filter: market={(_settings.MinuteMarketFilter.Length == 0 ? "ALL" : _settings.MinuteMarketFilter)} / groups={groups.Count} / max={_settings.MaxMinuteStockMarketGroups}");
+            if (mirroredAlBaseCandles > 0)
+                summary.Logs.Add($"base candles mirrored for SOR/AL integrated minute download: {mirroredAlBaseCandles}events");
+            if (!string.IsNullOrWhiteSpace(_settings.MinuteCodeFilter) ||
+                !string.IsNullOrWhiteSpace(_settings.MinuteMarketFilter) ||
+                _settings.MaxMinuteStockMarketGroups > 0)
+            {
+                summary.Logs.Add($"minute datastore filter: code={(_settings.MinuteCodeFilter.Length == 0 ? "ALL" : BacktestDataStore.NormalizeCode(_settings.MinuteCodeFilter))} / market={(_settings.MinuteMarketFilter.Length == 0 ? "ALL" : _settings.MinuteMarketFilter)} / groups={groups.Count} / max={_settings.MaxMinuteStockMarketGroups}");
+            }
 
             foreach (BaseCandleGroup group in groups)
             {
@@ -66,16 +75,15 @@ namespace TradingDashboard.Services.Backtests
                     cancellationToken.ThrowIfCancellationRequested();
 
                     IReadOnlyList<BacktestMinuteBar> existing = _dataStore.LoadMinuteBars(group.Code, group.Market, minute);
-                    if (!ShouldDownload(existing, group.EarliestBaseDate))
+                    if (!ShouldDownload(existing, group.EarliestBaseDate, fetchCount))
                     {
                         summary.MinuteReusedCount++;
                         summary.Logs.Add($"minute reused: {group.Code} / {group.Market} / {minute}m / {existing.Count}bars");
                         continue;
                     }
 
-                    bool useNxtMarket = string.Equals(group.Market, "NXT", StringComparison.OrdinalIgnoreCase);
                     List<DailyCandle> candles = await _kiwoomService
-                        .GetMinuteCandlesAsync(group.Code, minute, useNxtMarket, fetchCount, cancellationToken)
+                        .GetMinuteCandlesByMarketAsync(group.Code, minute, group.Market, fetchCount, cancellationToken)
                         .ConfigureAwait(false);
 
                     List<BacktestMinuteBar> filtered = ConvertMinuteBars(group, minute, candles);
@@ -101,8 +109,21 @@ namespace TradingDashboard.Services.Backtests
             return _dataStore.UpsertBaseCandles(mirrors);
         }
 
-        private static bool ShouldDownload(IReadOnlyList<BacktestMinuteBar> existing, string earliestBaseDate)
+        private int MirrorKrxBaseCandlesForAlIntegrated()
         {
+            if (!BacktestMarketModeHelper.IsAlIntegrated(_settings))
+                return 0;
+
+            IReadOnlyList<BacktestBaseCandle> mirrors =
+                BacktestMarketModeHelper.BuildAlExecutionBaseCandles(_dataStore.LoadBaseCandles());
+            return _dataStore.UpsertBaseCandles(mirrors);
+        }
+
+        private static bool ShouldDownload(IReadOnlyList<BacktestMinuteBar> existing, string earliestBaseDate, int targetCount)
+        {
+            if (existing.Count < Math.Max(1, targetCount))
+                return true;
+
             string threshold = $"{BacktestDataStore.NormalizeDate(earliestBaseDate)}000000";
             if (!existing.Any(bar => string.CompareOrdinal(bar.DateTime, threshold) >= 0))
                 return true;

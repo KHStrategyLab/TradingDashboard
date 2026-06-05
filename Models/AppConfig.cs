@@ -113,6 +113,7 @@ namespace TradingDashboard.Models
         public string CandidateSourceName { get; set; } = "120일내_20퍼_500억";
         public string MarketMode { get; set; } = "MARKET_SPLIT";
         public int MaxConditionCandidates { get; set; }
+        public string MinuteCodeFilter { get; set; } = string.Empty;
         public string MinuteMarketFilter { get; set; } = string.Empty;
         public int MaxMinuteStockMarketGroups { get; set; }
         public int[] MinuteIntervals { get; set; } = [1, 3, 5, 10, 15, 30];

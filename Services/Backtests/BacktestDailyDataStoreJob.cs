@@ -34,9 +34,28 @@ namespace TradingDashboard.Services.Backtests
 
             _dataStore.SaveCandidates(candidates, _settings.CandidateSourceName);
 
+            List<BacktestCandidate> downloadCandidates = [.. candidates];
+            if (BacktestMarketModeHelper.IsAlIntegrated(_settings))
+            {
+                downloadCandidates.AddRange(candidates
+                    .Where(item => string.Equals(BacktestDataStore.NormalizeMarket(item.Market), "KRX", StringComparison.Ordinal))
+                    .Select(item => new BacktestCandidate
+                    {
+                        Code = BacktestDataStore.NormalizeCode(item.Code),
+                        Name = item.Name,
+                        Market = "AL",
+                        CandidateDate = BacktestDataStore.NormalizeDate(item.CandidateDate),
+                        NxtEnabled = item.NxtEnabled,
+                        StrategyCode = item.StrategyCode,
+                        Source = $"{item.Source}_AL",
+                        ImportedAt = item.ImportedAt,
+                        Memo = "SOR ON integrated daily data candidate; KRX base-price/gate fields stay separate and are not overwritten"
+                    }));
+            }
+
             BacktestDatasetUpdateSummary summary = await _datasetBuilder
                 .BuildDailyDataStoreAsync(
-                    candidates,
+                    downloadCandidates,
                     mirrorKrxBaseCandlesForNxt: BacktestMarketModeHelper.IsSorMixed(_settings),
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
@@ -48,9 +67,10 @@ namespace TradingDashboard.Services.Backtests
                 .Count();
             int krxCandidateCount = candidates.Count(item => string.Equals(BacktestDataStore.NormalizeMarket(item.Market), "KRX", StringComparison.Ordinal));
             int nxtCandidateCount = candidates.Count(item => string.Equals(BacktestDataStore.NormalizeMarket(item.Market), "NXT", StringComparison.Ordinal));
+            int alCandidateCount = downloadCandidates.Count(item => string.Equals(BacktestDataStore.NormalizeMarket(item.Market), "AL", StringComparison.Ordinal));
             summary.MarketMode = BacktestMarketModeHelper.NormalizeMarketMode(_settings);
             summary.Logs.Insert(0, $"condition candidates loaded: {_settings.CandidateConditionIndex} / {candidates.Count}stocks / NXT eligible {nxtEligibleCount} / mode {_settings.MarketMode}");
-            summary.Logs.Insert(1, $"condition candidates by market: KRX {krxCandidateCount} / NXT {nxtCandidateCount}");
+            summary.Logs.Insert(1, $"condition candidates by market: KRX {krxCandidateCount} / NXT {nxtCandidateCount} / AL download {alCandidateCount}");
             return summary;
         }
     }

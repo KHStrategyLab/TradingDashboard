@@ -293,6 +293,69 @@ This command writes only a normal Run folder.
 It must not rewrite source DataStore files or connect to Live Orders.
 ```
 
+## Condition 01 5m Money Base Test
+
+Smoke test command:
+
+```powershell
+dotnet run -- --backtest-condition01-5m-money-1m-trigger
+```
+
+Strategy:
+
+```text
+CONDITION01_5M_MONEY_BASE_1M_TRIGGER
+```
+
+Purpose:
+
+```text
+Condition 01 is a candidate/money-flow gate, not a buy signal.
+This test turns the intraday branch of Condition 01 into a 5-minute base-candle candidate,
+then checks whether a 1-minute pullback/rebreak trigger can follow.
+```
+
+Base candidate:
+
+```text
+5-minute trading value >= 4,000,000,000 KRW
+latest 3 completed 3-minute bars average trading value >= 3,000,000,000 KRW
+5-minute close > previous daily high
+intraday provisional daily close breaks above Bollinger Band(20,2) upper band
+time window 09:00-12:00
+```
+
+Trigger:
+
+```text
+1-minute pullback keeps close above the 5-minute base center
+1-minute trigger candle is bullish
+1-minute trigger close > previous 1-minute high
+1-minute trigger close >= MA5
+1-minute trigger volume >= previous 20-bar average volume * 1.2
+```
+
+Structural exit only:
+
+```text
+5-minute money-base low break
+15-minute MA5 flow damage
+1-minute MA5 down-cross
+max 180-minute holding
+```
+
+Notes:
+
+```text
+This is a smoke test over the current reusable DataStore.
+It does not rewrite DataStore source files.
+It does not connect to Live Orders.
+It does not use fixed N% stop/profit rules.
+Daily Bollinger upper break must not use the final daily close while scanning morning 5-minute bars.
+Use the previous 19 completed daily closes plus the current 5-minute close as the provisional daily close.
+This is still a backtest proxy for the live Kiwoom condition formula, but it avoids lookahead leakage.
+```
+
 Version roles:
 
 ```text

@@ -59,9 +59,8 @@ namespace TradingDashboard.Services.Backtests
 
                 if (shouldDownload)
                 {
-                    bool useNxtMarket = string.Equals(candidate.Market, "NXT", StringComparison.OrdinalIgnoreCase);
                     List<DailyCandle> candles = await _kiwoomService
-                        .GetDailyCandlesAsync(candidate.Code, useNxtMarket, lookbackBars, cancellationToken)
+                        .GetDailyCandlesByMarketAsync(candidate.Code, candidate.Market, lookbackBars, cancellationToken)
                         .ConfigureAwait(false);
 
                     List<BacktestDailyBar> downloaded = ConvertDailyBars(candidate, candles);

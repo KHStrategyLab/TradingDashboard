@@ -16,6 +16,14 @@ namespace TradingDashboard.Services.Backtests
                 mode.Contains("MIXED", StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsAlIntegrated(BacktestSettings? settings)
+        {
+            string mode = (settings?.MarketMode ?? string.Empty).Trim();
+            return mode.Contains("AL", StringComparison.OrdinalIgnoreCase) ||
+                mode.Contains("SOR", StringComparison.OrdinalIgnoreCase) ||
+                mode.Contains("UNIFIED", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static bool IsMarketSplit(BacktestSettings? settings)
         {
             string mode = (settings?.MarketMode ?? string.Empty).Trim();
@@ -80,6 +88,53 @@ namespace TradingDashboard.Services.Backtests
                     Code = code,
                     Name = string.IsNullOrWhiteSpace(item.Name) ? master.Name : item.Name,
                     Market = "NXT",
+                    BaseCandleMarket = "KRX",
+                    BaseCandleDate = date,
+                    BaseOpen = item.BaseOpen,
+                    BaseHigh = item.BaseHigh,
+                    BaseLow = item.BaseLow,
+                    BaseClose = item.BaseClose,
+                    BaseVolume = item.BaseVolume,
+                    BaseTradingValue = item.BaseTradingValue,
+                    PreviousClose = item.PreviousClose,
+                    ChangeRate = item.ChangeRate,
+                    CloseLocationPercent = item.CloseLocationPercent,
+                    UpperTailPercent = item.UpperTailPercent,
+                    Status = item.Status,
+                    SourceName = string.IsNullOrWhiteSpace(item.SourceName)
+                        ? sourceNameSuffix
+                        : $"{item.SourceName}|{sourceNameSuffix}",
+                    VerifiedAt = DateTime.Now.ToString("yyyyMMddHHmmss")
+                });
+            }
+
+            return mirrors;
+        }
+
+        public static IReadOnlyList<BacktestBaseCandle> BuildAlExecutionBaseCandles(
+            IEnumerable<BacktestBaseCandle> source,
+            string sourceNameSuffix = "SOR_AL_KRX_BASE")
+        {
+            var mirrors = new List<BacktestBaseCandle>();
+            foreach (BacktestBaseCandle item in source ?? [])
+            {
+                string code = BacktestDataStore.NormalizeCode(item.Code);
+                if (string.IsNullOrWhiteSpace(code) ||
+                    !string.Equals(BacktestDataStore.NormalizeMarket(item.Market), "KRX", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string date = BacktestDataStore.NormalizeDate(item.BaseCandleDate);
+                if (string.IsNullOrWhiteSpace(date))
+                    continue;
+
+                mirrors.Add(new BacktestBaseCandle
+                {
+                    Key = DailyBaseCandleVerifier.BuildBaseCandleKey(code, "AL", date),
+                    Code = code,
+                    Name = item.Name,
+                    Market = "AL",
                     BaseCandleMarket = "KRX",
                     BaseCandleDate = date,
                     BaseOpen = item.BaseOpen,

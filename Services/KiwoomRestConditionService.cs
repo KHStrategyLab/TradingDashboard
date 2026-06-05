@@ -388,12 +388,25 @@ namespace TradingDashboard.Services
 
         public async Task<List<DailyCandle>> GetDailyCandlesAsync(string code, bool useNxtMarket = false, int takeCount = 240, CancellationToken cancellationToken = default)
         {
+            return await GetDailyCandlesByMarketAsync(code, useNxtMarket ? "NXT" : "KRX", takeCount, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        public async Task<List<DailyCandle>> GetDailyCandlesByMarketAsync(string code, string market, int takeCount = 240, CancellationToken cancellationToken = default)
+        {
             ValidateSettings();
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string baseCode = NormalizeStockCode(code);
             if (string.IsNullOrWhiteSpace(baseCode))
                 return [];
-            string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
+            string normalizedMarket = (market ?? string.Empty).Trim().ToUpperInvariant();
+            string requestCode = normalizedMarket.Contains("AL", StringComparison.OrdinalIgnoreCase) ||
+                normalizedMarket.Contains("SOR", StringComparison.OrdinalIgnoreCase) ||
+                normalizedMarket.Contains("UNIFIED", StringComparison.OrdinalIgnoreCase)
+                    ? $"{baseCode}_AL"
+                    : normalizedMarket.Contains("NXT", StringComparison.OrdinalIgnoreCase)
+                        ? $"{baseCode}_NX"
+                        : baseCode;
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kiwoom.com/api/dostk/chart");
             req.Headers.TryAddWithoutValidation("authorization", $"Bearer {token}");
@@ -439,6 +452,11 @@ namespace TradingDashboard.Services
 
         public async Task<List<DailyCandle>> GetMinuteCandlesAsync(string code, int minute, bool useNxtMarket = false, int takeCount = 240, CancellationToken cancellationToken = default)
         {
+            return await GetMinuteCandlesByMarketAsync(code, minute, useNxtMarket ? "NXT" : "KRX", takeCount, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<List<DailyCandle>> GetMinuteCandlesByMarketAsync(string code, int minute, string market, int takeCount = 240, CancellationToken cancellationToken = default)
+        {
             ValidateSettings();
             string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
             string baseCode = NormalizeStockCode(code);
@@ -446,9 +464,17 @@ namespace TradingDashboard.Services
                 return [];
 
             // Match the MTS display rules.
-            // When useNxtMarket=true, query OHLC/price/volume using the NXT code.
+            // When market=NXT, query OHLC/price/volume using the NXT code.
+            // When market=AL, query the SOR/unified chart code used for HTS/MTS integrated candles.
             // Base price and colors still use the KRX previous close locked by MainWindow.
-            string requestCode = useNxtMarket ? $"{baseCode}_NX" : baseCode;
+            string normalizedMarket = (market ?? string.Empty).Trim().ToUpperInvariant();
+            string requestCode = normalizedMarket.Contains("AL", StringComparison.OrdinalIgnoreCase) ||
+                normalizedMarket.Contains("SOR", StringComparison.OrdinalIgnoreCase) ||
+                normalizedMarket.Contains("UNIFIED", StringComparison.OrdinalIgnoreCase)
+                    ? $"{baseCode}_AL"
+                    : normalizedMarket.Contains("NXT", StringComparison.OrdinalIgnoreCase)
+                        ? $"{baseCode}_NX"
+                        : baseCode;
 
             var candles = new List<DailyCandle>();
             var body = new

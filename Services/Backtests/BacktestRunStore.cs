@@ -304,7 +304,7 @@ namespace TradingDashboard.Services.Backtests
         {
             string[] distinct = [.. markets
                 .Select(NormalizeMarketLabel)
-                .Where(item => item is "KRX" or "NXT")
+                .Where(item => item is "KRX" or "NXT" or "AL")
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(item => item, StringComparer.Ordinal)];
 
@@ -312,6 +312,7 @@ namespace TradingDashboard.Services.Backtests
             {
                 ["KRX"] => "KRX_ONLY",
                 ["NXT"] => "NXT_ONLY",
+                ["AL"] => "AL_ONLY",
                 ["KRX", "NXT"] => "MARKET_SPLIT",
                 _ => "UNKNOWN"
             };
@@ -321,7 +322,7 @@ namespace TradingDashboard.Services.Backtests
         {
             string[] distinct = [.. markets
                 .Select(NormalizeMarketLabel)
-                .Where(item => item is "KRX" or "NXT")
+                .Where(item => item is "KRX" or "NXT" or "AL")
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(item => item, StringComparer.Ordinal)];
 
@@ -336,6 +337,10 @@ namespace TradingDashboard.Services.Backtests
         private static string NormalizeMarketLabel(string market)
         {
             string text = (market ?? string.Empty).Trim().ToUpperInvariant();
+            if (text.Contains("AL", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("SOR", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("UNIFIED", StringComparison.OrdinalIgnoreCase))
+                return "AL";
             if (text.Contains("NXT", StringComparison.OrdinalIgnoreCase))
                 return "NXT";
             if (text.Contains("KRX", StringComparison.OrdinalIgnoreCase))
@@ -347,7 +352,7 @@ namespace TradingDashboard.Services.Backtests
 
         private static void EnsureKnownMarket(string market, string rowType, string code, string time)
         {
-            if (market is "KRX" or "NXT")
+            if (market is "KRX" or "NXT" or "AL")
                 return;
 
             throw new InvalidOperationException(

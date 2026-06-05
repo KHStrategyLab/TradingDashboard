@@ -26,17 +26,22 @@ namespace TradingDashboard.Services.Backtests
             int triggerMinute = 0,
             int observationMinutes = 180,
             decimal baseRisePercent = 1.0m,
+            decimal? baseRiseMaxPercent = null,
             long baseTradingValueWon = 1_000_000_000,
             decimal entryVolumeMultiplier = 1.2m,
             decimal triggerVolumeMultiplier = 1.2m,
-            bool useSignalExit = false)
+            bool useSignalExit = false,
+            int? maxIntradayTradingValueRank = null)
         {
             int resolvedTriggerMinute = triggerMinute > 0 ? triggerMinute : entryMinute;
             int holdingBars = Math.Max(1, observationMinutes / Math.Max(1, resolvedTriggerMinute));
             string exitRuleCode = useSignalExit ? "SIGNAL_EXIT_1M_MA5_BASE_LOW_15M_STRUCTURE_MAX180" : $"OBSERVE_{observationMinutes}M_R";
+            string rankSuffix = maxIntradayTradingValueRank.HasValue
+                ? $"_rank{maxIntradayTradingValueRank.Value}"
+                : string.Empty;
             string runId = _runStore.CreateRunId(useSignalExit
-                ? $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_signal_exit{observationMinutes}"
-                : $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_hold{observationMinutes}");
+                ? $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_signal_exit{observationMinutes}{rankSuffix}"
+                : $"small_base_center_{baseMinute}m_{entryMinute}m_{resolvedTriggerMinute}m_hold{observationMinutes}{rankSuffix}");
             List<BacktestSignalRow> signals = [];
             List<BacktestTradeRow> trades = [];
 
@@ -49,6 +54,11 @@ namespace TradingDashboard.Services.Backtests
                     group.Min(item => BacktestDataStore.NormalizeDate(item.BaseCandleDate)) ?? DateTime.Today.ToString("yyyyMMdd")))
                 .OrderBy(item => item.Code)
                 .ThenBy(item => item.Market)];
+
+            Dictionary<string, IntradayTradingValueRankState> intradayRankStates =
+                maxIntradayTradingValueRank.HasValue
+                    ? BuildIntradayTradingValueRankStateMap(groups, resolvedTriggerMinute)
+                    : [];
 
             foreach (BaseGroup group in groups)
             {
@@ -77,7 +87,7 @@ namespace TradingDashboard.Services.Backtests
                 if (useSignalExit && (oneBars.Count < 25 || fifteenBars.Count < 6))
                     continue;
 
-                Dictionary<string, BaseState> baseStates = BuildBaseStateMap(baseBars, baseRisePercent, baseTradingValueWon);
+                Dictionary<string, BaseState> baseStates = BuildBaseStateMap(baseBars, baseRisePercent, baseRiseMaxPercent, baseTradingValueWon);
                 Dictionary<string, MinuteState> oneStateByTime = useSignalExit ? BuildMinuteStateMap(oneBars, 5) : [];
                 Dictionary<string, MinuteState> baseMinuteStateByTime = useSignalExit ? BuildMinuteStateMap(baseBars, 5) : [];
                 Dictionary<string, MinuteState> fifteenStateByTime = useSignalExit ? BuildMinuteStateMap(fifteenBars, 5) : [];
@@ -101,6 +111,15 @@ namespace TradingDashboard.Services.Backtests
                     decimal avgTriggerVolume20 = previousTrigger20.Average(bar => (decimal)Math.Max(0, bar.Volume));
                     if (!IsTriggerEntry(triggerBar, previousTrigger, avgTriggerVolume20, triggerVolumeMultiplier))
                         continue;
+
+                    IntradayTradingValueRankState rankState = default;
+                    if (maxIntradayTradingValueRank.HasValue &&
+                        (!TryGetIntradayTradingValueRankState(intradayRankStates, group, triggerBar.DateTime, out rankState) ||
+                         rankState.TradingValueRank <= 0 ||
+                         rankState.TradingValueRank > maxIntradayTradingValueRank.Value))
+                    {
+                        continue;
+                    }
 
                     long entryPrice = triggerBar.Close;
                     long stopPrice = baseState.Low;
@@ -135,7 +154,10 @@ namespace TradingDashboard.Services.Backtests
                     decimal maxR = (maxHigh - entryPrice) / (decimal)riskWon;
                     decimal minR = (minLow - entryPrice) / (decimal)riskWon;
 
-                    string reason = $"{baseMinute}m small-base MA60 recover {baseState.Time}; {entryMinute}m center support {supportBar.DateTime}; {resolvedTriggerMinute}m trigger bullish above prev high; vol>{triggerVolumeMultiplier:0.##}x avg20";
+                    string rankReason = maxIntradayTradingValueRank.HasValue
+                        ? $"; intraday money rank {rankState.TradingValueRank} / cum {rankState.CumulativeTradingValue:N0}"
+                        : string.Empty;
+                    string reason = $"{baseMinute}m small-base MA60 recover {baseState.Time}; {entryMinute}m center support {supportBar.DateTime}; {resolvedTriggerMinute}m trigger bullish above prev high; vol>{triggerVolumeMultiplier:0.##}x avg20{rankReason}";
                     signals.Add(new BacktestSignalRow
                     {
                         RunId = runId,
@@ -297,6 +319,7 @@ namespace TradingDashboard.Services.Backtests
         private static Dictionary<string, BaseState> BuildBaseStateMap(
             IReadOnlyList<BacktestMinuteBar> bars,
             decimal baseRisePercent,
+            decimal? baseRiseMaxPercent,
             long baseTradingValueWon)
         {
             var result = new Dictionary<string, BaseState>(StringComparer.Ordinal);
@@ -314,6 +337,7 @@ namespace TradingDashboard.Services.Backtests
                     current.Close > currentMa60 &&
                     current.Close > current.Open &&
                     rise >= baseRisePercent &&
+                    (!baseRiseMaxPercent.HasValue || rise <= baseRiseMaxPercent.Value) &&
                     current.TradingValue >= baseTradingValueWon;
 
                 result[current.DateTime] = new BaseState(
@@ -375,6 +399,71 @@ namespace TradingDashboard.Services.Backtests
             bool volumeOk = avgVolume20 <= 0 || triggerBar.Volume >= avgVolume20 * triggerVolumeMultiplier;
             return bullishTurn && highBreak && volumeOk;
         }
+
+        private Dictionary<string, IntradayTradingValueRankState> BuildIntradayTradingValueRankStateMap(
+            IReadOnlyList<BaseGroup> groups,
+            int minute)
+        {
+            var snapshotsByTime = new Dictionary<string, List<IntradayTradingValueSnapshot>>(StringComparer.Ordinal);
+
+            foreach (BaseGroup group in groups)
+            {
+                List<BacktestMinuteBar> bars = [.. _dataStore.LoadMinuteBars(group.Code, group.Market, minute)
+                    .OrderBy(bar => bar.DateTime)];
+                if (bars.Count == 0)
+                    continue;
+
+                string currentDate = string.Empty;
+                long cumulativeTradingValue = 0;
+                foreach (BacktestMinuteBar bar in bars)
+                {
+                    if (bar.DateTime.Length < 8)
+                        continue;
+
+                    string date = bar.DateTime[..8];
+                    if (!string.Equals(date, currentDate, StringComparison.Ordinal))
+                    {
+                        currentDate = date;
+                        cumulativeTradingValue = 0;
+                    }
+
+                    cumulativeTradingValue += Math.Max(0, bar.TradingValue);
+                    if (!snapshotsByTime.TryGetValue(bar.DateTime, out List<IntradayTradingValueSnapshot>? snapshots))
+                    {
+                        snapshots = [];
+                        snapshotsByTime[bar.DateTime] = snapshots;
+                    }
+
+                    snapshots.Add(new IntradayTradingValueSnapshot(group, cumulativeTradingValue));
+                }
+            }
+
+            var result = new Dictionary<string, IntradayTradingValueRankState>(StringComparer.Ordinal);
+            foreach ((string time, List<IntradayTradingValueSnapshot> snapshots) in snapshotsByTime)
+            {
+                foreach (var ranked in snapshots
+                    .OrderByDescending(snapshot => snapshot.CumulativeTradingValue)
+                    .Select((snapshot, index) => new { snapshot.Stock, snapshot.CumulativeTradingValue, Rank = index + 1 }))
+                {
+                    result[BuildIntradayTradingValueRankKey(ranked.Stock, time)] = new IntradayTradingValueRankState(
+                        time,
+                        ranked.CumulativeTradingValue,
+                        ranked.Rank);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool TryGetIntradayTradingValueRankState(
+            IReadOnlyDictionary<string, IntradayTradingValueRankState> states,
+            BaseGroup stock,
+            string time,
+            out IntradayTradingValueRankState state) =>
+            states.TryGetValue(BuildIntradayTradingValueRankKey(stock, time), out state);
+
+        private static string BuildIntradayTradingValueRankKey(BaseGroup stock, string time) =>
+            $"{time}|{stock.Code}|{stock.Market}";
 
         private static bool TryGetLatestBaseState(Dictionary<string, BaseState> states, string entryTime, out BaseState state)
         {
@@ -551,6 +640,11 @@ namespace TradingDashboard.Services.Backtests
         }
 
         private sealed record BaseGroup(string Code, string Market, string BaseDate);
+        private readonly record struct IntradayTradingValueSnapshot(BaseGroup Stock, long CumulativeTradingValue);
+        private readonly record struct IntradayTradingValueRankState(
+            string Time,
+            long CumulativeTradingValue,
+            int TradingValueRank);
         private readonly record struct ExitResult(
             string ExitTime,
             long ExitPrice,

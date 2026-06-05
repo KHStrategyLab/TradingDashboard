@@ -4938,6 +4938,9 @@
                                         <ComboBoxItem Content="small base center 10m/3m" Tag="--backtest-small-base-center-10m-3m"/>
                                         <ComboBoxItem Content="small base center 10m/3m + 1m" Tag="--backtest-small-base-center-10m-3m-1m"/>
                                         <ComboBoxItem Content="small base center 15m/5m + 1m" Tag="--backtest-small-base-center-15m-5m-1m"/>
+                                        <ComboBoxItem Content="condition01 5m money base + 1m" Tag="--backtest-condition01-5m-money-1m-trigger"/>
+                                        <ComboBoxItem Content="condition01 5m money base + 1m close exit" Tag="--backtest-condition01-5m-money-1m-close-exit"/>
+                                        <ComboBoxItem Content="5m MA200 money base + 1m" Tag="--backtest-five-ma200-money-1m-trigger"/>
                                         <ComboBoxItem Content="small base stoch A/B" Tag="--backtest-small-base-stoch-ab"/>
                                         <ComboBoxItem Content="stoch quick reaction" Tag="--backtest-stoch-quick-reaction"/>
                                     </ComboBox>

@@ -198,6 +198,10 @@ namespace TradingDashboard.Services.Backtests
         public static string NormalizeMarket(string market)
         {
             string value = (market ?? string.Empty).Trim().ToUpperInvariant();
+            if (value.Contains("AL", StringComparison.OrdinalIgnoreCase) ||
+                value.Contains("SOR", StringComparison.OrdinalIgnoreCase) ||
+                value.Contains("UNIFIED", StringComparison.OrdinalIgnoreCase))
+                return "AL";
             if (value.Contains("NXT", StringComparison.OrdinalIgnoreCase))
                 return "NXT";
             return "KRX";
