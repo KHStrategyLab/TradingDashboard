@@ -19,7 +19,14 @@ namespace TradingDashboard.Services.Backtests
         SignalLowFiveMinuteCloseStop,
         Ma200FiveMinuteCloseStop,
         OneMinutePreviousLowCloseStop,
-        AvgifUpperOrOneMinutePreviousLowCloseStop
+        AvgifUpperOrOneMinutePreviousLowCloseStop,
+        OneMinuteHeikinAshiPrevLowDamage,
+        OneMinuteHeikinAshiBearTurn,
+        OneMinuteHeikinAshiBearTurnAndPrevLowDamage,
+        OneMinuteHeikinAshiBearHold2,
+        OneMinuteHeikinAshiPrevLowDamageOrBearHold2,
+        OneMinuteHeikinAshiBearTurnAndMa5Damage,
+        OneMinuteHeikinAshiBearTurnAndVolumeWeak
     }
 
     public enum FiveMinuteEntryMode
@@ -47,6 +54,7 @@ namespace TradingDashboard.Services.Backtests
         public const string Ma200FiveMinuteCloseStopExitRuleCode = "MA200_5M_CLOSE_STOP_OR_NEXT_DAY_1100";
         public const string OneMinutePreviousLowCloseStopExitRuleCode = "ONE_MINUTE_PREVIOUS_LOW_CLOSE_STOP_OR_NEXT_DAY_1100";
         public const string AvgifUpperOrOneMinutePreviousLowCloseStopExitRuleCode = "AVGIF240_UPPER_OR_ONE_MINUTE_PREVIOUS_LOW_CLOSE_STOP";
+        public const string OneMinuteHeikinAshiExitRuleCodePrefix = "ONE_MINUTE_HEIKIN_ASHI";
 
         private const int MaxHoldingMinutes = 180;
 
@@ -76,6 +84,7 @@ namespace TradingDashboard.Services.Backtests
             string runId = _runStore.CreateRunId(_exitMode switch
             {
                 FiveMinuteExitMode.AvgifUpperOrOneMinutePreviousLowCloseStop => $"avgif240_lower_1m_prev_high_{ResolveAvgifVolumeFilterLabel(_entryMode)}_upper_or_prev_low_stop",
+                _ when IsOneMinuteHeikinAshiExitMode(_exitMode) => $"avgif240_lower_1m_prev_high_{ResolveAvgifVolumeFilterLabel(_entryMode)}_{ResolveHeikinAshiExitLabel(_exitMode)}",
                 FiveMinuteExitMode.LinearRegressionCrossDown => $"five_preday_range_f{factorLabel}_rsi2_lr_exit",
                 FiveMinuteExitMode.Ma240PositiveDeviationUpperCrossUp => $"five_preday_range_f{factorLabel}_rsi2_ma240_upper_exit",
                 FiveMinuteExitMode.OneMinutePreviousLowCloseStop => $"five_preday_range_f{factorLabel}_rsi2_1m_prev_high_break_prev_low_stop",
@@ -334,6 +343,7 @@ namespace TradingDashboard.Services.Backtests
             FiveMinuteExitMode.Ma200FiveMinuteCloseStop => Ma200FiveMinuteCloseStopExitRuleCode,
             FiveMinuteExitMode.OneMinutePreviousLowCloseStop => OneMinutePreviousLowCloseStopExitRuleCode,
             FiveMinuteExitMode.AvgifUpperOrOneMinutePreviousLowCloseStop => AvgifUpperOrOneMinutePreviousLowCloseStopExitRuleCode,
+            _ when IsOneMinuteHeikinAshiExitMode(_exitMode) => $"{OneMinuteHeikinAshiExitRuleCodePrefix}_{ResolveHeikinAshiExitLabel(_exitMode).ToUpperInvariant()}_OR_NEXT_DAY_1100",
             _ => HoldToNextDayExitRuleCode
         };
 
@@ -355,12 +365,33 @@ namespace TradingDashboard.Services.Backtests
             mode == FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighNormal ||
             mode == FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighStrong;
 
+        private static bool IsOneMinuteHeikinAshiExitMode(FiveMinuteExitMode mode) =>
+            mode == FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamage ||
+            mode == FiveMinuteExitMode.OneMinuteHeikinAshiBearTurn ||
+            mode == FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndPrevLowDamage ||
+            mode == FiveMinuteExitMode.OneMinuteHeikinAshiBearHold2 ||
+            mode == FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamageOrBearHold2 ||
+            mode == FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndMa5Damage ||
+            mode == FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndVolumeWeak;
+
         private static string ResolveAvgifVolumeFilterLabel(FiveMinuteEntryMode mode) => mode switch
         {
             FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighLight => "light",
             FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighNormal => "normal",
             FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighStrong => "strong",
             _ => "none"
+        };
+
+        private static string ResolveHeikinAshiExitLabel(FiveMinuteExitMode mode) => mode switch
+        {
+            FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamage => "ha_prev_low_damage",
+            FiveMinuteExitMode.OneMinuteHeikinAshiBearTurn => "ha_bear_turn",
+            FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndPrevLowDamage => "ha_bear_turn_prev_low",
+            FiveMinuteExitMode.OneMinuteHeikinAshiBearHold2 => "ha_bear_hold2",
+            FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamageOrBearHold2 => "ha_prev_low_or_bear_hold2",
+            FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndMa5Damage => "ha_bear_turn_ma5_damage",
+            FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndVolumeWeak => "ha_bear_turn_volume_weak",
+            _ => "ha_unknown"
         };
 
         private static int ResolveOneMinuteTouchPeriod(FiveMinuteEntryMode mode) =>
@@ -1162,6 +1193,19 @@ namespace TradingDashboard.Services.Backtests
                         return false;
                     }
                 }
+                else if (IsOneMinuteHeikinAshiExitMode(_exitMode))
+                {
+                    if (!TryResolveHeikinAshiOneMinuteExit(
+                        entryBaseState,
+                        oneBars,
+                        i,
+                        entryPrice,
+                        entryReason,
+                        out result))
+                    {
+                        return false;
+                    }
+                }
                 else if (_exitMode == FiveMinuteExitMode.OneMinutePreviousLowCloseStop)
                 {
                     if (!TryResolveOneMinutePreviousLowCloseExit(
@@ -1503,6 +1547,174 @@ namespace TradingDashboard.Services.Backtests
                     entryReason,
                     BuildOneMinuteExitReason(
                         "hold to next trading day 11:00 close",
+                        maxHigh,
+                        entryPrice,
+                        firstVerdict,
+                        target3Price,
+                        target3Time,
+                        stopPrice,
+                        stopTime));
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryResolveHeikinAshiOneMinuteExit(
+            BaseState baseState,
+            IReadOnlyList<BacktestMinuteBar> oneBars,
+            int entryIndex,
+            long entryPrice,
+            string entryReason,
+            out EntryExitResult result)
+        {
+            result = default;
+            if (entryIndex < 1 || entryIndex + 1 >= oneBars.Count)
+                return false;
+
+            decimal[] haOpen = new decimal[oneBars.Count];
+            decimal[] haClose = new decimal[oneBars.Count];
+            for (int i = 0; i < oneBars.Count; i++)
+            {
+                BacktestMinuteBar bar = oneBars[i];
+                haClose[i] = (bar.Open + bar.High + bar.Low + bar.Close) / 4m;
+                haOpen[i] = i == 0
+                    ? (bar.Open + bar.Close) / 2m
+                    : (haOpen[i - 1] + haClose[i - 1]) / 2m;
+            }
+
+            string entryTime = oneBars[entryIndex].DateTime;
+            string entryDate = ResolveDate(entryTime);
+            long maxHigh = Math.Max(entryPrice, oneBars[entryIndex].High);
+            long minLow = Math.Min(entryPrice, oneBars[entryIndex].Low);
+            long target3Price = entryPrice > 0
+                ? (long)Math.Ceiling(entryPrice * 1.03m)
+                : 0;
+            string firstVerdict = string.Empty;
+            string target3Time = string.Empty;
+            string stopTime = string.Empty;
+            string targetExitDate = string.Empty;
+            long stopPrice = oneBars[entryIndex - 1].Low;
+
+            for (int i = entryIndex + 1; i < oneBars.Count; i++)
+            {
+                BacktestMinuteBar current = oneBars[i];
+                BacktestMinuteBar previous = oneBars[i - 1];
+                string currentDate = ResolveDate(current.DateTime);
+                if (string.IsNullOrWhiteSpace(currentDate))
+                    continue;
+
+                if (!string.Equals(entryDate, currentDate, StringComparison.Ordinal) &&
+                    string.IsNullOrWhiteSpace(targetExitDate))
+                {
+                    targetExitDate = currentDate;
+                }
+
+                if (!string.IsNullOrWhiteSpace(targetExitDate) &&
+                    !string.Equals(currentDate, targetExitDate, StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                int holdingMinutes = ResolveHoldingMinutes(entryTime, current.DateTime, i - entryIndex);
+                if (holdingMinutes < 0)
+                    continue;
+
+                maxHigh = Math.Max(maxHigh, current.High);
+                minLow = Math.Min(minLow, current.Low);
+
+                bool target3Hit = target3Price > 0 && current.High >= target3Price;
+                bool haBear0 = haClose[i] < haOpen[i];
+                bool haBear1 = haClose[i - 1] < haOpen[i - 1];
+                bool haBull1 = haClose[i - 1] >= haOpen[i - 1];
+                bool haBearTurn = haBull1 && haBear0;
+                bool haBearHold2 = haBear0 && haBear1;
+                bool previousLowDamage = current.Close < previous.Low;
+                long ma5 = ResolveMaAt(oneBars, i, 5);
+                decimal volumeMa5 = CalculateAverageVolume(oneBars, i, 5);
+                bool ma5Damage = ma5 > 0 && current.Close < ma5;
+                bool volumeWeak = volumeMa5 > 0 && current.Close < previous.Close && current.Volume < volumeMa5;
+                bool haBullTurn = haBear1 && haClose[i] >= haOpen[i];
+                bool haBullHold2 = haClose[i] >= haOpen[i] && haClose[i - 1] >= haOpen[i - 1];
+                bool exitHit = _exitMode switch
+                {
+                    FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamage => previousLowDamage,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurn => haBearTurn,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndPrevLowDamage => haBearTurn && previousLowDamage,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearHold2 => haBearHold2,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamageOrBearHold2 => previousLowDamage || haBearHold2,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndMa5Damage => haBearTurn && ma5Damage,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndVolumeWeak => haBearTurn && volumeWeak,
+                    _ => false
+                };
+
+                if (string.IsNullOrWhiteSpace(firstVerdict))
+                {
+                    if (target3Hit && exitHit)
+                    {
+                        firstVerdict = "BOTH_SAME_BAR";
+                        target3Time = current.DateTime;
+                        stopTime = current.DateTime;
+                    }
+                    else if (target3Hit)
+                    {
+                        firstVerdict = "TARGET_3_FIRST";
+                        target3Time = current.DateTime;
+                    }
+                    else if (exitHit)
+                    {
+                        firstVerdict = ResolveHeikinAshiExitLabel(_exitMode).ToUpperInvariant() + "_FIRST";
+                        stopTime = current.DateTime;
+                    }
+                }
+
+                if (exitHit)
+                {
+                    stopPrice = previousLowDamage
+                        ? previous.Low
+                        : ma5Damage
+                            ? ma5
+                            : current.Close;
+                    result = new EntryExitResult(
+                        entryTime,
+                        entryPrice,
+                        current.DateTime,
+                        current.Close,
+                        maxHigh,
+                        minLow,
+                        stopPrice,
+                        Math.Max(0, holdingMinutes),
+                        entryReason,
+                        BuildOneMinuteExitReason(
+                            $"{ResolveHeikinAshiExitLabel(_exitMode)}; HA O/C {haOpen[i]:N2}/{haClose[i]:N2}; prevLowDamage={(previousLowDamage ? "Y" : "N")}; ma5Damage={(ma5Damage ? "Y" : "N")} MA5={ma5:N0}; volumeWeak={(volumeWeak ? "Y" : "N")} vol={current.Volume:N0} vma5={volumeMa5:N0}; inverseBullTurn={(haBullTurn ? "Y" : "N")}; inverseBullHold2={(haBullHold2 ? "Y" : "N")}",
+                            maxHigh,
+                            entryPrice,
+                            firstVerdict,
+                            target3Price,
+                            target3Time,
+                            stopPrice,
+                            stopTime));
+                    return true;
+                }
+
+                if (string.IsNullOrWhiteSpace(targetExitDate) ||
+                    string.CompareOrdinal(ResolveTime(current.DateTime), "110000") < 0)
+                {
+                    continue;
+                }
+
+                result = new EntryExitResult(
+                    entryTime,
+                    entryPrice,
+                    current.DateTime,
+                    current.Close,
+                    maxHigh,
+                    minLow,
+                    stopPrice,
+                    Math.Max(0, holdingMinutes),
+                    entryReason,
+                    BuildOneMinuteExitReason(
+                        $"hold to next trading day 11:00 close; last inverseBullTurn={(haBullTurn ? "Y" : "N")}; last inverseBullHold2={(haBullHold2 ? "Y" : "N")}",
                         maxHigh,
                         entryPrice,
                         firstVerdict,

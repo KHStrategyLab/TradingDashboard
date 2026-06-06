@@ -353,6 +353,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-five-avgif240-1m-ha-exit-sweep", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunFiveMinuteAvgif240OneMinuteHeikinAshiExitSweepBacktest();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-daily-500eok-20p-10m-ma60-recover", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunDailyBaseTenMinuteMa60RecoverBacktest(10);
@@ -727,6 +735,69 @@ namespace TradingDashboard
                 {
                     RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
                     Error = $"backtest AVGIF240 1m merge sweep failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunFiveMinuteAvgif240OneMinuteHeikinAshiExitSweepBacktest()
+        {
+            try
+            {
+                FiveMinuteExitMode[] modes =
+                [
+                    FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamage,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurn,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndPrevLowDamage,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearHold2,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiPrevLowDamageOrBearHold2,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndMa5Damage,
+                    FiveMinuteExitMode.OneMinuteHeikinAshiBearTurnAndVolumeWeak
+                ];
+
+                var results = modes
+                    .Select(mode =>
+                    {
+                        var backtest = new FiveMinuteMa200MoneyBaseBacktest(
+                            mode,
+                            FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighNormal);
+                        return (Mode: mode, Result: backtest.Run());
+                    })
+                    .ToList();
+
+                string runId = $"avgif240_1m_ha_exit_sweep_{DateTime.Now:yyyyMMddHHmmss}";
+                var summaryResult = new
+                {
+                    RunId = runId,
+                    Entry = "AVGIF240 lower recovery + 1m MA5 previous-high break + normal volume",
+                    Results = results.Select(item => new
+                    {
+                        ExitMode = item.Mode.ToString().Replace("OneMinuteHeikinAshi", "HA_", StringComparison.Ordinal),
+                        item.Result.RunId,
+                        item.Result.OutputDirectory,
+                        item.Result.SignalCount,
+                        item.Result.TradeCount,
+                        item.Result.Summary.WinRate,
+                        item.Result.Summary.AvgProfit,
+                        item.Result.Summary.AvgLoss,
+                        item.Result.Summary.Expectancy,
+                        item.Result.Summary.MAE,
+                        item.Result.Summary.MFE,
+                        item.Result.Summary.AvgHoldingMinutes,
+                        item.Result.Summary.ConsecutiveLosses
+                    })
+                };
+
+                WriteBacktestJobSummary(summaryResult, "last_strategy_run_summary.json", $"strategy_run_summary_{runId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest AVGIF240 1m HA exit sweep failed: {ex.GetType().Name}: {ex.Message}"
                 };
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 1;
