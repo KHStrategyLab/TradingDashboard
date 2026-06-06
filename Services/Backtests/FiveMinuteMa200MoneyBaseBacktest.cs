@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -16,14 +17,20 @@ namespace TradingDashboard.Services.Backtests
         LinearRegressionCrossDown,
         Ma240PositiveDeviationUpperCrossUp,
         SignalLowFiveMinuteCloseStop,
-        Ma200FiveMinuteCloseStop
+        Ma200FiveMinuteCloseStop,
+        OneMinutePreviousLowCloseStop,
+        AvgifUpperOrOneMinutePreviousLowCloseStop
     }
 
     public enum FiveMinuteEntryMode
     {
         SignalCandleClose,
         OneMinuteMa5CrossMa60TouchMa60,
-        OneMinuteMa5CrossMa20TouchMa20
+        OneMinuteMa5CrossMa20TouchMa20,
+        OneMinuteMa5PreviousHighBreak,
+        AvgifLowerOneMinutePrevHighLight,
+        AvgifLowerOneMinutePrevHighNormal,
+        AvgifLowerOneMinutePrevHighStrong
     }
 
     public sealed class FiveMinuteMa200MoneyBaseBacktest
@@ -31,11 +38,15 @@ namespace TradingDashboard.Services.Backtests
         public const string StrategyCode = "DAILY_ALIGNED_5M_PREDAY_RANGE_HALF_RSI2_CROSSUP";
         public const string OneMinuteMaTouchStrategyCode = "DAILY_ALIGNED_5M_PREDAY_RANGE_HALF_RSI2_1M_MA5_CROSS_MA60_TOUCH";
         public const string OneMinuteMa20TouchStrategyCode = "DAILY_ALIGNED_5M_PREDAY_RANGE_HALF_RSI2_1M_MA5_CROSS_MA20_TOUCH";
+        public const string OneMinutePreviousHighBreakStrategyCode = "DAILY_ALIGNED_5M_PREDAY_RANGE_HALF_RSI2_1M_MA5_PREV_HIGH_BREAK";
+        public const string AvgifLowerOneMinutePrevHighStrategyCode = "AVGIF240_LOWER_RECOVERY_1M_MA5_PREV_HIGH_BREAK";
         public const string HoldToNextDayExitRuleCode = "HOLD_TO_NEXT_TRADING_DAY_1100";
         public const string LinearRegressionExitRuleCode = "LINEAR_REGRESSION_5M_CROSSDOWN_OR_NEXT_DAY_1100";
         public const string Ma240DeviationUpperExitRuleCode = "MA240_POSITIVE_DEVIATION_UPPER_CROSSUP_OR_NEXT_DAY_1100";
         public const string SignalLowFiveMinuteCloseStopExitRuleCode = "SIGNAL_LOW_5M_CLOSE_STOP_OR_NEXT_DAY_1100";
         public const string Ma200FiveMinuteCloseStopExitRuleCode = "MA200_5M_CLOSE_STOP_OR_NEXT_DAY_1100";
+        public const string OneMinutePreviousLowCloseStopExitRuleCode = "ONE_MINUTE_PREVIOUS_LOW_CLOSE_STOP_OR_NEXT_DAY_1100";
+        public const string AvgifUpperOrOneMinutePreviousLowCloseStopExitRuleCode = "AVGIF240_UPPER_OR_ONE_MINUTE_PREVIOUS_LOW_CLOSE_STOP";
 
         private const int MaxHoldingMinutes = 180;
 
@@ -43,34 +54,41 @@ namespace TradingDashboard.Services.Backtests
         private readonly BacktestRunStore _runStore;
         private readonly FiveMinuteExitMode _exitMode;
         private readonly FiveMinuteEntryMode _entryMode;
+        private readonly decimal _rangeFactor;
 
         public FiveMinuteMa200MoneyBaseBacktest(
             FiveMinuteExitMode exitMode = FiveMinuteExitMode.HoldToNextDay1100,
             FiveMinuteEntryMode entryMode = FiveMinuteEntryMode.SignalCandleClose,
+            decimal rangeFactor = 0.5m,
             BacktestDataStore? dataStore = null,
             BacktestRunStore? runStore = null)
         {
             _exitMode = exitMode;
             _entryMode = entryMode;
+            _rangeFactor = Math.Clamp(rangeFactor, 0.1m, 0.9m);
             _dataStore = dataStore ?? new BacktestDataStore();
             _runStore = runStore ?? new BacktestRunStore();
         }
 
         public BacktestRunResult Run()
         {
+            string factorLabel = FormatFactorForRunId(_rangeFactor);
             string runId = _runStore.CreateRunId(_exitMode switch
             {
-                FiveMinuteExitMode.LinearRegressionCrossDown => "five_preday_range_half_rsi2_lr_exit",
-                FiveMinuteExitMode.Ma240PositiveDeviationUpperCrossUp => "five_preday_range_half_rsi2_ma240_upper_exit",
-                FiveMinuteExitMode.SignalLowFiveMinuteCloseStop => "five_preday_range_half_rsi2_signal_low_5m_close_stop",
+                FiveMinuteExitMode.AvgifUpperOrOneMinutePreviousLowCloseStop => $"avgif240_lower_1m_prev_high_{ResolveAvgifVolumeFilterLabel(_entryMode)}_upper_or_prev_low_stop",
+                FiveMinuteExitMode.LinearRegressionCrossDown => $"five_preday_range_f{factorLabel}_rsi2_lr_exit",
+                FiveMinuteExitMode.Ma240PositiveDeviationUpperCrossUp => $"five_preday_range_f{factorLabel}_rsi2_ma240_upper_exit",
+                FiveMinuteExitMode.OneMinutePreviousLowCloseStop => $"five_preday_range_f{factorLabel}_rsi2_1m_prev_high_break_prev_low_stop",
+                FiveMinuteExitMode.SignalLowFiveMinuteCloseStop => $"five_preday_range_f{factorLabel}_rsi2_signal_low_5m_close_stop",
                 FiveMinuteExitMode.Ma200FiveMinuteCloseStop => IsOneMinuteMaTouchMode(_entryMode)
-                    ? $"five_preday_range_half_rsi2_1m_ma{ResolveOneMinuteTouchPeriod(_entryMode)}_touch_ma200_stop"
-                    : "five_preday_range_half_rsi2_ma200_stop",
-                _ when IsOneMinuteMaTouchMode(_entryMode) => $"five_preday_range_half_rsi2_1m_ma{ResolveOneMinuteTouchPeriod(_entryMode)}_touch_signal_low_stop",
-                _ => "five_preday_range_half_rsi2_trigger"
+                    ? $"five_preday_range_f{factorLabel}_rsi2_1m_ma{ResolveOneMinuteTouchPeriod(_entryMode)}_touch_ma200_stop"
+                    : $"five_preday_range_f{factorLabel}_rsi2_ma200_stop",
+                _ when IsOneMinuteMaTouchMode(_entryMode) => $"five_preday_range_f{factorLabel}_rsi2_1m_ma{ResolveOneMinuteTouchPeriod(_entryMode)}_touch_signal_low_stop",
+                _ => $"five_preday_range_f{factorLabel}_rsi2_trigger"
             });
             List<BacktestSignalRow> signals = [];
             List<BacktestTradeRow> trades = [];
+            List<RangeFactorDiagnosticRow> rangeFactorDiagnostics = [];
             List<ChartRequest> chartRequests = [];
             string strategyCode = ResolveStrategyCode();
             string exitRuleCode = ResolveExitRuleCode();
@@ -121,20 +139,54 @@ namespace TradingDashboard.Services.Backtests
                     if (!dayOpenByDate.TryGetValue(date, out long dayOpen) || dayOpen <= 0)
                         continue;
 
-                    long previousRange = dailyTrend.PreviousHigh - dailyTrend.PreviousLow;
-                    if (previousRange <= 0)
-                        continue;
+                    bool avgifMergedMode = IsAvgifMergedEntryMode(_entryMode);
+                    decimal triggerLine;
+                    decimal rsi2 = 0m;
+                    string baseKind;
+                    bool baseSignal;
 
-                    decimal triggerLine = dayOpen + previousRange * 0.5m;
-                    bool crossUp = previousBar.Close <= triggerLine && baseBar.Close > triggerLine;
-                    bool rsiOk = fiveRsi2ByTime.TryGetValue(baseBar.DateTime, out decimal rsi2) && rsi2 > 50m;
+                    if (avgifMergedMode)
+                    {
+                        if (!TryEvaluateMa240DeviationLowerRecovery(
+                            fiveBars,
+                            i,
+                            out Ma240DeviationBandState bandState))
+                        {
+                            continue;
+                        }
 
-                    if (!crossUp || !rsiOk)
+                        triggerLine = bandState.LowerLine;
+                        baseSignal = bandState.LowerRecoveryCrossUp;
+                        baseKind = "AVGIF240_LOWER_RECOVERY";
+                    }
+                    else
+                    {
+                        long previousRange = dailyTrend.PreviousHigh - dailyTrend.PreviousLow;
+                        if (previousRange <= 0)
+                            continue;
+
+                        triggerLine = dayOpen + previousRange * _rangeFactor;
+                        bool crossUp = previousBar.Close <= triggerLine && baseBar.Close > triggerLine;
+                        bool rsiOk = fiveRsi2ByTime.TryGetValue(baseBar.DateTime, out rsi2) && rsi2 > 50m;
+                        baseSignal = crossUp && rsiOk;
+                        baseKind = "PREDAY_RANGE_HALF_RSI2_CROSSUP";
+                    }
+
+                    if (!baseSignal)
                         continue;
 
                     decimal ma200 = i >= 199
                         ? fiveBars.Skip(i - 199).Take(200).Average(bar => (decimal)bar.Close)
                         : 0m;
+                    decimal ma5 = CalculateAverageClose(fiveBars, i, 5);
+                    decimal ma20 = CalculateAverageClose(fiveBars, i, 20);
+                    decimal ma60 = CalculateAverageClose(fiveBars, i, 60);
+                    decimal volumeMa5 = CalculateAverageVolume(fiveBars, i, 5);
+                    decimal volumeMa20 = CalculateAverageVolume(fiveBars, i, 20);
+                    decimal volumeMa60 = CalculateAverageVolume(fiveBars, i, 60);
+                    decimal tradingValueMa5 = CalculateAverageTradingValue(fiveBars, i, 5);
+                    decimal tradingValueMa20 = CalculateAverageTradingValue(fiveBars, i, 20);
+                    decimal tradingValueMa60 = CalculateAverageTradingValue(fiveBars, i, 60);
                     if (_exitMode == FiveMinuteExitMode.Ma200FiveMinuteCloseStop &&
                         (ma200 <= 0 || baseBar.Close <= ma200))
                     {
@@ -151,8 +203,18 @@ namespace TradingDashboard.Services.Backtests
                         baseBar.High,
                         baseBar.Low,
                         baseBar.Close,
+                        baseBar.Volume,
                         baseBar.TradingValue,
+                        ma5,
+                        ma20,
+                        ma60,
                         ma200,
+                        volumeMa5,
+                        volumeMa20,
+                        volumeMa60,
+                        tradingValueMa5,
+                        tradingValueMa20,
+                        tradingValueMa60,
                         dailyTrend.Ma5,
                         dailyTrend.Ma20,
                         dailyTrend.Ma60,
@@ -168,7 +230,7 @@ namespace TradingDashboard.Services.Backtests
                         string.Empty,
                         0,
                         (baseBar.High + baseBar.Low) / 2m,
-                        "PREDAY_RANGE_HALF_RSI2_CROSSUP");
+                        baseKind);
 
                     signals.Add(new BacktestSignalRow
                     {
@@ -182,14 +244,21 @@ namespace TradingDashboard.Services.Backtests
                         Reason = BuildBaseReason(baseState)
                     });
 
-                    bool hasTrade = IsOneMinuteMaTouchMode(_entryMode)
+                    EntryExitResult trade;
+                    bool hasTrade = _entryMode == FiveMinuteEntryMode.OneMinuteMa5PreviousHighBreak || avgifMergedMode
+                        ? TryBuildOneMinutePreviousHighBreakEntryAndExit(
+                            baseState,
+                            oneBars,
+                            fiveBars,
+                            out trade)
+                        : IsOneMinuteMaTouchMode(_entryMode)
                         ? TryBuildOneMinuteMaTouchEntryAndExit(
                             baseState,
                             oneBars,
                             fiveBars,
                             oneMa5ByTime,
                             oneMaTargetByTime,
-                            out EntryExitResult trade)
+                            out trade)
                         : TryBuildFiveMinuteFormulaEntryAndExit(
                             baseState,
                             fiveBars,
@@ -221,7 +290,9 @@ namespace TradingDashboard.Services.Backtests
                             Reason = trade.ExitReason
                         });
 
-                        trades.Add(BuildTradeRow(runId, stock, trade, strategyCode, exitRuleCode));
+                        BacktestTradeRow tradeRow = BuildTradeRow(runId, stock, trade, strategyCode, exitRuleCode);
+                        trades.Add(tradeRow);
+                        rangeFactorDiagnostics.Add(BuildRangeFactorDiagnostic(stock, baseState, tradeRow));
                         chartRequests.Add(new ChartRequest(stock, baseState.Time, trade.EntryTime, trade.ExitTime, trade.EntryPrice, trade.ExitPrice));
                     }
 
@@ -246,10 +317,11 @@ namespace TradingDashboard.Services.Backtests
                 OrderMode = "None",
                 LiveOrder = false,
                 ExecutionType = "BacktestOnly",
-                Memo = $"SOR ON integrated minute/daily bars use Market=AL when available. KRX previous-close/base-price and search/gate base-candle fields remain separate and are not overwritten. Test trigger replaces the prior 40eok/1m-MA60 rule: A=PREDAYHIGH()-PREDAYLOW(); B=DAYOPEN()+A*0.5; B1=RSI(2); CROSSUP(C,B) AND B1>50. Entry mode: {_entryMode}. Exit rule: {exitRuleCode}. MFE/exit reason show the best high reached during the holding window. DataStore is read-only."
+                Memo = $"SOR ON integrated minute/daily bars use Market=AL when available. KRX previous-close/base-price and search/gate base-candle fields remain separate and are not overwritten. Test trigger replaces the prior 40eok/1m-MA60 rule: A=PREDAYHIGH()-PREDAYLOW(); B=DAYOPEN()+A*{_rangeFactor.ToString("0.##", CultureInfo.InvariantCulture)}; B1=RSI(2); CROSSUP(C,B) AND B1>50. Entry mode: {_entryMode}. Exit rule: {exitRuleCode}. MFE/exit reason show the best high reached during the holding window. DataStore is read-only."
             };
 
             string outputDirectory = _runStore.SaveRun(runId, signals, trades, summaries, config);
+            SaveRangeFactorDiagnostics(outputDirectory, rangeFactorDiagnostics);
             SaveCharts(outputDirectory, chartRequests.Take(12));
             return new BacktestRunResult(runId, outputDirectory, signals.Count, trades.Count, summaries[0]);
         }
@@ -260,6 +332,8 @@ namespace TradingDashboard.Services.Backtests
             FiveMinuteExitMode.Ma240PositiveDeviationUpperCrossUp => Ma240DeviationUpperExitRuleCode,
             FiveMinuteExitMode.SignalLowFiveMinuteCloseStop => SignalLowFiveMinuteCloseStopExitRuleCode,
             FiveMinuteExitMode.Ma200FiveMinuteCloseStop => Ma200FiveMinuteCloseStopExitRuleCode,
+            FiveMinuteExitMode.OneMinutePreviousLowCloseStop => OneMinutePreviousLowCloseStopExitRuleCode,
+            FiveMinuteExitMode.AvgifUpperOrOneMinutePreviousLowCloseStop => AvgifUpperOrOneMinutePreviousLowCloseStopExitRuleCode,
             _ => HoldToNextDayExitRuleCode
         };
 
@@ -267,6 +341,8 @@ namespace TradingDashboard.Services.Backtests
         {
             FiveMinuteEntryMode.OneMinuteMa5CrossMa60TouchMa60 => OneMinuteMaTouchStrategyCode,
             FiveMinuteEntryMode.OneMinuteMa5CrossMa20TouchMa20 => OneMinuteMa20TouchStrategyCode,
+            FiveMinuteEntryMode.OneMinuteMa5PreviousHighBreak => OneMinutePreviousHighBreakStrategyCode,
+            _ when IsAvgifMergedEntryMode(_entryMode) => AvgifLowerOneMinutePrevHighStrategyCode,
             _ => StrategyCode
         };
 
@@ -274,8 +350,24 @@ namespace TradingDashboard.Services.Backtests
             mode == FiveMinuteEntryMode.OneMinuteMa5CrossMa60TouchMa60 ||
             mode == FiveMinuteEntryMode.OneMinuteMa5CrossMa20TouchMa20;
 
+        private static bool IsAvgifMergedEntryMode(FiveMinuteEntryMode mode) =>
+            mode == FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighLight ||
+            mode == FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighNormal ||
+            mode == FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighStrong;
+
+        private static string ResolveAvgifVolumeFilterLabel(FiveMinuteEntryMode mode) => mode switch
+        {
+            FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighLight => "light",
+            FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighNormal => "normal",
+            FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighStrong => "strong",
+            _ => "none"
+        };
+
         private static int ResolveOneMinuteTouchPeriod(FiveMinuteEntryMode mode) =>
             mode == FiveMinuteEntryMode.OneMinuteMa5CrossMa20TouchMa20 ? 20 : 60;
+
+        private static string FormatFactorForRunId(decimal factor) =>
+            factor.ToString("0.00", CultureInfo.InvariantCulture).Replace(".", "p");
 
         private IEnumerable<StockMarketKey> EnumerateFiveMinuteStockMarkets()
         {
@@ -996,6 +1088,434 @@ namespace TradingDashboard.Services.Backtests
             return false;
         }
 
+        private bool TryBuildOneMinutePreviousHighBreakEntryAndExit(
+            BaseState baseState,
+            IReadOnlyList<BacktestMinuteBar> oneBars,
+            IReadOnlyList<BacktestMinuteBar> fiveBars,
+            out EntryExitResult result)
+        {
+            result = default;
+            int baseIndex = FindTimeIndex(oneBars, baseState.Time);
+            if (baseIndex < 5 || baseIndex + 1 >= oneBars.Count)
+                return false;
+
+            string baseDate = ResolveDate(baseState.Time);
+            for (int i = baseIndex + 1; i < oneBars.Count; i++)
+            {
+                BacktestMinuteBar current = oneBars[i];
+                BacktestMinuteBar previous = oneBars[i - 1];
+                if (!string.Equals(baseDate, ResolveDate(current.DateTime), StringComparison.Ordinal))
+                    break;
+
+                int elapsed = ResolveHoldingMinutes(baseState.Time, current.DateTime, i - baseIndex);
+                if (elapsed > MaxHoldingMinutes)
+                    break;
+
+                decimal ma5 = ResolveMaAt(oneBars, i, 5);
+                decimal volumeMa5 = CalculateAverageVolume(oneBars, i, 5);
+                decimal volumeMa10 = CalculateAverageVolume(oneBars, i, 10);
+                decimal previousVolumeMa5 = CalculateAverageVolume(oneBars, i - 1, 5);
+                bool bullish = current.Close > current.Open;
+                bool closeAboveMa5 = ma5 > 0 && current.Close > ma5;
+                bool previousHighBreak = current.Close > previous.High;
+                bool volumeMaintained = volumeMa5 > 0 &&
+                    previousVolumeMa5 > 0 &&
+                    volumeMa5 >= previousVolumeMa5 &&
+                    current.Volume >= volumeMa5 * 0.8m;
+                bool avgifMergedMode = IsAvgifMergedEntryMode(_entryMode);
+                string volumeFilterLabel = "maintained";
+                bool volumeOk = avgifMergedMode
+                    ? ResolveAvgifVolumeFilter(
+                        _entryMode,
+                        current,
+                        volumeMa5,
+                        previousVolumeMa5,
+                        volumeMa10,
+                        out volumeFilterLabel)
+                    : volumeMaintained;
+
+                if (!bullish || !closeAboveMa5 || !previousHighBreak || !volumeOk)
+                    continue;
+
+                long entryPrice = current.Close;
+                BaseState entryBaseState = baseState with
+                {
+                    RecoveryTime = current.DateTime,
+                    RecoveryHigh = current.High,
+                    Close = entryPrice
+                };
+
+                string entryReason =
+                    $"1m completed close broke previous high above MA5 with volume {volumeFilterLabel}; bar {current.DateTime}; close {current.Close:N0}; prevHigh {previous.High:N0}; MA5 {ma5:N0}; volume {current.Volume:N0}; volumeMA5 {volumeMa5:N0}; volumeMA10 {volumeMa10:N0}; base {baseState.Time}; trigger={baseState.TriggerLine:N0}; kind={baseState.Kind}; RSI2={baseState.Rsi2:0.##}";
+
+                if (_exitMode == FiveMinuteExitMode.AvgifUpperOrOneMinutePreviousLowCloseStop)
+                {
+                    if (!TryResolveAvgifMergedExit(
+                        entryBaseState,
+                        oneBars,
+                        fiveBars,
+                        i,
+                        entryPrice,
+                        entryReason,
+                        out result))
+                    {
+                        return false;
+                    }
+                }
+                else if (_exitMode == FiveMinuteExitMode.OneMinutePreviousLowCloseStop)
+                {
+                    if (!TryResolveOneMinutePreviousLowCloseExit(
+                        entryBaseState,
+                        oneBars,
+                        i,
+                        entryPrice,
+                        entryReason,
+                        out result))
+                    {
+                        return false;
+                    }
+                }
+                else if (!TryResolveFiveMinuteExitFromEntry(
+                    entryBaseState,
+                    fiveBars,
+                    current.DateTime,
+                    entryPrice,
+                    entryReason,
+                    out result))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool ResolveAvgifVolumeFilter(
+            FiveMinuteEntryMode entryMode,
+            BacktestMinuteBar current,
+            decimal volumeMa5,
+            decimal previousVolumeMa5,
+            decimal volumeMa10,
+            out string label)
+        {
+            label = ResolveAvgifVolumeFilterLabel(entryMode);
+            if (volumeMa5 <= 0)
+                return false;
+
+            return entryMode switch
+            {
+                FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighLight =>
+                    current.Volume >= volumeMa5 * 0.7m,
+                FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighNormal =>
+                    current.Volume >= volumeMa5,
+                FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighStrong =>
+                    previousVolumeMa5 > 0 &&
+                    volumeMa10 > 0 &&
+                    current.Volume >= volumeMa5 &&
+                    volumeMa5 > previousVolumeMa5 &&
+                    volumeMa5 >= volumeMa10,
+                _ => false
+            };
+        }
+
+        private static bool TryResolveOneMinutePreviousLowCloseExit(
+            BaseState baseState,
+            IReadOnlyList<BacktestMinuteBar> oneBars,
+            int entryIndex,
+            long entryPrice,
+            string entryReason,
+            out EntryExitResult result)
+        {
+            result = default;
+            if (entryIndex < 1 || entryIndex + 1 >= oneBars.Count)
+                return false;
+
+            string entryTime = oneBars[entryIndex].DateTime;
+            string entryDate = ResolveDate(entryTime);
+            long maxHigh = Math.Max(entryPrice, oneBars[entryIndex].High);
+            long minLow = Math.Min(entryPrice, oneBars[entryIndex].Low);
+            long target3Price = entryPrice > 0
+                ? (long)Math.Ceiling(entryPrice * 1.03m)
+                : 0;
+            string firstVerdict = string.Empty;
+            string target3Time = string.Empty;
+            string stopTime = string.Empty;
+            string targetExitDate = string.Empty;
+            long stopPrice = oneBars[entryIndex - 1].Low;
+
+            for (int i = entryIndex + 1; i < oneBars.Count; i++)
+            {
+                BacktestMinuteBar current = oneBars[i];
+                BacktestMinuteBar previous = oneBars[i - 1];
+                string currentDate = ResolveDate(current.DateTime);
+                if (string.IsNullOrWhiteSpace(currentDate))
+                    continue;
+
+                if (!string.Equals(entryDate, currentDate, StringComparison.Ordinal) &&
+                    string.IsNullOrWhiteSpace(targetExitDate))
+                {
+                    targetExitDate = currentDate;
+                }
+
+                if (!string.IsNullOrWhiteSpace(targetExitDate) &&
+                    !string.Equals(currentDate, targetExitDate, StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                int holdingMinutes = ResolveHoldingMinutes(entryTime, current.DateTime, i - entryIndex);
+                if (holdingMinutes < 0)
+                    continue;
+
+                maxHigh = Math.Max(maxHigh, current.High);
+                minLow = Math.Min(minLow, current.Low);
+
+                bool target3Hit = target3Price > 0 && current.High >= target3Price;
+                bool previousLowCloseStopHit = current.Close < previous.Low;
+                if (string.IsNullOrWhiteSpace(firstVerdict))
+                {
+                    if (target3Hit && previousLowCloseStopHit)
+                    {
+                        firstVerdict = "BOTH_SAME_BAR";
+                        target3Time = current.DateTime;
+                        stopTime = current.DateTime;
+                    }
+                    else if (target3Hit)
+                    {
+                        firstVerdict = "TARGET_3_FIRST";
+                        target3Time = current.DateTime;
+                    }
+                    else if (previousLowCloseStopHit)
+                    {
+                        firstVerdict = "ONE_MINUTE_PREV_LOW_CLOSE_STOP_FIRST";
+                        stopTime = current.DateTime;
+                    }
+                }
+
+                if (previousLowCloseStopHit)
+                {
+                    stopPrice = previous.Low;
+                    result = new EntryExitResult(
+                        entryTime,
+                        entryPrice,
+                        current.DateTime,
+                        current.Close,
+                        maxHigh,
+                        minLow,
+                        stopPrice,
+                        Math.Max(0, holdingMinutes),
+                        entryReason,
+                        BuildOneMinuteExitReason(
+                            "1m completed close below previous low",
+                            maxHigh,
+                            entryPrice,
+                            firstVerdict,
+                            target3Price,
+                            target3Time,
+                            stopPrice,
+                            stopTime));
+                    return true;
+                }
+
+                if (string.IsNullOrWhiteSpace(targetExitDate) ||
+                    string.CompareOrdinal(ResolveTime(current.DateTime), "110000") < 0)
+                {
+                    continue;
+                }
+
+                result = new EntryExitResult(
+                    entryTime,
+                    entryPrice,
+                    current.DateTime,
+                    current.Close,
+                    maxHigh,
+                    minLow,
+                    stopPrice,
+                    Math.Max(0, holdingMinutes),
+                    entryReason,
+                    BuildOneMinuteExitReason(
+                        "hold to next trading day 11:00 close",
+                        maxHigh,
+                        entryPrice,
+                        firstVerdict,
+                        target3Price,
+                        target3Time,
+                        stopPrice,
+                        stopTime));
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryResolveAvgifMergedExit(
+            BaseState baseState,
+            IReadOnlyList<BacktestMinuteBar> oneBars,
+            IReadOnlyList<BacktestMinuteBar> fiveBars,
+            int entryIndex,
+            long entryPrice,
+            string entryReason,
+            out EntryExitResult result)
+        {
+            result = default;
+            if (entryIndex < 1 || entryIndex + 1 >= oneBars.Count)
+                return false;
+
+            string entryTime = oneBars[entryIndex].DateTime;
+            string entryDate = ResolveDate(entryTime);
+            long maxHigh = Math.Max(entryPrice, oneBars[entryIndex].High);
+            long minLow = Math.Min(entryPrice, oneBars[entryIndex].Low);
+            long target3Price = entryPrice > 0
+                ? (long)Math.Ceiling(entryPrice * 1.03m)
+                : 0;
+            string firstVerdict = string.Empty;
+            string target3Time = string.Empty;
+            string stopTime = string.Empty;
+            string targetExitDate = string.Empty;
+            long stopPrice = oneBars[entryIndex - 1].Low;
+            int lastCheckedFiveIndex = -1;
+
+            for (int i = entryIndex + 1; i < oneBars.Count; i++)
+            {
+                BacktestMinuteBar current = oneBars[i];
+                BacktestMinuteBar previous = oneBars[i - 1];
+                string currentDate = ResolveDate(current.DateTime);
+                if (string.IsNullOrWhiteSpace(currentDate))
+                    continue;
+
+                if (!string.Equals(entryDate, currentDate, StringComparison.Ordinal) &&
+                    string.IsNullOrWhiteSpace(targetExitDate))
+                {
+                    targetExitDate = currentDate;
+                }
+
+                if (!string.IsNullOrWhiteSpace(targetExitDate) &&
+                    !string.Equals(currentDate, targetExitDate, StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                int holdingMinutes = ResolveHoldingMinutes(entryTime, current.DateTime, i - entryIndex);
+                if (holdingMinutes < 0)
+                    continue;
+
+                maxHigh = Math.Max(maxHigh, current.High);
+                minLow = Math.Min(minLow, current.Low);
+
+                bool target3Hit = target3Price > 0 && current.High >= target3Price;
+                bool previousLowCloseStopHit = current.Close < previous.Low;
+                bool avgifUpperHit = false;
+                Ma240DeviationBandState upperState = default;
+                int fiveIndex = FindLastTimeIndexAtOrBefore(fiveBars, current.DateTime);
+                if (fiveIndex > 0 && fiveIndex != lastCheckedFiveIndex)
+                {
+                    lastCheckedFiveIndex = fiveIndex;
+                    avgifUpperHit =
+                        TryEvaluateMa240DeviationUpperExtension(fiveBars, fiveIndex, out upperState) &&
+                        upperState.UpperExtensionCrossUp;
+                }
+
+                if (string.IsNullOrWhiteSpace(firstVerdict))
+                {
+                    if (target3Hit)
+                    {
+                        firstVerdict = "TARGET_3_FIRST";
+                        target3Time = current.DateTime;
+                    }
+                    else if (avgifUpperHit)
+                    {
+                        firstVerdict = "AVGIF240_UPPER_FIRST";
+                        target3Time = current.DateTime;
+                    }
+                    else if (previousLowCloseStopHit)
+                    {
+                        firstVerdict = "ONE_MINUTE_PREV_LOW_CLOSE_STOP_FIRST";
+                        stopTime = current.DateTime;
+                    }
+                }
+
+                if (avgifUpperHit)
+                {
+                    result = new EntryExitResult(
+                        entryTime,
+                        entryPrice,
+                        current.DateTime,
+                        current.Close,
+                        maxHigh,
+                        minLow,
+                        stopPrice,
+                        Math.Max(0, holdingMinutes),
+                        entryReason,
+                        BuildOneMinuteExitReason(
+                            $"AVGIF240 upper extension crossup; upper={upperState.UpperLine:N0}; MA240={upperState.Ma240:N0}",
+                            maxHigh,
+                            entryPrice,
+                            firstVerdict,
+                            target3Price,
+                            target3Time,
+                            stopPrice,
+                            stopTime));
+                    return true;
+                }
+
+                if (previousLowCloseStopHit)
+                {
+                    stopPrice = previous.Low;
+                    result = new EntryExitResult(
+                        entryTime,
+                        entryPrice,
+                        current.DateTime,
+                        current.Close,
+                        maxHigh,
+                        minLow,
+                        stopPrice,
+                        Math.Max(0, holdingMinutes),
+                        entryReason,
+                        BuildOneMinuteExitReason(
+                            "1m completed close below previous low",
+                            maxHigh,
+                            entryPrice,
+                            firstVerdict,
+                            target3Price,
+                            target3Time,
+                            stopPrice,
+                            stopTime));
+                    return true;
+                }
+
+                if (string.IsNullOrWhiteSpace(targetExitDate) ||
+                    string.CompareOrdinal(ResolveTime(current.DateTime), "110000") < 0)
+                {
+                    continue;
+                }
+
+                result = new EntryExitResult(
+                    entryTime,
+                    entryPrice,
+                    current.DateTime,
+                    current.Close,
+                    maxHigh,
+                    minLow,
+                    stopPrice,
+                    Math.Max(0, holdingMinutes),
+                    entryReason,
+                    BuildOneMinuteExitReason(
+                        "hold to next trading day 11:00 close",
+                        maxHigh,
+                        entryPrice,
+                        firstVerdict,
+                        target3Price,
+                        target3Time,
+                        stopPrice,
+                        stopTime));
+                return true;
+            }
+
+            return false;
+        }
+
         private bool TryResolveFiveMinuteExitFromEntry(
             BaseState baseState,
             IReadOnlyList<BacktestMinuteBar> fiveBars,
@@ -1214,6 +1734,26 @@ namespace TradingDashboard.Services.Backtests
             return $"{exitLabel}; maxHigh {maxHigh:N0}; high move {mfe:0.##}%; verdict {verdict}; target3 {target3Price:N0} {target3Time}; {stopLabel} {stopPrice:N0} {stopTime}{regression}{ma240}";
         }
 
+        private static string BuildOneMinuteExitReason(
+            string exitLabel,
+            long maxHigh,
+            long entryPrice,
+            string firstVerdict,
+            long target3Price,
+            string target3Time,
+            long stopPrice,
+            string stopTime)
+        {
+            decimal mfe = entryPrice > 0
+                ? (maxHigh - entryPrice) / (decimal)entryPrice * 100m
+                : 0m;
+            string verdict = string.IsNullOrWhiteSpace(firstVerdict)
+                ? "NO_TARGET_OR_STOP"
+                : firstVerdict;
+
+            return $"{exitLabel}; maxHigh {maxHigh:N0}; high move {mfe:0.##}%; verdict {verdict}; target3 {target3Price:N0} {target3Time}; prevLowStop {stopPrice:N0} {stopTime}";
+        }
+
         private static bool TryResolveSignalExit(
             BacktestMinuteBar entryBar,
             BaseState baseState,
@@ -1361,6 +1901,70 @@ namespace TradingDashboard.Services.Backtests
             return true;
         }
 
+        private static bool TryEvaluateMa240DeviationLowerRecovery(
+            IReadOnlyList<BacktestMinuteBar> bars,
+            int currentIndex,
+            out Ma240DeviationBandState state)
+        {
+            state = default;
+            if (currentIndex <= 0)
+                return false;
+
+            if (!TryResolveMa240DeviationBandLine(bars, currentIndex, out Ma240DeviationBandLine currentLine) ||
+                !TryResolveMa240DeviationBandLine(bars, currentIndex - 1, out Ma240DeviationBandLine previousLine))
+            {
+                return false;
+            }
+
+            long currentClose = bars[currentIndex].Close;
+            long previousClose = bars[currentIndex - 1].Close;
+            bool crossUp = previousClose <= previousLine.LowerLine && currentClose > currentLine.LowerLine;
+            state = new Ma240DeviationBandState(
+                true,
+                crossUp,
+                false,
+                currentLine.Ma240,
+                currentLine.LowerLine,
+                currentLine.UpperLine,
+                currentLine.NegativeDeviationAverage,
+                currentLine.NegativeDeviationStdDev,
+                currentLine.PositiveDeviationAverage,
+                currentLine.PositiveDeviationStdDev);
+            return true;
+        }
+
+        private static bool TryEvaluateMa240DeviationUpperExtension(
+            IReadOnlyList<BacktestMinuteBar> bars,
+            int currentIndex,
+            out Ma240DeviationBandState state)
+        {
+            state = default;
+            if (currentIndex <= 0)
+                return false;
+
+            if (!TryResolveMa240DeviationBandLine(bars, currentIndex, out Ma240DeviationBandLine currentLine) ||
+                !TryResolveMa240DeviationBandLine(bars, currentIndex - 1, out Ma240DeviationBandLine previousLine))
+            {
+                return false;
+            }
+
+            long currentClose = bars[currentIndex].Close;
+            long previousClose = bars[currentIndex - 1].Close;
+            bool crossUp = previousClose <= previousLine.UpperLine && currentClose > currentLine.UpperLine;
+            state = new Ma240DeviationBandState(
+                true,
+                false,
+                crossUp,
+                currentLine.Ma240,
+                currentLine.LowerLine,
+                currentLine.UpperLine,
+                currentLine.NegativeDeviationAverage,
+                currentLine.NegativeDeviationStdDev,
+                currentLine.PositiveDeviationAverage,
+                currentLine.PositiveDeviationStdDev);
+            return true;
+        }
+
         private static bool TryResolveMa240DeviationUpperLine(
             IReadOnlyList<BacktestMinuteBar> bars,
             int currentIndex,
@@ -1389,6 +1993,51 @@ namespace TradingDashboard.Services.Backtests
             decimal stdDev = (decimal)Math.Sqrt((double)variance);
             decimal upper = ma240 + average + (2m * stdDev);
             line = new Ma240DeviationUpperLine(ma240, upper, average, stdDev);
+            return true;
+        }
+
+        private static bool TryResolveMa240DeviationBandLine(
+            IReadOnlyList<BacktestMinuteBar> bars,
+            int currentIndex,
+            out Ma240DeviationBandLine line)
+        {
+            line = default;
+            const int period = 240;
+            if (currentIndex - (period * 2) + 2 < 0)
+                return false;
+
+            decimal ma240 = bars.Skip(currentIndex - period + 1).Take(period).Average(bar => (decimal)bar.Close);
+            List<decimal> positiveDeviations = [];
+            List<decimal> negativeDeviations = [];
+            for (int i = currentIndex - period + 1; i <= currentIndex; i++)
+            {
+                decimal rollingMa = bars.Skip(i - period + 1).Take(period).Average(bar => (decimal)bar.Close);
+                decimal deviation = bars[i].Close - rollingMa;
+                if (deviation > 0)
+                    positiveDeviations.Add(deviation);
+                else if (deviation < 0)
+                    negativeDeviations.Add(deviation);
+            }
+
+            if (positiveDeviations.Count < 2 || negativeDeviations.Count < 2)
+                return false;
+
+            decimal positiveAverage = positiveDeviations.Average();
+            decimal positiveVariance = positiveDeviations.Average(value => (value - positiveAverage) * (value - positiveAverage));
+            decimal positiveStdDev = (decimal)Math.Sqrt((double)positiveVariance);
+            decimal negativeAverage = negativeDeviations.Average();
+            decimal negativeVariance = negativeDeviations.Average(value => (value - negativeAverage) * (value - negativeAverage));
+            decimal negativeStdDev = (decimal)Math.Sqrt((double)negativeVariance);
+            decimal lower = ma240 + negativeAverage - (2m * negativeStdDev);
+            decimal upper = ma240 + positiveAverage + (2m * positiveStdDev);
+            line = new Ma240DeviationBandLine(
+                ma240,
+                lower,
+                upper,
+                negativeAverage,
+                negativeStdDev,
+                positiveAverage,
+                positiveStdDev);
             return true;
         }
 
@@ -1522,6 +2171,371 @@ namespace TradingDashboard.Services.Backtests
                 EntryReason = trade.EntryReason,
                 ExitReason = trade.ExitReason
             };
+        }
+
+        private RangeFactorDiagnosticRow BuildRangeFactorDiagnostic(
+            StockMarketKey stock,
+            BaseState baseState,
+            BacktestTradeRow trade)
+        {
+            decimal ma200GapRate = CalculateRate(baseState.Close, baseState.Ma200);
+            decimal dailyMa5To60Rate = CalculateRate(baseState.DailyMa5, baseState.DailyMa60);
+            decimal triggerToPreviousHighRate = CalculateRate(baseState.Close, baseState.PreviousDailyHigh);
+            decimal bodyRate = CalculateBodyRate(baseState.Open, baseState.Close);
+            decimal upperWickRate = CalculateUpperWickRate(baseState.Open, baseState.High, baseState.Close);
+            decimal lowerWickRate = CalculateLowerWickRate(baseState.Open, baseState.Low, baseState.Close);
+            decimal closeLocationRate = CalculateCloseLocationRate(baseState.Low, baseState.High, baseState.Close);
+            string signalTime = ResolveTime(baseState.Time);
+            string signalHour = signalTime.Length >= 2 ? signalTime[..2] : string.Empty;
+
+            return new RangeFactorDiagnosticRow(
+                _rangeFactor,
+                stock.Code,
+                stock.Market,
+                ResolveDate(baseState.Time),
+                signalHour,
+                baseState.Time,
+                trade.EntryTime,
+                trade.ExitTime,
+                baseState.DayOpen,
+                baseState.PreviousDailyHigh,
+                baseState.PreviousDailyLow,
+                baseState.TriggerLine,
+                baseState.Rsi2,
+                baseState.PriceMa5,
+                baseState.PriceMa20,
+                baseState.PriceMa60,
+                baseState.Ma200,
+                ma200GapRate,
+                baseState.Volume,
+                baseState.VolumeMa5,
+                baseState.VolumeMa20,
+                baseState.VolumeMa60,
+                baseState.TradingValueMa5,
+                baseState.TradingValueMa20,
+                baseState.TradingValueMa60,
+                bodyRate,
+                upperWickRate,
+                lowerWickRate,
+                closeLocationRate,
+                baseState.DailyMa5,
+                baseState.DailyMa20,
+                baseState.DailyMa60,
+                dailyMa5To60Rate,
+                baseState.DailyTradingValue,
+                baseState.TradingValue,
+                triggerToPreviousHighRate,
+                ResolveDailyValueBucket(baseState.DailyTradingValue),
+                ResolveMa200PositionBucket(ma200GapRate),
+                ResolveVolumeExpansionBucket(baseState.Volume, baseState.VolumeMa5, baseState.VolumeMa20, baseState.VolumeMa60),
+                ResolveTradingValueExpansionBucket(baseState.TradingValue, baseState.TradingValueMa5, baseState.TradingValueMa20, baseState.TradingValueMa60),
+                ResolveCandleStructureBucket(baseState.Open, baseState.Close, bodyRate, upperWickRate, closeLocationRate),
+                ResolvePriceMaStructureBucket(baseState.Close, baseState.PriceMa5, baseState.PriceMa20, baseState.PriceMa60),
+                ResolveDailyMaSpreadBucket(dailyMa5To60Rate, baseState.DailyMa5, baseState.DailyMa20, baseState.DailyMa60),
+                trade.ProfitRate,
+                trade.Mae,
+                trade.Mfe,
+                ResolveOutcomeBucket(trade),
+                trade.ExitReason);
+        }
+
+        private static decimal CalculateRate(long current, decimal basis) =>
+            basis > 0 ? (current - basis) / basis * 100m : 0m;
+
+        private static decimal CalculateRate(decimal current, decimal basis) =>
+            basis > 0 ? (current - basis) / basis * 100m : 0m;
+
+        private static decimal CalculateRate(long current, long basis) =>
+            basis > 0 ? (current - basis) / (decimal)basis * 100m : 0m;
+
+        private static decimal CalculateAverageClose(IReadOnlyList<BacktestMinuteBar> bars, int index, int period) =>
+            index >= period - 1
+                ? bars.Skip(index - period + 1).Take(period).Average(bar => (decimal)bar.Close)
+                : 0m;
+
+        private static decimal CalculateAverageVolume(IReadOnlyList<BacktestMinuteBar> bars, int index, int period) =>
+            index >= period - 1
+                ? bars.Skip(index - period + 1).Take(period).Average(bar => (decimal)bar.Volume)
+                : 0m;
+
+        private static decimal CalculateAverageTradingValue(IReadOnlyList<BacktestMinuteBar> bars, int index, int period) =>
+            index >= period - 1
+                ? bars.Skip(index - period + 1).Take(period).Average(bar => (decimal)bar.TradingValue)
+                : 0m;
+
+        private static decimal CalculateBodyRate(long open, long close) =>
+            open > 0 ? Math.Abs(close - open) / (decimal)open * 100m : 0m;
+
+        private static decimal CalculateUpperWickRate(long open, long high, long close)
+        {
+            long bodyHigh = Math.Max(open, close);
+            return open > 0 && high > bodyHigh ? (high - bodyHigh) / (decimal)open * 100m : 0m;
+        }
+
+        private static decimal CalculateLowerWickRate(long open, long low, long close)
+        {
+            long bodyLow = Math.Min(open, close);
+            return open > 0 && low < bodyLow ? (bodyLow - low) / (decimal)open * 100m : 0m;
+        }
+
+        private static decimal CalculateCloseLocationRate(long low, long high, long close) =>
+            high > low ? (close - low) / (decimal)(high - low) * 100m : 50m;
+
+        private static string ResolveDailyValueBucket(long tradingValue) =>
+            tradingValue switch
+            {
+                >= 300_000_000_000 => "3000eok+",
+                >= 100_000_000_000 => "1000-3000eok",
+                >= 50_000_000_000 => "500-1000eok",
+                _ => "under500eok"
+            };
+
+        private static string ResolveMa200PositionBucket(decimal ma200GapRate) =>
+            ma200GapRate switch
+            {
+                0m => "ma200-none-or-touch",
+                < 0m => "below-ma200",
+                <= 2m => "near-ma200-0-2",
+                <= 5m => "above-ma200-2-5",
+                _ => "above-ma200-5+"
+            };
+
+        private static string ResolveVolumeExpansionBucket(long volume, decimal ma5, decimal ma20, decimal ma60)
+        {
+            if (volume <= 0 || ma5 <= 0 || ma20 <= 0 || ma60 <= 0)
+                return "vol-missing";
+
+            if (volume >= ma60 * 2m && ma5 > ma20 && ma20 >= ma60)
+                return "vol-strong-2x60-ma-aligned";
+
+            if (volume >= ma20 * 1.5m && ma5 > ma20)
+                return "vol-expanding-1p5x20";
+
+            if (volume >= ma5)
+                return "vol-above-ma5";
+
+            return "vol-weak";
+        }
+
+        private static string ResolveTradingValueExpansionBucket(long tradingValue, decimal ma5, decimal ma20, decimal ma60)
+        {
+            if (tradingValue <= 0 || ma5 <= 0 || ma20 <= 0 || ma60 <= 0)
+                return "value-missing";
+
+            if (tradingValue >= ma60 * 2m && ma5 > ma20 && ma20 >= ma60)
+                return "value-strong-2x60-ma-aligned";
+
+            if (tradingValue >= ma20 * 1.5m && ma5 > ma20)
+                return "value-expanding-1p5x20";
+
+            if (tradingValue >= ma5)
+                return "value-above-ma5";
+
+            return "value-weak";
+        }
+
+        private static string ResolveCandleStructureBucket(long open, long close, decimal bodyRate, decimal upperWickRate, decimal closeLocationRate)
+        {
+            if (open <= 0 || close <= 0)
+                return "candle-missing";
+
+            if (close > open && closeLocationRate >= 70m && upperWickRate <= bodyRate)
+                return "bull-close-high";
+
+            if (close > open && upperWickRate > bodyRate)
+                return "bull-upper-wick-heavy";
+
+            if (close > open)
+                return "bull";
+
+            if (close < open && closeLocationRate <= 30m)
+                return "bear-close-low";
+
+            if (close < open)
+                return "bear";
+
+            return "doji";
+        }
+
+        private static string ResolvePriceMaStructureBucket(long close, decimal ma5, decimal ma20, decimal ma60)
+        {
+            if (close <= 0 || ma5 <= 0 || ma20 <= 0 || ma60 <= 0)
+                return "price-ma-missing";
+
+            if (close > ma5 && ma5 > ma20 && ma20 > ma60)
+                return "price-above-5m-ma-aligned";
+
+            if (close > ma60 && ma5 > ma20)
+                return "price-above-ma60-short-up";
+
+            if (close > ma60)
+                return "price-above-ma60";
+
+            if (close < ma60 && ma5 < ma20)
+                return "price-below-ma60-short-down";
+
+            return "price-below-ma60";
+        }
+
+        private static string ResolveDailyMaSpreadBucket(decimal dailyMa5To60Rate, decimal ma5, decimal ma20, decimal ma60)
+        {
+            if (ma5 <= 0 || ma20 <= 0 || ma60 <= 0)
+                return "daily-ma-missing";
+
+            if (ma5 < ma20 || ma5 < ma60)
+                return "daily-ma-not-aligned";
+
+            return dailyMa5To60Rate switch
+            {
+                <= 3m => "daily-ma-tight-0-3",
+                <= 8m => "daily-ma-spread-3-8",
+                _ => "daily-ma-hot-8+"
+            };
+        }
+
+        private static string ResolveOutcomeBucket(BacktestTradeRow trade)
+        {
+            if (trade.Mfe >= 5m && trade.Mae > -3m)
+                return "clean-mfe5";
+
+            if (trade.Mfe >= 3m && trade.Mae > -3m)
+                return "clean-mfe3";
+
+            if (trade.Mfe >= 3m)
+                return "mfe3-with-drawdown";
+
+            if (trade.ProfitRate > 0m)
+                return "small-win";
+
+            return "failed";
+        }
+
+        private static void SaveRangeFactorDiagnostics(string outputDirectory, IReadOnlyList<RangeFactorDiagnosticRow> rows)
+        {
+            if (rows.Count == 0)
+                return;
+
+            StringBuilder builder = new();
+            AppendCsvLine(
+                builder,
+                "Factor",
+                "Code",
+                "Market",
+                "SignalDate",
+                "SignalHour",
+                "BaseTime",
+                "EntryTime",
+                "ExitTime",
+                "DayOpen",
+                "PreviousHigh",
+                "PreviousLow",
+                "TriggerLine",
+                "Rsi2",
+                "PriceMa5",
+                "PriceMa20",
+                "PriceMa60",
+                "Ma200",
+                "Ma200GapRate",
+                "Volume",
+                "VolumeMa5",
+                "VolumeMa20",
+                "VolumeMa60",
+                "TradingValueMa5",
+                "TradingValueMa20",
+                "TradingValueMa60",
+                "BodyRate",
+                "UpperWickRate",
+                "LowerWickRate",
+                "CloseLocationRate",
+                "DailyMa5",
+                "DailyMa20",
+                "DailyMa60",
+                "DailyMa5To60Rate",
+                "DailyTradingValue",
+                "BaseTradingValue",
+                "TriggerToPreviousHighRate",
+                "DailyValueBucket",
+                "Ma200PositionBucket",
+                "VolumeExpansionBucket",
+                "TradingValueExpansionBucket",
+                "CandleStructureBucket",
+                "PriceMaStructureBucket",
+                "DailyMaSpreadBucket",
+                "ProfitRate",
+                "MAE",
+                "MFE",
+                "OutcomeBucket",
+                "ExitReason");
+
+            foreach (RangeFactorDiagnosticRow row in rows)
+            {
+                AppendCsvLine(
+                    builder,
+                    row.Factor.ToString("0.00", CultureInfo.InvariantCulture),
+                    row.Code,
+                    row.Market,
+                    row.SignalDate,
+                    row.SignalHour,
+                    row.BaseTime,
+                    row.EntryTime,
+                    row.ExitTime,
+                    row.DayOpen.ToString(CultureInfo.InvariantCulture),
+                    row.PreviousHigh.ToString(CultureInfo.InvariantCulture),
+                    row.PreviousLow.ToString(CultureInfo.InvariantCulture),
+                    row.TriggerLine.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Rsi2.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.PriceMa5.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.PriceMa20.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.PriceMa60.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Ma200.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Ma200GapRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Volume.ToString(CultureInfo.InvariantCulture),
+                    row.VolumeMa5.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.VolumeMa20.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.VolumeMa60.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.TradingValueMa5.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.TradingValueMa20.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.TradingValueMa60.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.BodyRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.UpperWickRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.LowerWickRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.CloseLocationRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.DailyMa5.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.DailyMa20.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.DailyMa60.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.DailyMa5To60Rate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.DailyTradingValue.ToString(CultureInfo.InvariantCulture),
+                    row.BaseTradingValue.ToString(CultureInfo.InvariantCulture),
+                    row.TriggerToPreviousHighRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.DailyValueBucket,
+                    row.Ma200PositionBucket,
+                    row.VolumeExpansionBucket,
+                    row.TradingValueExpansionBucket,
+                    row.CandleStructureBucket,
+                    row.PriceMaStructureBucket,
+                    row.DailyMaSpreadBucket,
+                    row.ProfitRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Mae.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Mfe.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.OutcomeBucket,
+                    row.ExitReason);
+            }
+
+            File.WriteAllText(Path.Combine(outputDirectory, "range_factor_trade_diagnostics.csv"), builder.ToString(), Encoding.UTF8);
+        }
+
+        private static void AppendCsvLine(StringBuilder builder, params string[] values)
+        {
+            builder.AppendLine(string.Join(",", values.Select(EscapeCsv)));
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            value ??= string.Empty;
+            if (!value.Contains(',') && !value.Contains('"') && !value.Contains('\n') && !value.Contains('\r'))
+                return value;
+
+            return $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
         }
 
         private static List<BacktestSignalRow> FilterSignals(
@@ -1780,6 +2794,17 @@ namespace TradingDashboard.Services.Backtests
             return -1;
         }
 
+        private static int FindLastTimeIndexAtOrBefore(IReadOnlyList<BacktestMinuteBar> bars, string dateTime)
+        {
+            for (int i = bars.Count - 1; i >= 0; i--)
+            {
+                if (string.CompareOrdinal(bars[i].DateTime, dateTime) <= 0)
+                    return i;
+            }
+
+            return -1;
+        }
+
         private static int ResolveHoldingMinutes(string entryTime, string exitTime, int fallbackBars)
         {
             if (DateTime.TryParseExact(entryTime, "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime entry) &&
@@ -1818,8 +2843,15 @@ namespace TradingDashboard.Services.Backtests
             return diff <= percent;
         }
 
-        private static string BuildBaseReason(BaseState state) =>
-            $"completed daily MA aligned 5={state.DailyMa5:N0} > 20={state.DailyMa20:N0} > 60={state.DailyMa60:N0}; daily value {FormatEok(state.DailyTradingValue)}; A=prevHigh({state.PreviousDailyHigh:N0})-prevLow({state.PreviousDailyLow:N0}); B=dayOpen({state.DayOpen:N0})+A*0.5={state.TriggerLine:N0}; CROSSUP(C,B) and RSI2={state.Rsi2:0.##}>50; 5m base={state.Time}; close {state.Close:N0}; base low {state.Low:N0}; prev close stop {state.StopPrice:N0}; MA200 {state.Ma200:N0}";
+        private string BuildBaseReason(BaseState state)
+        {
+            if (state.Kind == "AVGIF240_LOWER_RECOVERY")
+            {
+                return $"completed daily MA aligned 5={state.DailyMa5:N0} > 20={state.DailyMa20:N0} > 60={state.DailyMa60:N0}; daily value {FormatEok(state.DailyTradingValue)}; AVGIF240 lower band recovery CROSSUP; lower={state.TriggerLine:N0}; 5m base={state.Time}; close {state.Close:N0}; base low {state.Low:N0}; prev close stop {state.StopPrice:N0}; MA200 {state.Ma200:N0}";
+            }
+
+            return $"completed daily MA aligned 5={state.DailyMa5:N0} > 20={state.DailyMa20:N0} > 60={state.DailyMa60:N0}; daily value {FormatEok(state.DailyTradingValue)}; A=prevHigh({state.PreviousDailyHigh:N0})-prevLow({state.PreviousDailyLow:N0}); B=dayOpen({state.DayOpen:N0})+A*{_rangeFactor.ToString("0.##", CultureInfo.InvariantCulture)}={state.TriggerLine:N0}; CROSSUP(C,B) and RSI2={state.Rsi2:0.##}>50; 5m base={state.Time}; close {state.Close:N0}; base low {state.Low:N0}; prev close stop {state.StopPrice:N0}; MA200 {state.Ma200:N0}";
+        }
 
         private static string BuildEntryReason(BaseState state) =>
             $"buy at 5m signal candle close; formula CROSSUP(C,B) AND RSI2>50; daily value {FormatEok(state.DailyTradingValue)}; B={state.TriggerLine:N0}; RSI2={state.Rsi2:0.##}; base {state.Time}; base low {state.Low:N0}; prev close stop {state.StopPrice:N0}; center {state.Center:N0}; MA200 {state.Ma200:N0}";
@@ -1850,6 +2882,55 @@ namespace TradingDashboard.Services.Backtests
             return max;
         }
 
+        private readonly record struct RangeFactorDiagnosticRow(
+            decimal Factor,
+            string Code,
+            string Market,
+            string SignalDate,
+            string SignalHour,
+            string BaseTime,
+            string EntryTime,
+            string ExitTime,
+            long DayOpen,
+            long PreviousHigh,
+            long PreviousLow,
+            decimal TriggerLine,
+            decimal Rsi2,
+            decimal PriceMa5,
+            decimal PriceMa20,
+            decimal PriceMa60,
+            decimal Ma200,
+            decimal Ma200GapRate,
+            long Volume,
+            decimal VolumeMa5,
+            decimal VolumeMa20,
+            decimal VolumeMa60,
+            decimal TradingValueMa5,
+            decimal TradingValueMa20,
+            decimal TradingValueMa60,
+            decimal BodyRate,
+            decimal UpperWickRate,
+            decimal LowerWickRate,
+            decimal CloseLocationRate,
+            decimal DailyMa5,
+            decimal DailyMa20,
+            decimal DailyMa60,
+            decimal DailyMa5To60Rate,
+            long DailyTradingValue,
+            long BaseTradingValue,
+            decimal TriggerToPreviousHighRate,
+            string DailyValueBucket,
+            string Ma200PositionBucket,
+            string VolumeExpansionBucket,
+            string TradingValueExpansionBucket,
+            string CandleStructureBucket,
+            string PriceMaStructureBucket,
+            string DailyMaSpreadBucket,
+            decimal ProfitRate,
+            decimal Mae,
+            decimal Mfe,
+            string OutcomeBucket,
+            string ExitReason);
         private readonly record struct StockMarketKey(string Code, string Market);
         private readonly record struct ChartRequest(StockMarketKey Stock, string BaseTime, string EntryTime, string ExitTime, long EntryPrice, long ExitPrice);
         private readonly record struct BaseState(
@@ -1858,8 +2939,18 @@ namespace TradingDashboard.Services.Backtests
             long High,
             long Low,
             long Close,
+            long Volume,
             long TradingValue,
+            decimal PriceMa5,
+            decimal PriceMa20,
+            decimal PriceMa60,
             decimal Ma200,
+            decimal VolumeMa5,
+            decimal VolumeMa20,
+            decimal VolumeMa60,
+            decimal TradingValueMa5,
+            decimal TradingValueMa20,
+            decimal TradingValueMa60,
             decimal DailyMa5,
             decimal DailyMa20,
             decimal DailyMa60,
@@ -1931,11 +3022,30 @@ namespace TradingDashboard.Services.Backtests
             decimal UpperLine,
             decimal PositiveDeviationAverage,
             decimal PositiveDeviationStdDev);
+        private readonly record struct Ma240DeviationBandLine(
+            decimal Ma240,
+            decimal LowerLine,
+            decimal UpperLine,
+            decimal NegativeDeviationAverage,
+            decimal NegativeDeviationStdDev,
+            decimal PositiveDeviationAverage,
+            decimal PositiveDeviationStdDev);
         private readonly record struct Ma240DeviationUpperExitState(
             bool IsReady,
             bool ShouldExit,
             decimal Ma240,
             decimal UpperLine,
+            decimal PositiveDeviationAverage,
+            decimal PositiveDeviationStdDev);
+        private readonly record struct Ma240DeviationBandState(
+            bool IsReady,
+            bool LowerRecoveryCrossUp,
+            bool UpperExtensionCrossUp,
+            decimal Ma240,
+            decimal LowerLine,
+            decimal UpperLine,
+            decimal NegativeDeviationAverage,
+            decimal NegativeDeviationStdDev,
             decimal PositiveDeviationAverage,
             decimal PositiveDeviationStdDev);
         private readonly record struct EntryExitResult(

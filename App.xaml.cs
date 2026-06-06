@@ -1,6 +1,8 @@
-using System;
+﻿using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -209,7 +211,23 @@ namespace TradingDashboard
 
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-preday-high-first-pullback-breakout", StringComparison.OrdinalIgnoreCase)))
             {
-                int exitCode = RunPrevHighFirstPullbackBreakoutBacktest();
+                int exitCode = RunPrevHighFirstPullbackBreakoutBacktest(useConditionSearchGate: false);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-condition01-preday-high-first-pullback-breakout", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunPrevHighFirstPullbackBreakoutBacktest(useConditionSearchGate: true);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-condition01-preday-high-first-pullback-breakout-risk5", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunPrevHighFirstPullbackBreakoutBacktest(useConditionSearchGate: true, maxEntryToPullbackRiskRate: 5m);
                 Shutdown(exitCode);
                 Environment.Exit(exitCode);
                 return;
@@ -242,6 +260,14 @@ namespace TradingDashboard
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-five-ma200-money-1m-trigger", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunFiveMinuteMa200MoneyBaseBacktest(FiveMinuteExitMode.HoldToNextDay1100);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-five-preday-range-rsi2-factor-sweep", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunFiveMinuteRangeFactorSweepBacktest();
                 Shutdown(exitCode);
                 Environment.Exit(exitCode);
                 return;
@@ -304,6 +330,24 @@ namespace TradingDashboard
                 int exitCode = RunFiveMinuteMa200MoneyBaseBacktest(
                     FiveMinuteExitMode.Ma200FiveMinuteCloseStop,
                     FiveMinuteEntryMode.OneMinuteMa5CrossMa20TouchMa20);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-five-preday-range-rsi2-1m-prev-high-break-prev-low-stop", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunFiveMinuteMa200MoneyBaseBacktest(
+                    FiveMinuteExitMode.OneMinutePreviousLowCloseStop,
+                    FiveMinuteEntryMode.OneMinuteMa5PreviousHighBreak);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-five-avgif240-1m-merge-sweep", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunFiveMinuteAvgif240OneMinuteMergeSweepBacktest();
                 Shutdown(exitCode);
                 Environment.Exit(exitCode);
                 return;
@@ -529,11 +573,12 @@ namespace TradingDashboard
 
         private static int RunFiveMinuteMa200MoneyBaseBacktest(
             FiveMinuteExitMode exitMode,
-            FiveMinuteEntryMode entryMode = FiveMinuteEntryMode.SignalCandleClose)
+            FiveMinuteEntryMode entryMode = FiveMinuteEntryMode.SignalCandleClose,
+            decimal rangeFactor = 0.5m)
         {
             try
             {
-                var backtest = new FiveMinuteMa200MoneyBaseBacktest(exitMode, entryMode);
+                var backtest = new FiveMinuteMa200MoneyBaseBacktest(exitMode, entryMode, rangeFactor);
                 BacktestRunResult result = backtest.Run();
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 0;
@@ -549,6 +594,596 @@ namespace TradingDashboard
                 return 1;
             }
         }
+
+        private static int RunFiveMinuteRangeFactorSweepBacktest()
+        {
+            try
+            {
+                decimal[] factors = [0.30m, 0.40m, 0.50m, 0.60m, 0.70m, 0.80m];
+                var results = factors
+                    .Select(factor =>
+                    {
+                        var backtest = new FiveMinuteMa200MoneyBaseBacktest(
+                            FiveMinuteExitMode.HoldToNextDay1100,
+                            FiveMinuteEntryMode.SignalCandleClose,
+                            factor);
+                        return (Factor: factor, Result: backtest.Run());
+                    })
+                    .ToList();
+
+                string runId = $"five_preday_range_factor_sweep_{DateTime.Now:yyyyMMddHHmmss}";
+                string outputDirectory = Path.Combine(AppContext.BaseDirectory, "Storage", "Backtests", "Runs", runId);
+                Directory.CreateDirectory(outputDirectory);
+
+                var sb = new StringBuilder();
+                sb.AppendLine("Factor,RunId,OutputDirectory,SignalCount,TradeCount,WinRate,AvgProfit,AvgLoss,Expectancy,MAE,MFE,AvgHoldingMinutes,ConsecutiveLosses");
+                foreach ((decimal factor, BacktestRunResult result) in results)
+                {
+                    BacktestRunSummary summary = result.Summary;
+                    sb.AppendLine(string.Join(",",
+                    [
+                        factor.ToString("0.00", CultureInfo.InvariantCulture),
+                        result.RunId,
+                        result.OutputDirectory,
+                        result.SignalCount.ToString(CultureInfo.InvariantCulture),
+                        result.TradeCount.ToString(CultureInfo.InvariantCulture),
+                        summary.WinRate.ToString(CultureInfo.InvariantCulture),
+                        summary.AvgProfit.ToString(CultureInfo.InvariantCulture),
+                        summary.AvgLoss.ToString(CultureInfo.InvariantCulture),
+                        summary.Expectancy.ToString(CultureInfo.InvariantCulture),
+                        summary.MAE.ToString(CultureInfo.InvariantCulture),
+                        summary.MFE.ToString(CultureInfo.InvariantCulture),
+                        summary.AvgHoldingMinutes.ToString(CultureInfo.InvariantCulture),
+                        summary.ConsecutiveLosses.ToString(CultureInfo.InvariantCulture)
+                    ]));
+                }
+
+                string summaryPath = Path.Combine(outputDirectory, "range_factor_sweep_summary.csv");
+                File.WriteAllText(summaryPath, sb.ToString(), Encoding.UTF8);
+                SaveRangeFactorFailureReview(outputDirectory, results);
+
+                var summaryResult = new
+                {
+                    RunId = runId,
+                    OutputDirectory = outputDirectory,
+                    SummaryPath = summaryPath,
+                    Factors = results.Select(item => new
+                    {
+                        Factor = item.Factor,
+                        item.Result.RunId,
+                        item.Result.SignalCount,
+                        item.Result.TradeCount,
+                        item.Result.Summary.WinRate,
+                        item.Result.Summary.Expectancy,
+                        item.Result.Summary.MAE,
+                        item.Result.Summary.MFE
+                    })
+                };
+                WriteBacktestJobSummary(summaryResult, "last_strategy_run_summary.json", $"strategy_run_summary_{runId}.json");
+                Console.WriteLine($"factor sweep saved: {summaryPath}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest 5m range-factor sweep failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunFiveMinuteAvgif240OneMinuteMergeSweepBacktest()
+        {
+            try
+            {
+                FiveMinuteEntryMode[] modes =
+                [
+                    FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighLight,
+                    FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighNormal,
+                    FiveMinuteEntryMode.AvgifLowerOneMinutePrevHighStrong
+                ];
+
+                var results = modes
+                    .Select(mode =>
+                    {
+                        var backtest = new FiveMinuteMa200MoneyBaseBacktest(
+                            FiveMinuteExitMode.AvgifUpperOrOneMinutePreviousLowCloseStop,
+                            mode);
+                        return (Mode: mode, Result: backtest.Run());
+                    })
+                    .ToList();
+
+                string runId = $"avgif240_1m_merge_sweep_{DateTime.Now:yyyyMMddHHmmss}";
+                var summaryResult = new
+                {
+                    RunId = runId,
+                    Results = results.Select(item => new
+                    {
+                        VolumeFilter = item.Mode.ToString().Replace("AvgifLowerOneMinutePrevHigh", string.Empty, StringComparison.Ordinal),
+                        item.Result.RunId,
+                        item.Result.OutputDirectory,
+                        item.Result.SignalCount,
+                        item.Result.TradeCount,
+                        item.Result.Summary.WinRate,
+                        item.Result.Summary.AvgProfit,
+                        item.Result.Summary.AvgLoss,
+                        item.Result.Summary.Expectancy,
+                        item.Result.Summary.MAE,
+                        item.Result.Summary.MFE,
+                        item.Result.Summary.AvgHoldingMinutes,
+                        item.Result.Summary.ConsecutiveLosses
+                    })
+                };
+
+                WriteBacktestJobSummary(summaryResult, "last_strategy_run_summary.json", $"strategy_run_summary_{runId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest AVGIF240 1m merge sweep failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static void SaveRangeFactorFailureReview(
+            string outputDirectory,
+            IReadOnlyList<(decimal Factor, BacktestRunResult Result)> results)
+        {
+            List<RangeFactorDiagnosticCsvRow> rows = [];
+            foreach ((decimal factor, BacktestRunResult result) in results)
+            {
+                string path = Path.Combine(result.OutputDirectory, "range_factor_trade_diagnostics.csv");
+                if (!File.Exists(path))
+                    continue;
+
+                rows.AddRange(ReadRangeFactorDiagnostics(path, factor));
+            }
+
+            if (rows.Count == 0)
+                return;
+
+            SaveRangeFactorBucketSummary(outputDirectory, rows);
+            SaveRangeFactorCautionRows(outputDirectory, rows);
+            SaveRangeFactorNoBuyReview(outputDirectory, rows);
+        }
+
+        private static List<RangeFactorDiagnosticCsvRow> ReadRangeFactorDiagnostics(string path, decimal fallbackFactor)
+        {
+            List<string> lines = [.. File.ReadLines(path, Encoding.UTF8).Where(line => !string.IsNullOrWhiteSpace(line))];
+            if (lines.Count < 2)
+                return [];
+
+            string[] headers = ParseCsvLine(lines[0]);
+            Dictionary<string, int> indexes = headers
+                .Select((header, index) => (header, index))
+                .ToDictionary(item => item.header, item => item.index, StringComparer.OrdinalIgnoreCase);
+
+            List<RangeFactorDiagnosticCsvRow> rows = [];
+            foreach (string line in lines.Skip(1))
+            {
+                string[] fields = ParseCsvLine(line);
+                string Get(string name) =>
+                    indexes.TryGetValue(name, out int index) && index >= 0 && index < fields.Length
+                        ? fields[index]
+                        : string.Empty;
+
+                decimal ReadDecimal(string name)
+                {
+                    string value = Get(name);
+                    return decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal parsed)
+                        ? parsed
+                        : 0m;
+                }
+
+                long ReadLong(string name)
+                {
+                    string value = Get(name);
+                    return long.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out long parsed)
+                        ? parsed
+                        : 0L;
+                }
+
+                decimal factor = ReadDecimal("Factor");
+                if (factor <= 0)
+                    factor = fallbackFactor;
+
+                rows.Add(new RangeFactorDiagnosticCsvRow(
+                    factor,
+                    Get("Code"),
+                    Get("Market"),
+                    Get("SignalDate"),
+                    Get("SignalHour"),
+                    Get("BaseTime"),
+                    Get("EntryTime"),
+                    Get("ExitTime"),
+                    ReadLong("DayOpen"),
+                    ReadLong("PreviousHigh"),
+                    ReadLong("PreviousLow"),
+                    ReadDecimal("TriggerLine"),
+                    ReadDecimal("Rsi2"),
+                    ReadDecimal("PriceMa5"),
+                    ReadDecimal("PriceMa20"),
+                    ReadDecimal("PriceMa60"),
+                    ReadDecimal("Ma200"),
+                    ReadDecimal("Ma200GapRate"),
+                    ReadLong("Volume"),
+                    ReadDecimal("VolumeMa5"),
+                    ReadDecimal("VolumeMa20"),
+                    ReadDecimal("VolumeMa60"),
+                    ReadDecimal("TradingValueMa5"),
+                    ReadDecimal("TradingValueMa20"),
+                    ReadDecimal("TradingValueMa60"),
+                    ReadDecimal("BodyRate"),
+                    ReadDecimal("UpperWickRate"),
+                    ReadDecimal("LowerWickRate"),
+                    ReadDecimal("CloseLocationRate"),
+                    ReadDecimal("DailyMa5"),
+                    ReadDecimal("DailyMa20"),
+                    ReadDecimal("DailyMa60"),
+                    ReadDecimal("DailyMa5To60Rate"),
+                    ReadLong("DailyTradingValue"),
+                    ReadLong("BaseTradingValue"),
+                    ReadDecimal("TriggerToPreviousHighRate"),
+                    Get("DailyValueBucket"),
+                    Get("Ma200PositionBucket"),
+                    Get("VolumeExpansionBucket"),
+                    Get("TradingValueExpansionBucket"),
+                    Get("CandleStructureBucket"),
+                    Get("PriceMaStructureBucket"),
+                    Get("DailyMaSpreadBucket"),
+                    ReadDecimal("ProfitRate"),
+                    ReadDecimal("MAE"),
+                    ReadDecimal("MFE"),
+                    Get("OutcomeBucket"),
+                    Get("ExitReason")));
+            }
+
+            return rows;
+        }
+
+        private static void SaveRangeFactorBucketSummary(string outputDirectory, IReadOnlyList<RangeFactorDiagnosticCsvRow> rows)
+        {
+            List<RangeFactorBucketSummaryRow> summaries = [];
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "DailyValue", Bucket = row.DailyValueBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "Ma200Position", Bucket = row.Ma200PositionBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "VolumeExpansion", Bucket = row.VolumeExpansionBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "TradingValueExpansion", Bucket = row.TradingValueExpansionBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "CandleStructure", Bucket = row.CandleStructureBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "PriceMaStructure", Bucket = row.PriceMaStructureBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "DailyMaSpread", Bucket = row.DailyMaSpreadBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            StringBuilder builder = new();
+            AppendCsvLine(builder, "Factor", "BucketType", "Bucket", "TradeCount", "FailureCount", "CautionCount", "FailureRate", "CautionRate", "AvgProfit", "AvgMAE", "AvgMFE");
+            foreach (RangeFactorBucketSummaryRow row in summaries
+                .OrderBy(item => item.Factor)
+                .ThenBy(item => item.BucketType, StringComparer.Ordinal)
+                .ThenBy(item => item.Bucket, StringComparer.Ordinal))
+            {
+                AppendCsvLine(
+                    builder,
+                    row.Factor.ToString("0.00", CultureInfo.InvariantCulture),
+                    row.BucketType,
+                    row.Bucket,
+                    row.TradeCount.ToString(CultureInfo.InvariantCulture),
+                    row.FailureCount.ToString(CultureInfo.InvariantCulture),
+                    row.CautionCount.ToString(CultureInfo.InvariantCulture),
+                    row.FailureRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.CautionRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.AvgProfit.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.AvgMAE.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.AvgMFE.ToString("0.####", CultureInfo.InvariantCulture));
+            }
+
+            File.WriteAllText(Path.Combine(outputDirectory, "range_factor_bucket_summary.csv"), builder.ToString(), Encoding.UTF8);
+        }
+
+        private static RangeFactorBucketSummaryRow BuildRangeFactorBucketSummary(
+            decimal factor,
+            string bucketType,
+            string bucket,
+            IEnumerable<RangeFactorDiagnosticCsvRow> source)
+        {
+            List<RangeFactorDiagnosticCsvRow> rows = [.. source];
+            int failureCount = rows.Count(IsFailedOutcome);
+            int cautionCount = rows.Count(IsCautionOutcome);
+            return new RangeFactorBucketSummaryRow(
+                factor,
+                bucketType,
+                bucket,
+                rows.Count,
+                failureCount,
+                cautionCount,
+                rows.Count > 0 ? failureCount / (decimal)rows.Count * 100m : 0m,
+                rows.Count > 0 ? cautionCount / (decimal)rows.Count * 100m : 0m,
+                rows.Count > 0 ? rows.Average(row => row.ProfitRate) : 0m,
+                rows.Count > 0 ? rows.Average(row => row.Mae) : 0m,
+                rows.Count > 0 ? rows.Average(row => row.Mfe) : 0m);
+        }
+
+        private static void SaveRangeFactorCautionRows(string outputDirectory, IReadOnlyList<RangeFactorDiagnosticCsvRow> rows)
+        {
+            List<RangeFactorDiagnosticCsvRow> cautionRows = [.. rows
+                .Where(IsCautionOutcome)
+                .OrderBy(row => row.Factor)
+                .ThenBy(row => row.Mae)
+                .ThenBy(row => row.SignalDate, StringComparer.Ordinal)
+                .ThenBy(row => row.Code, StringComparer.Ordinal)];
+
+            StringBuilder builder = new();
+            AppendCsvLine(
+                builder,
+                "Factor",
+                "Code",
+                "Market",
+                "SignalDate",
+                "SignalHour",
+                "DailyValueBucket",
+                "Ma200PositionBucket",
+                "VolumeExpansionBucket",
+                "TradingValueExpansionBucket",
+                "CandleStructureBucket",
+                "PriceMaStructureBucket",
+                "DailyMaSpreadBucket",
+                "ProfitRate",
+                "MAE",
+                "MFE",
+                "OutcomeBucket",
+                "NoBuyCandidateReason",
+                "ExitReason");
+
+            foreach (RangeFactorDiagnosticCsvRow row in cautionRows)
+            {
+                AppendCsvLine(
+                    builder,
+                    row.Factor.ToString("0.00", CultureInfo.InvariantCulture),
+                    row.Code,
+                    row.Market,
+                    row.SignalDate,
+                    row.SignalHour,
+                    row.DailyValueBucket,
+                    row.Ma200PositionBucket,
+                    row.VolumeExpansionBucket,
+                    row.TradingValueExpansionBucket,
+                    row.CandleStructureBucket,
+                    row.PriceMaStructureBucket,
+                    row.DailyMaSpreadBucket,
+                    row.ProfitRate.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Mae.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.Mfe.ToString("0.####", CultureInfo.InvariantCulture),
+                    row.OutcomeBucket,
+                    BuildNoBuyCandidateReason(row),
+                    row.ExitReason);
+            }
+
+            File.WriteAllText(Path.Combine(outputDirectory, "range_factor_caution_rows.csv"), builder.ToString(), Encoding.UTF8);
+        }
+
+        private static void SaveRangeFactorNoBuyReview(string outputDirectory, IReadOnlyList<RangeFactorDiagnosticCsvRow> rows)
+        {
+            List<RangeFactorBucketSummaryRow> summaries = [];
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "DailyValue", Bucket = row.DailyValueBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "VolumeExpansion", Bucket = row.VolumeExpansionBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "TradingValueExpansion", Bucket = row.TradingValueExpansionBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "CandleStructure", Bucket = row.CandleStructureBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            foreach (var group in rows.GroupBy(row => new { row.Factor, BucketType = "PriceMaStructure", Bucket = row.PriceMaStructureBucket }))
+                summaries.Add(BuildRangeFactorBucketSummary(group.Key.Factor, group.Key.BucketType, group.Key.Bucket, group));
+
+            List<RangeFactorBucketSummaryRow> cautionBuckets = [.. summaries
+                .Where(row => row.TradeCount >= 3)
+                .OrderByDescending(row => row.CautionRate)
+                .ThenBy(row => row.AvgProfit)
+                .Take(12)];
+
+            StringBuilder builder = new();
+            builder.AppendLine("# Range Factor NoBuy 후보 리뷰");
+            builder.AppendLine();
+            builder.AppendLine("이 보고서는 수익을 따라가기보다 실패/흔들림 구간에서 안 살 이유 후보를 찾기 위한 전처리 결과다.");
+            builder.AppendLine();
+            builder.AppendLine("## 주의 후보 버킷");
+            builder.AppendLine();
+            builder.AppendLine("| Factor | BucketType | Bucket | Trades | Failure% | Caution% | AvgProfit | AvgMAE | AvgMFE |");
+            builder.AppendLine("|---:|---|---|---:|---:|---:|---:|---:|---:|");
+            foreach (RangeFactorBucketSummaryRow row in cautionBuckets)
+            {
+                builder.AppendLine(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"| {row.Factor:0.00} | {row.BucketType} | {row.Bucket} | {row.TradeCount} | {row.FailureRate:0.##}% | {row.CautionRate:0.##}% | {row.AvgProfit:0.##}% | {row.AvgMAE:0.##}% | {row.AvgMFE:0.##}% |"));
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("## 현재 해석");
+            builder.AppendLine();
+            builder.AppendLine("- 일봉 거래대금, 5분 MA200 위치, 일봉 이평 정렬만으로는 부족하다.");
+            builder.AppendLine("- 이번 버전부터 거래량 이평, 거래대금 이평, 봉 구조, 가격 이평 구조를 같이 본다.");
+            builder.AppendLine("- `vol-weak`, `value-weak`, `bear`, `bear-close-low`, `bull-upper-wick-heavy`는 매수 보류 후보로 우선 복기한다.");
+            builder.AppendLine("- 다음 검토는 `caution rows`를 차트로 열어 실제로 거래가 붙었는데 밀린 자리인지, 거래가 죽은 눌림인지 확인한다.");
+            builder.AppendLine();
+            builder.AppendLine("## 산출물");
+            builder.AppendLine();
+            builder.AppendLine("- `range_factor_bucket_summary.csv`: 조건 축별 실패율/주의율");
+            builder.AppendLine("- `range_factor_caution_rows.csv`: 실패 또는 큰 흔들림 후보 행");
+
+            File.WriteAllText(Path.Combine(outputDirectory, "range_factor_no_buy_review.md"), builder.ToString(), Encoding.UTF8);
+        }
+        private static bool IsFailedOutcome(RangeFactorDiagnosticCsvRow row) =>
+            string.Equals(row.OutcomeBucket, "failed", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsCautionOutcome(RangeFactorDiagnosticCsvRow row) =>
+            IsFailedOutcome(row) || row.Mae <= -10m;
+
+        private static string BuildNoBuyCandidateReason(RangeFactorDiagnosticCsvRow row)
+        {
+            List<string> reasons = [];
+            if (string.Equals(row.DailyValueBucket, "under500eok", StringComparison.Ordinal))
+                reasons.Add("daily value under 500eok");
+            if (row.Mae <= -10m)
+                reasons.Add("MAE <= -10%");
+            if (string.Equals(row.Ma200PositionBucket, "below-ma200", StringComparison.Ordinal))
+                reasons.Add("below 5m MA200");
+            if (string.Equals(row.Ma200PositionBucket, "ma200-none-or-touch", StringComparison.Ordinal))
+                reasons.Add("MA200 unavailable/touch ambiguous");
+            if (string.Equals(row.VolumeExpansionBucket, "vol-weak", StringComparison.Ordinal))
+                reasons.Add("volume below short average");
+            if (string.Equals(row.TradingValueExpansionBucket, "value-weak", StringComparison.Ordinal))
+                reasons.Add("trading value below short average");
+            if (string.Equals(row.CandleStructureBucket, "bear", StringComparison.Ordinal) ||
+                string.Equals(row.CandleStructureBucket, "bear-close-low", StringComparison.Ordinal))
+                reasons.Add("bearish signal candle");
+            if (string.Equals(row.CandleStructureBucket, "bull-upper-wick-heavy", StringComparison.Ordinal))
+                reasons.Add("upper wick heavier than body");
+            if (string.Equals(row.PriceMaStructureBucket, "price-below-ma60-short-down", StringComparison.Ordinal) ||
+                string.Equals(row.PriceMaStructureBucket, "price-below-ma60", StringComparison.Ordinal))
+                reasons.Add("price below 5m MA60");
+            if (string.Equals(row.DailyMaSpreadBucket, "daily-ma-not-aligned", StringComparison.Ordinal))
+                reasons.Add("daily MA not aligned");
+            if (row.Mfe < 3m)
+                reasons.Add("MFE < 3%");
+
+            return reasons.Count > 0 ? string.Join(" / ", reasons) : "review chart context";
+        }
+
+        private static string[] ParseCsvLine(string line)
+        {
+            List<string> fields = [];
+            StringBuilder field = new();
+            bool quoted = false;
+
+            for (int i = 0; i < line.Length; i++)
+            {
+                char current = line[i];
+                if (current == '"')
+                {
+                    if (quoted && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        field.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        quoted = !quoted;
+                    }
+                }
+                else if (current == ',' && !quoted)
+                {
+                    fields.Add(field.ToString());
+                    field.Clear();
+                }
+                else
+                {
+                    field.Append(current);
+                }
+            }
+
+            fields.Add(field.ToString());
+            return [.. fields];
+        }
+
+        private static void AppendCsvLine(StringBuilder builder, params string[] values)
+        {
+            builder.AppendLine(string.Join(",", values.Select(EscapeCsv)));
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            value ??= string.Empty;
+            if (!value.Contains(',') && !value.Contains('"') && !value.Contains('\n') && !value.Contains('\r'))
+                return value;
+
+            return $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+        }
+
+        private sealed record RangeFactorDiagnosticCsvRow(
+            decimal Factor,
+            string Code,
+            string Market,
+            string SignalDate,
+            string SignalHour,
+            string BaseTime,
+            string EntryTime,
+            string ExitTime,
+            long DayOpen,
+            long PreviousHigh,
+            long PreviousLow,
+            decimal TriggerLine,
+            decimal Rsi2,
+            decimal PriceMa5,
+            decimal PriceMa20,
+            decimal PriceMa60,
+            decimal Ma200,
+            decimal Ma200GapRate,
+            long Volume,
+            decimal VolumeMa5,
+            decimal VolumeMa20,
+            decimal VolumeMa60,
+            decimal TradingValueMa5,
+            decimal TradingValueMa20,
+            decimal TradingValueMa60,
+            decimal BodyRate,
+            decimal UpperWickRate,
+            decimal LowerWickRate,
+            decimal CloseLocationRate,
+            decimal DailyMa5,
+            decimal DailyMa20,
+            decimal DailyMa60,
+            decimal DailyMa5To60Rate,
+            long DailyTradingValue,
+            long BaseTradingValue,
+            decimal TriggerToPreviousHighRate,
+            string DailyValueBucket,
+            string Ma200PositionBucket,
+            string VolumeExpansionBucket,
+            string TradingValueExpansionBucket,
+            string CandleStructureBucket,
+            string PriceMaStructureBucket,
+            string DailyMaSpreadBucket,
+            decimal ProfitRate,
+            decimal Mae,
+            decimal Mfe,
+            string OutcomeBucket,
+            string ExitReason);
+
+        private sealed record RangeFactorBucketSummaryRow(
+            decimal Factor,
+            string BucketType,
+            string Bucket,
+            int TradeCount,
+            int FailureCount,
+            int CautionCount,
+            decimal FailureRate,
+            decimal CautionRate,
+            decimal AvgProfit,
+            decimal AvgMAE,
+            decimal AvgMFE);
 
         private static int RunMa200BbLowerReboundBacktest()
         {
@@ -613,12 +1248,12 @@ namespace TradingDashboard
             }
         }
 
-        private static int RunPrevHighFirstPullbackBreakoutBacktest()
+        private static int RunPrevHighFirstPullbackBreakoutBacktest(bool useConditionSearchGate, decimal? maxEntryToPullbackRiskRate = null)
         {
             try
             {
                 var backtest = new PrevHighFirstPullbackBreakoutBacktest();
-                BacktestRunResult result = backtest.Run();
+                BacktestRunResult result = backtest.Run(useConditionSearchGate, maxEntryToPullbackRiskRate);
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 0;
             }

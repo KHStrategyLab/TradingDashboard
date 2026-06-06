@@ -16,6 +16,8 @@ namespace TradingDashboard.Services.Backtests
         private const int ObservationMinutes = 180;
         private const int Ma5Period = 5;
         private const int Ma10Period = 10;
+        private const long FiveMinuteTradingValueWon = 4_000_000_000; // 40eok, same money-flow gate as condition search.
+        private const long ThreeMinuteAverageTradingValueWon = 3_000_000_000; // 30eok latest 3 completed 3m bars.
 
         private readonly BacktestDataStore _dataStore;
         private readonly BacktestRunStore _runStore;
@@ -28,9 +30,14 @@ namespace TradingDashboard.Services.Backtests
             _runStore = runStore ?? new BacktestRunStore();
         }
 
-        public BacktestRunResult Run()
+        public BacktestRunResult Run(bool useConditionSearchGate = false, decimal? maxEntryToPullbackRiskRate = null)
         {
-            string runId = _runStore.CreateRunId("preday_high_first_pullback_breakout_5m_observe180");
+            string baseRunName = useConditionSearchGate
+                ? "condition01_preday_high_first_pullback_breakout_5m_observe180"
+                : "preday_high_first_pullback_breakout_5m_observe180";
+            string runId = _runStore.CreateRunId(maxEntryToPullbackRiskRate.HasValue
+                ? $"{baseRunName}_risk{maxEntryToPullbackRiskRate.Value:0.#}"
+                : baseRunName);
             var signals = new List<BacktestSignalRow>();
             var trades = new List<BacktestTradeRow>();
             int holdingBars = Math.Max(1, ObservationMinutes / Minute);
@@ -39,10 +46,13 @@ namespace TradingDashboard.Services.Backtests
             {
                 List<BacktestMinuteBar> fiveBars = [.. _dataStore.LoadMinuteBars(stock.Code, stock.Market, Minute)
                     .OrderBy(item => item.DateTime)];
+                List<BacktestMinuteBar> threeBars = useConditionSearchGate
+                    ? [.. _dataStore.LoadMinuteBars(stock.Code, stock.Market, 3).OrderBy(item => item.DateTime)]
+                    : [];
                 List<BacktestDailyBar> dailyBars = [.. _dataStore.LoadDailyBars(stock.Code, stock.Market)
                     .OrderBy(item => BacktestDataStore.NormalizeDate(item.Date))];
 
-                if (fiveBars.Count < Ma10Period + holdingBars + 2 || dailyBars.Count < 2)
+                if (fiveBars.Count < Ma10Period + holdingBars + 2 || dailyBars.Count < 22 || (useConditionSearchGate && threeBars.Count < 3))
                     continue;
 
                 Dictionary<string, PreviousDayState> previousDayByDate = BuildPreviousDayMap(dailyBars);
@@ -57,6 +67,7 @@ namespace TradingDashboard.Services.Backtests
                 long pullbackLow = 0;
                 string breakTime = string.Empty;
                 string pullbackTime = string.Empty;
+                bool conditionGateSeen = !useConditionSearchGate;
 
                 for (int i = 1; i < fiveBars.Count - holdingBars; i++)
                 {
@@ -75,6 +86,7 @@ namespace TradingDashboard.Services.Backtests
                         pullbackLow = 0;
                         breakTime = string.Empty;
                         pullbackTime = string.Empty;
+                        conditionGateSeen = !useConditionSearchGate;
                         previousHigh = previousDayByDate.TryGetValue(date, out PreviousDayState previousDay)
                             ? previousDay.High
                             : 0;
@@ -86,10 +98,23 @@ namespace TradingDashboard.Services.Backtests
                     if (!maByIndex.TryGetValue(i, out MaState ma))
                         continue;
 
+                    if (useConditionSearchGate && !conditionGateSeen)
+                    {
+                        if (!previousDayByDate.TryGetValue(date, out PreviousDayState dailyState) ||
+                            !IsConditionSearchGateBar(dailyState, current, threeBars))
+                        {
+                            continue;
+                        }
+
+                        conditionGateSeen = true;
+                        signals.Add(BuildSignal(runId, stock, current, "STAGE_CONDITION01_GATE",
+                            $"Condition01Gate; previousHigh {previousHigh:N0}; BBUpper {CalculateIntradayBollingerUpper(dailyState.PreviousCloses, current.Close):N0}; 5mValue {current.TradingValue / 100_000_000m:0.##}eok"));
+                    }
+
                     if (stage == StageState.None)
                     {
                         bool crossesAbovePreviousHigh =
-                            previous.Close <= previousHigh &&
+                            (useConditionSearchGate || previous.Close <= previousHigh) &&
                             current.Close > previousHigh;
 
                         if (crossesAbovePreviousHigh)
@@ -132,6 +157,18 @@ namespace TradingDashboard.Services.Backtests
                             continue;
 
                         long entryPrice = current.Close;
+                        decimal entryToPullbackRiskRate = entryPrice > 0
+                            ? (entryPrice - pullbackLow) / (decimal)entryPrice * 100m
+                            : 0m;
+                        if (maxEntryToPullbackRiskRate.HasValue && entryToPullbackRiskRate > maxEntryToPullbackRiskRate.Value)
+                        {
+                            signals.Add(BuildSignal(runId, stock, current, "SKIP_RISK_TOO_WIDE",
+                                $"SkipRiskTooWide; previousHigh {previousHigh:N0}; pullbackLow {pullbackLow:N0}; entry {entryPrice:N0}; risk {entryToPullbackRiskRate:0.##}%; max {maxEntryToPullbackRiskRate.Value:0.##}%"));
+                            stage = StageState.None;
+                            usedDate.Add(date);
+                            continue;
+                        }
+
                         long maxHigh = holding.Max(item => item.High);
                         long minLow = holding.Min(item => item.Low);
                         BacktestMinuteBar exitBar = holding[^1];
@@ -162,7 +199,7 @@ namespace TradingDashboard.Services.Backtests
                             ProfitAmount = exitBar.Close - entryPrice,
                             Mae = mae,
                             Mfe = mfe,
-                            RiskRate = entryPrice > 0 ? (entryPrice - pullbackLow) / (decimal)entryPrice * 100m : 0m,
+                            RiskRate = entryToPullbackRiskRate,
                             MaxR = 0,
                             MinR = 0,
                             HoldingMinutes = holdingMinutes,
@@ -192,7 +229,9 @@ namespace TradingDashboard.Services.Backtests
                 OrderMode = "None",
                 LiveOrder = false,
                 ExecutionType = "BacktestOnly",
-                Memo = "P=PREDAYHIGH; after close cross above P, wait first MA5/MA10 pullback support, then buy when close breaks pullback high and remains above P. No live orders."
+                Memo = useConditionSearchGate
+                    ? $"Condition search gate first: intraday daily BB upper break + previous high break + 5m 40eok + latest 3m avg 30eok. Then wait first MA5/MA10 pullback support and buy only when close breaks pullback high above previous high. {(maxEntryToPullbackRiskRate.HasValue ? $"Skip entries whose entry-to-pullback-low structural risk exceeds {maxEntryToPullbackRiskRate.Value:0.##}%." : "No structural risk cap.")} No live orders."
+                    : $"P=PREDAYHIGH; after close cross above P, wait first MA5/MA10 pullback support, then buy when close breaks pullback high and remains above P. {(maxEntryToPullbackRiskRate.HasValue ? $"Skip entries whose entry-to-pullback-low structural risk exceeds {maxEntryToPullbackRiskRate.Value:0.##}%." : "No structural risk cap.")} No live orders."
             };
 
             string outputDirectory = _runStore.SaveRun(runId, signals, trades, summaries, config);
@@ -241,14 +280,99 @@ namespace TradingDashboard.Services.Backtests
                 .Where(item => !string.IsNullOrWhiteSpace(item.Date))
                 .OrderBy(item => BacktestDataStore.NormalizeDate(item.Date))];
 
-            for (int i = 1; i < sorted.Count; i++)
+            for (int i = 20; i < sorted.Count; i++)
             {
                 string date = BacktestDataStore.NormalizeDate(sorted[i].Date);
                 BacktestDailyBar previous = sorted[i - 1];
-                result[date] = new PreviousDayState(previous.High, previous.Low, previous.Close);
+                decimal previousUpper = CalculateBollingerUpper(sorted, i - 1, 20, 2m);
+                List<decimal> previousCloses = [.. sorted
+                    .Skip(i - 19)
+                    .Take(19)
+                    .Select(item => (decimal)item.Close)];
+                result[date] = new PreviousDayState(previous.High, previous.Low, previous.Close, previousUpper, previousCloses);
             }
 
             return result;
+        }
+
+        private static bool IsConditionSearchGateBar(
+            PreviousDayState dailyState,
+            BacktestMinuteBar current,
+            IReadOnlyList<BacktestMinuteBar> threeBars)
+        {
+            if (!IsMorningSearchWindow(current.DateTime) ||
+                dailyState.High <= 0 ||
+                current.Close <= dailyState.High ||
+                current.TradingValue < FiveMinuteTradingValueWon ||
+                !IsIntradayDailyBollingerUpperBreak(dailyState, current.Close) ||
+                !TryGetLatestThreeMinuteAverageTradingValue(threeBars, current.DateTime, out decimal threeMinuteAverageTradingValue) ||
+                threeMinuteAverageTradingValue < ThreeMinuteAverageTradingValueWon)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsMorningSearchWindow(string dateTime)
+        {
+            if (!DateTime.TryParseExact(dateTime, "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsed))
+                return false;
+
+            TimeSpan time = parsed.TimeOfDay;
+            return time >= TimeSpan.Parse("09:00:00", CultureInfo.InvariantCulture) &&
+                   time <= TimeSpan.Parse("12:00:00", CultureInfo.InvariantCulture);
+        }
+
+        private static bool IsIntradayDailyBollingerUpperBreak(PreviousDayState dailyState, long currentPrice)
+        {
+            decimal upper = CalculateIntradayBollingerUpper(dailyState.PreviousCloses, currentPrice);
+            return upper > 0m && currentPrice > upper && dailyState.Close <= dailyState.PreviousBollingerUpper;
+        }
+
+        private static decimal CalculateIntradayBollingerUpper(IReadOnlyList<decimal> previousCloses, long currentPrice)
+        {
+            if (previousCloses.Count < 19 || currentPrice <= 0)
+                return 0m;
+
+            List<decimal> closes = [.. previousCloses, currentPrice];
+            decimal average = closes.Average();
+            double variance = closes.Select(item => Math.Pow((double)(item - average), 2)).Average();
+            decimal standardDeviation = (decimal)Math.Sqrt(variance);
+            return average + standardDeviation * 2m;
+        }
+
+        private static decimal CalculateBollingerUpper(IReadOnlyList<BacktestDailyBar> bars, int index, int period, decimal width)
+        {
+            if (index < period - 1)
+                return 0m;
+
+            List<decimal> closes = [.. bars.Skip(index - period + 1).Take(period).Select(item => (decimal)item.Close)];
+            if (closes.Count < period)
+                return 0m;
+
+            decimal average = closes.Average();
+            double variance = closes.Select(item => Math.Pow((double)(item - average), 2)).Average();
+            decimal standardDeviation = (decimal)Math.Sqrt(variance);
+            return average + standardDeviation * width;
+        }
+
+        private static bool TryGetLatestThreeMinuteAverageTradingValue(
+            IReadOnlyList<BacktestMinuteBar> threeBars,
+            string baseTime,
+            out decimal averageTradingValue)
+        {
+            averageTradingValue = 0m;
+            List<BacktestMinuteBar> latest = [.. threeBars
+                .Where(item => string.CompareOrdinal(item.DateTime, baseTime) <= 0)
+                .OrderByDescending(item => item.DateTime)
+                .Take(3)];
+
+            if (latest.Count < 3)
+                return false;
+
+            averageTradingValue = latest.Average(item => (decimal)item.TradingValue);
+            return true;
         }
 
         private static Dictionary<int, MaState> BuildMaStates(IReadOnlyList<BacktestMinuteBar> bars)
@@ -359,7 +483,7 @@ namespace TradingDashboard.Services.Backtests
         }
 
         private sealed record StockMarketKey(string Code, string Market);
-        private readonly record struct PreviousDayState(long High, long Low, long Close);
+        private readonly record struct PreviousDayState(long High, long Low, long Close, decimal PreviousBollingerUpper, IReadOnlyList<decimal> PreviousCloses);
         private readonly record struct MaState(decimal Ma5, decimal Ma10);
     }
 }
