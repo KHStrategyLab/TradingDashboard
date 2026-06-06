@@ -167,6 +167,16 @@ namespace TradingDashboard
         private Border? _currentPriceMarkerLabel;
         private TextBlock? _currentPriceMarkerText;
         private Canvas? _priceChartCanvas;
+        private bool _showSupplyProfileOverlay;
+        private readonly List<ChartCandle> _supplyProfileDetailCandles = [];
+        private string _supplyProfileDetailCode = string.Empty;
+        private string _supplyProfileDetailMarket = string.Empty;
+        private ChartPeriod _supplyProfileDetailBasePeriod = ChartPeriod.Daily;
+        private int _supplyProfileDetailSourceMinute;
+        private DateTime _supplyProfileDetailStart = DateTime.MinValue;
+        private DateTime _supplyProfileDetailEnd = DateTime.MinValue;
+        private bool _isSupplyProfileDetailLoading;
+        private string _lastSupplyProfileDetailMissKey = string.Empty;
         private Rectangle? _chartDragSelectionRect;
         private bool _isChartDragSelecting;
         private Point _chartDragStartPoint;

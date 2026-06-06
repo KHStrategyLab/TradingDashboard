@@ -114,6 +114,41 @@
             <Setter Property="FontSize" Value="12"/>
         </Style>
 
+        <Style x:Key="ChartOverlayToggleStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Width" Value="50"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMainBrush}"/>
+            <Setter Property="BorderBrush" Value="#444444"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="Border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#333333"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#12384A"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource PaletteSkyBlue}"/>
+                                <Setter Property="Foreground" Value="{StaticResource WhiteValueBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="DarkComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
             <Setter Property="Background" Value="#333333"/>
             <Setter Property="Foreground" Value="{StaticResource WhiteValueBrush}"/>
@@ -2193,6 +2228,12 @@
                                         ToolTip="현재 분봉 차트 데이터를 100봉 더 가져오기"
                                         Style="{StaticResource ToolbarButtonStyle}"
                                         Click="ChartLoadMoreButton_Click"/>
+                                <ToggleButton x:Name="SupplyProfileToggleButton"
+                                              Content="매물"
+                                              ToolTip="현재 차트 구간의 거래량 매물대 레이어 보기"
+                                              Style="{StaticResource ChartOverlayToggleStyle}"
+                                              Checked="SupplyProfileToggleButton_Checked"
+                                              Unchecked="SupplyProfileToggleButton_Unchecked"/>
                             </StackPanel>
                         </Grid>
                     </Border>

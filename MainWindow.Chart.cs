@@ -86,6 +86,21 @@ namespace TradingDashboard
             StartSelectedChartRender();
         }
 
+        private void SupplyProfileToggleButton_Checked(object sender, RoutedEventArgs e)
+        {
+            _showSupplyProfileOverlay = true;
+            _ = EnsureSupplyProfileDetailCandlesAsync();
+            if (_currentChartCandles.Count > 0)
+                DrawFullChart("supply profile on");
+        }
+
+        private void SupplyProfileToggleButton_Unchecked(object sender, RoutedEventArgs e)
+        {
+            _showSupplyProfileOverlay = false;
+            if (_currentChartCandles.Count > 0)
+                DrawFullChart("supply profile off");
+        }
+
         private void ResetChartLoadMoreCount()
         {
             _chartAdditionalCandleCount = 0;
@@ -569,6 +584,8 @@ namespace TradingDashboard
             double gap = chartW / candles.Count;
             int visibleStartIndex = GetVisibleChartStartIndex();
 
+            DrawSupplyProfileOverlay(canvas, candles, chartW, h, min, max, currentPrice);
+
             for (int i = 0; i < candles.Count; i++)
             {
                 ChartCandle c = candles[i];
@@ -618,6 +635,291 @@ namespace TradingDashboard
             DrawRightPriceAxis(canvas, chartW + ChartRightPadding, axisWidth, h, min, max, tick);
             DrawCurrentPriceMarker(canvas, chartW, ChartRightPadding, axisWidth, h, min, max, currentPrice);
             _priceChartRenderState = new ChartRenderState(candles.Count, GetVisibleChartStartIndex(), chartW, h, min, max, gap, candleW, 0, 0);
+        }
+
+        private void DrawSupplyProfileOverlay(
+            Canvas canvas,
+            IReadOnlyList<ChartCandle> candles,
+            double chartW,
+            double h,
+            double min,
+            double max,
+            double currentPrice)
+        {
+            if (!_showSupplyProfileOverlay || candles.Count < 5 || chartW <= 0 || h <= 0 || max <= min)
+                return;
+
+            IReadOnlyList<ChartCandle> profileCandles = ResolveSupplyProfileCandles(candles);
+            const int binCount = 48;
+            double range = Math.Max(1, max - min);
+            double binSize = Math.Max(1, Math.Ceiling(range / binCount));
+            double[] values = new double[binCount];
+
+            foreach (ChartCandle candle in profileCandles)
+            {
+                if (candle.Volume <= 0 || candle.High <= 0 || candle.Low <= 0)
+                    continue;
+
+                // HTS 매물대에 가깝게 봉이 실제로 지나간 가격 범위에 거래량을 나누어 누적한다.
+                double low = Math.Max(min, Math.Min(candle.Low, candle.High));
+                double high = Math.Min(max, Math.Max(candle.Low, candle.High));
+                int start = Math.Clamp((int)Math.Floor((low - min) / binSize), 0, binCount - 1);
+                int end = Math.Clamp((int)Math.Floor((high - min) / binSize), 0, binCount - 1);
+                int touched = Math.Max(1, end - start + 1);
+                double share = candle.Volume / touched;
+
+                for (int i = start; i <= end; i++)
+                    values[i] += share;
+            }
+
+            double maxValue = values.Max();
+            if (maxValue <= 0)
+                return;
+
+            double threshold = ResolveSupplyProfileThreshold(values);
+            int pocIndex = Array.IndexOf(values, maxValue);
+            double maxBarWidth = Math.Max(80, chartW * 0.74);
+            var profileBrush = new SolidColorBrush(Color.FromRgb(230, 207, 170));
+            var pocBrush = new SolidColorBrush(Color.FromRgb(255, 232, 176));
+
+            var title = new TextBlock
+            {
+                Text = "매물대",
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(210, 226, 235)),
+                Opacity = 0.72,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(title, 8);
+            Canvas.SetTop(title, 4);
+            canvas.Children.Add(title);
+
+            for (int i = 0; i < binCount; i++)
+            {
+                double value = values[i];
+                if (value <= 0)
+                    continue;
+
+                double priceLow = min + i * binSize;
+                double priceHigh = Math.Min(max, priceLow + binSize);
+                double y1 = (max - priceHigh) / range * (h - 4) + 2;
+                double y2 = (max - priceLow) / range * (h - 4) + 2;
+                double bandHeight = Math.Max(4, y2 - y1 + 1);
+                double barWidth = Math.Max(chartW * 0.018, value / maxValue * maxBarWidth);
+                bool isPoc = i == pocIndex;
+                bool isMajor = value >= threshold;
+
+                var band = new Rectangle
+                {
+                    Width = barWidth,
+                    Height = bandHeight,
+                    Fill = isPoc ? pocBrush : profileBrush,
+                    Stroke = isPoc ? pocBrush : null,
+                    StrokeThickness = isPoc ? 1.0 : 0.0,
+                    Opacity = isPoc ? 0.28 : isMajor ? 0.17 : 0.07,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(band, 0);
+                Canvas.SetTop(band, y1);
+                canvas.Children.Add(band);
+
+                if (isPoc)
+                {
+                    var pocLine = new Line
+                    {
+                        X1 = 0,
+                        X2 = barWidth,
+                        Y1 = y1 + bandHeight / 2.0,
+                        Y2 = y1 + bandHeight / 2.0,
+                        Stroke = pocBrush,
+                        StrokeThickness = 1.0,
+                        Opacity = 0.42,
+                        IsHitTestVisible = false
+                    };
+                    canvas.Children.Add(pocLine);
+                }
+            }
+        }
+
+        private IReadOnlyList<ChartCandle> ResolveSupplyProfileCandles(IReadOnlyList<ChartCandle> visibleCandles)
+        {
+            if (_supplyProfileDetailCandles.Count == 0 ||
+                _supplyProfileDetailSourceMinute <= 0 ||
+                _supplyProfileDetailBasePeriod != _currentChartDataPeriod ||
+                !string.Equals(_supplyProfileDetailCode, _currentChartCode, StringComparison.Ordinal) ||
+                !string.Equals(_supplyProfileDetailMarket, _currentChartMarket, StringComparison.Ordinal) ||
+                !TryGetVisibleChartDateRange(visibleCandles, out DateTime start, out DateTime end) ||
+                _supplyProfileDetailStart > start ||
+                _supplyProfileDetailEnd < end)
+            {
+                return visibleCandles;
+            }
+
+            List<ChartCandle> detail = [.. _supplyProfileDetailCandles
+                .Where(c => TryParseChartDateTime(c.Date, out DateTime dt) && dt >= start && dt <= end)];
+
+            return detail.Count >= 5 ? detail : visibleCandles;
+        }
+
+        private async Task EnsureSupplyProfileDetailCandlesAsync()
+        {
+            if (!_showSupplyProfileOverlay ||
+                _currentChartCandles.Count == 0 ||
+                string.IsNullOrWhiteSpace(_currentChartCode))
+            {
+                return;
+            }
+
+            int sourceMinute = ResolveSupplyProfileDetailMinute(_currentChartDataPeriod);
+            if (sourceMinute <= 0)
+                return;
+
+            List<ChartCandle> visibleCandles = GetVisibleChartCandles();
+            if (!TryGetVisibleChartDateRange(visibleCandles, out DateTime visibleStart, out DateTime visibleEnd))
+                return;
+
+            string code = _currentChartCode;
+            string market = _currentChartMarket;
+            ChartPeriod basePeriod = _currentChartDataPeriod;
+            int selectionVersion = _selectionVersion;
+            int chartVersion = _chartRenderVersion;
+            bool useNxtMarket = string.Equals(market, "NXT", StringComparison.Ordinal);
+
+            if (_supplyProfileDetailCandles.Count > 0 &&
+                _supplyProfileDetailSourceMinute == sourceMinute &&
+                _supplyProfileDetailBasePeriod == basePeriod &&
+                string.Equals(_supplyProfileDetailCode, code, StringComparison.Ordinal) &&
+                string.Equals(_supplyProfileDetailMarket, market, StringComparison.Ordinal) &&
+                _supplyProfileDetailStart <= visibleStart &&
+                _supplyProfileDetailEnd >= visibleEnd)
+            {
+                return;
+            }
+
+            int requestedCount = ResolveSupplyProfileDetailRequestCount(basePeriod, visibleCandles.Count, sourceMinute);
+            string missKey = $"{code}|{market}|{basePeriod}|{sourceMinute}|{visibleStart:O}|{visibleEnd:O}|{requestedCount}";
+            if (_isSupplyProfileDetailLoading || string.Equals(_lastSupplyProfileDetailMissKey, missKey, StringComparison.Ordinal))
+                return;
+
+            _isSupplyProfileDetailLoading = true;
+            try
+            {
+                var key = CreateChartCacheKey(code, useNxtMarket, ChartPeriod.Minute5);
+                List<ChartCandle> detailCandles;
+                if (!TryGetChartMemoryCache(key, requestedCount, out detailCandles))
+                {
+                    try
+                    {
+                        detailCandles = [.. (await _kiwoomConditionService.GetMinuteCandlesAsync(code, sourceMinute, useNxtMarket, requestedCount))
+                            .TakeLast(requestedCount)
+                            .Select(ToChartCandle)];
+                        if (detailCandles.Count > 0)
+                            SetChartMemoryCache(key, detailCandles, requestedCount);
+                    }
+                    catch (Exception ex)
+                    {
+                        AppendLog($"supply profile detail load skipped: {code} / {sourceMinute}m / {ex.Message}");
+                        _lastSupplyProfileDetailMissKey = missKey;
+                        return;
+                    }
+                }
+
+                if (detailCandles.Count == 0)
+                {
+                    _lastSupplyProfileDetailMissKey = missKey;
+                    return;
+                }
+
+                List<ChartCandle> covering = [.. detailCandles
+                    .Where(c => TryParseChartDateTime(c.Date, out DateTime dt) && dt >= visibleStart && dt <= visibleEnd)];
+                if (covering.Count < 5)
+                {
+                    _lastSupplyProfileDetailMissKey = missKey;
+                    return;
+                }
+
+                if (selectionVersion != _selectionVersion ||
+                    chartVersion != _chartRenderVersion ||
+                    !_showSupplyProfileOverlay ||
+                    !string.Equals(code, _currentChartCode, StringComparison.Ordinal) ||
+                    !string.Equals(market, _currentChartMarket, StringComparison.Ordinal) ||
+                    basePeriod != _currentChartDataPeriod)
+                {
+                    return;
+                }
+
+                _supplyProfileDetailCandles.Clear();
+                _supplyProfileDetailCandles.AddRange(CloneChartCandles(detailCandles));
+                _supplyProfileDetailCode = code;
+                _supplyProfileDetailMarket = market;
+                _supplyProfileDetailBasePeriod = basePeriod;
+                _supplyProfileDetailSourceMinute = sourceMinute;
+                _supplyProfileDetailStart = detailCandles
+                    .Where(c => TryParseChartDateTime(c.Date, out _))
+                    .Select(c => TryParseChartDateTime(c.Date, out DateTime dt) ? dt : DateTime.MaxValue)
+                    .DefaultIfEmpty(DateTime.MinValue)
+                    .Min();
+                _supplyProfileDetailEnd = detailCandles
+                    .Where(c => TryParseChartDateTime(c.Date, out _))
+                    .Select(c => TryParseChartDateTime(c.Date, out DateTime dt) ? dt : DateTime.MinValue)
+                    .DefaultIfEmpty(DateTime.MinValue)
+                    .Max();
+                _lastSupplyProfileDetailMissKey = string.Empty;
+
+                DrawFullChart($"supply profile {sourceMinute}m detail");
+            }
+            finally
+            {
+                _isSupplyProfileDetailLoading = false;
+            }
+        }
+
+        private static bool TryGetVisibleChartDateRange(IReadOnlyList<ChartCandle> candles, out DateTime start, out DateTime end)
+        {
+            start = DateTime.MinValue;
+            end = DateTime.MinValue;
+            if (candles.Count == 0 ||
+                !TryParseChartDateTime(candles[0].Date, out start) ||
+                !TryParseChartDateTime(candles[^1].Date, out end))
+            {
+                return false;
+            }
+
+            if (end < start)
+                (start, end) = (end, start);
+            return true;
+        }
+
+        private static int ResolveSupplyProfileDetailMinute(ChartPeriod period)
+        {
+            return period is ChartPeriod.Minute10 or
+                ChartPeriod.Minute15 or
+                ChartPeriod.Minute30 or
+                ChartPeriod.Minute60 or
+                ChartPeriod.Minute120
+                ? 5
+                : 0;
+        }
+
+        private static int ResolveSupplyProfileDetailRequestCount(ChartPeriod basePeriod, int visibleCount, int sourceMinute)
+        {
+            int baseMinute = ResolveMinuteChartInterval(basePeriod);
+            if (baseMinute <= sourceMinute)
+                return Math.Max(MinuteChartCandleCount, visibleCount);
+
+            int ratio = Math.Max(1, baseMinute / sourceMinute);
+            return Math.Clamp(visibleCount * ratio + 80, MinuteChartCandleCount, 2400);
+        }
+
+        private static double ResolveSupplyProfileThreshold(IReadOnlyList<double> values)
+        {
+            double[] positive = [.. values.Where(v => v > 0).OrderBy(v => v)];
+            if (positive.Length == 0)
+                return double.MaxValue;
+
+            int index = Math.Clamp((int)Math.Floor(positive.Length * 0.72), 0, positive.Length - 1);
+            return positive[index];
         }
 
         private double ResolveSelectedCurrentPrice()
@@ -851,6 +1153,12 @@ namespace TradingDashboard
             sw.Stop();
 
             AppendLog($"chart full render({FormatChartPeriodLabel(_currentChartDataPeriod)} / {reason}): {candles.Count}bars / {sw.ElapsedMilliseconds:N0}ms");
+            if (_showSupplyProfileOverlay &&
+                ResolveSupplyProfileDetailMinute(_currentChartDataPeriod) > 0 &&
+                !reason.StartsWith("supply profile ", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = EnsureSupplyProfileDetailCandlesAsync();
+            }
         }
 
         private void ResetChartViewport()
@@ -1001,6 +1309,9 @@ namespace TradingDashboard
 
         private bool TryUpdateLastChartVisual(ChartCandle candle)
         {
+            if (_showSupplyProfileOverlay)
+                return false;
+
             if (_priceChartRenderState == null ||
                 _volumeChartRenderState == null ||
                 _lastCandleWick == null ||

@@ -2803,9 +2803,10 @@ namespace TradingDashboard.Services.Backtests
 
         private void SaveCharts(string outputDirectory, IEnumerable<ChartRequest> requests)
         {
+            List<ChartRequest> materializedRequests = [.. requests];
             string chartDirectory = Path.Combine(outputDirectory, "charts");
             Directory.CreateDirectory(chartDirectory);
-            foreach (ChartRequest request in requests)
+            foreach (ChartRequest request in materializedRequests)
             {
                 List<BacktestMinuteBar> fiveBars = LoadMinuteBars(request.Stock, 5);
                 int baseIndex = FindTimeIndex(fiveBars, request.BaseTime);
@@ -2822,6 +2823,53 @@ namespace TradingDashboard.Services.Backtests
                 string path = Path.Combine(chartDirectory, name);
                 RenderChart(path, request.Stock, window, request.BaseTime, request.EntryTime, request.ExitTime, request.EntryPrice, request.ExitPrice);
             }
+
+            SaveThirtyMinuteStructureCharts(outputDirectory, materializedRequests);
+        }
+
+        private void SaveThirtyMinuteStructureCharts(string outputDirectory, IEnumerable<ChartRequest> requests)
+        {
+            string structureDirectory = Path.Combine(outputDirectory, "charts_30m_structure");
+            Directory.CreateDirectory(structureDirectory);
+
+            var service = new ThirtyMinuteBaselineService(_dataStore);
+            List<ThirtyMinuteBaselineSignalChartResult> rows = [];
+            foreach (ChartRequest request in requests)
+            {
+                ThirtyMinuteBaselineSignalChartResult? result = service.SaveSignalChart(
+                    structureDirectory,
+                    request.Stock.Code,
+                    request.Stock.Market,
+                    request.EntryTime);
+                if (result != null)
+                    rows.Add(result);
+            }
+
+            string csvPath = Path.Combine(outputDirectory, "thirty_minute_signal_structure_summary.csv");
+            File.WriteAllText(csvPath, BuildThirtyMinuteSignalChartCsv(rows), Encoding.UTF8);
+        }
+
+        private static string BuildThirtyMinuteSignalChartCsv(IEnumerable<ThirtyMinuteBaselineSignalChartResult> rows)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("Code,Market,EntryTime,AnchorTime,AnchorClose,NearestSupport,NearestResistance,BreakoutRoomPct,LocationTag,ChartPath");
+            foreach (ThirtyMinuteBaselineSignalChartResult row in rows)
+            {
+                AppendCsvLine(
+                    builder,
+                    row.Code,
+                    row.Market,
+                    row.EntryTime,
+                    row.AnchorTime,
+                    row.AnchorClose.ToString(CultureInfo.InvariantCulture),
+                    row.NearestSupport.ToString(CultureInfo.InvariantCulture),
+                    row.NearestResistance.ToString(CultureInfo.InvariantCulture),
+                    row.BreakoutRoomPct.ToString(CultureInfo.InvariantCulture),
+                    row.LocationTag,
+                    row.ChartPath);
+            }
+
+            return builder.ToString();
         }
 
         private static void RenderChart(

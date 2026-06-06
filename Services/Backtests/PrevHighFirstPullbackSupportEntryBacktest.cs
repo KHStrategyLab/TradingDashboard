@@ -11,6 +11,7 @@ namespace TradingDashboard.Services.Backtests
     {
         public const string StrategyCode = "PREDAY_HIGH_FIRST_PULLBACK_SUPPORT_ENTRY";
         public const string ExitRuleCode = "OBSERVE_180M_CLOSE";
+        public const string OneMinutePrevLowCloseStopExitRuleCode = "ONE_MINUTE_PREV_LOW_CLOSE_STOP_OR_OBSERVE_180M";
 
         private const int Minute = 5;
         private const int ObservationMinutes = 180;
@@ -30,11 +31,20 @@ namespace TradingDashboard.Services.Backtests
             _runStore = runStore ?? new BacktestRunStore();
         }
 
-        public BacktestRunResult Run(bool useConditionSearchGate = false)
+        public BacktestRunResult Run(
+            bool useConditionSearchGate = false,
+            bool useOneMinutePrevLowCloseStop = false,
+            bool useNextDay1100MaxExit = false)
         {
-            string runId = _runStore.CreateRunId(useConditionSearchGate
-                ? "condition01_preday_high_first_pullback_support_entry_5m_observe180"
-                : "preday_high_first_pullback_support_entry_5m_observe180");
+            string maxExitName = useNextDay1100MaxExit ? "nextday1100" : "observe180";
+            string baseRunName = useConditionSearchGate
+                ? $"condition01_preday_high_first_pullback_support_entry_5m_{maxExitName}"
+                : $"preday_high_first_pullback_support_entry_5m_{maxExitName}";
+            if (useOneMinutePrevLowCloseStop)
+                baseRunName += "_1m_prevlow_stop";
+
+            string exitRuleCode = useOneMinutePrevLowCloseStop ? OneMinutePrevLowCloseStopExitRuleCode : ExitRuleCode;
+            string runId = _runStore.CreateRunId(baseRunName);
             var signals = new List<BacktestSignalRow>();
             var trades = new List<BacktestTradeRow>();
             int holdingBars = Math.Max(1, ObservationMinutes / Minute);
@@ -46,11 +56,19 @@ namespace TradingDashboard.Services.Backtests
                 List<BacktestMinuteBar> threeBars = useConditionSearchGate
                     ? [.. _dataStore.LoadMinuteBars(stock.Code, stock.Market, 3).OrderBy(item => item.DateTime)]
                     : [];
+                List<BacktestMinuteBar> oneBars = useOneMinutePrevLowCloseStop
+                    ? [.. _dataStore.LoadMinuteBars(stock.Code, stock.Market, 1).OrderBy(item => item.DateTime)]
+                    : [];
                 List<BacktestDailyBar> dailyBars = [.. _dataStore.LoadDailyBars(stock.Code, stock.Market)
                     .OrderBy(item => BacktestDataStore.NormalizeDate(item.Date))];
 
-                if (fiveBars.Count < Ma10Period + holdingBars + 2 || dailyBars.Count < 22 || (useConditionSearchGate && threeBars.Count < 3))
+                if (fiveBars.Count < Ma10Period + holdingBars + 2 ||
+                    dailyBars.Count < 22 ||
+                    (useConditionSearchGate && threeBars.Count < 3) ||
+                    (useOneMinutePrevLowCloseStop && oneBars.Count < 2))
+                {
                     continue;
+                }
 
                 Dictionary<string, PreviousDayState> previousDayByDate = BuildPreviousDayMap(dailyBars);
                 Dictionary<int, MaState> maByIndex = BuildMaStates(fiveBars);
@@ -126,17 +144,24 @@ namespace TradingDashboard.Services.Backtests
                     if (!(ma5Support || ma10Support) || !stillAbovePreviousHigh)
                         continue;
 
-                    List<BacktestMinuteBar> holding = ResolveHoldingBars(fiveBars, i, holdingBars);
+                    List<BacktestMinuteBar> holding = useNextDay1100MaxExit
+                        ? ResolveHoldingBarsToNextDay1100(fiveBars, i)
+                        : ResolveHoldingBars(fiveBars, i, holdingBars);
                     if (holding.Count == 0)
                         continue;
 
                     long entryPrice = current.Close;
-                    long maxHigh = holding.Max(item => item.High);
-                    long minLow = holding.Min(item => item.Low);
-                    BacktestMinuteBar exitBar = holding[^1];
+                    ExitState exit = ResolveExit(
+                        holding,
+                        oneBars,
+                        current.DateTime,
+                        useOneMinutePrevLowCloseStop,
+                        useNextDay1100MaxExit);
+                    long maxHigh = exit.MaxHigh;
+                    long minLow = exit.MinLow;
                     decimal mfe = entryPrice > 0 ? (maxHigh - entryPrice) / (decimal)entryPrice * 100m : 0m;
                     decimal mae = entryPrice > 0 ? (minLow - entryPrice) / (decimal)entryPrice * 100m : 0m;
-                    decimal profitRate = entryPrice > 0 ? (exitBar.Close - entryPrice) / (decimal)entryPrice * 100m : 0m;
+                    decimal profitRate = entryPrice > 0 ? (exit.ExitPrice - entryPrice) / (decimal)entryPrice * 100m : 0m;
                     string reason =
                         $"BUY; PrevHighFirstPullbackSupportEntry; previousHigh {previousHigh:N0}; breakTime {breakTime}; breakHigh {breakHigh:N0}; pullbackHigh {current.High:N0}; pullbackLow {current.Low:N0}; MA5 {ma.Ma5:N0}; MA10 {ma.Ma10:N0}; support {(ma5Support ? "MA5" : "MA10")}; entry {entryPrice:N0}; value {current.TradingValue / 100_000_000m:0.##}eok";
 
@@ -145,27 +170,27 @@ namespace TradingDashboard.Services.Backtests
                     {
                         RunId = runId,
                         StrategyCode = StrategyCode,
-                        ExitRuleCode = ExitRuleCode,
+                        ExitRuleCode = exitRuleCode,
                         Code = stock.Code,
                         Market = stock.Market,
                         EntryTime = current.DateTime,
-                        ExitTime = exitBar.DateTime,
+                        ExitTime = exit.ExitTime,
                         EntryPrice = entryPrice,
-                        ExitPrice = exitBar.Close,
+                        ExitPrice = exit.ExitPrice,
                         MaxHigh = maxHigh,
                         MinLow = minLow,
                         StopPrice = current.Low,
                         Quantity = 1,
                         ProfitRate = profitRate,
-                        ProfitAmount = exitBar.Close - entryPrice,
+                        ProfitAmount = exit.ExitPrice - entryPrice,
                         Mae = mae,
                         Mfe = mfe,
                         RiskRate = entryPrice > 0 ? (entryPrice - current.Low) / (decimal)entryPrice * 100m : 0m,
                         MaxR = 0,
                         MinR = 0,
-                        HoldingMinutes = ResolveHoldingMinutes(current.DateTime, exitBar.DateTime, holding.Count * Minute),
+                        HoldingMinutes = ResolveHoldingMinutes(current.DateTime, exit.ExitTime, exit.HoldingMinutesFallback),
                         EntryReason = reason,
-                        ExitReason = $"observe {ObservationMinutes}m close only; maxHigh MFE {mfe:0.##}%, minLow MAE {mae:0.##}%"
+                        ExitReason = $"{exit.ExitReason}; maxHigh MFE {mfe:0.##}%, minLow MAE {mae:0.##}%"
                     });
 
                     usedDate.Add(date);
@@ -174,10 +199,10 @@ namespace TradingDashboard.Services.Backtests
 
             List<BacktestRunSummary> summaries =
             [
-                BuildSummary(runId, "MIXED", signals, trades),
-                BuildSummary(runId, "KRX", signals.Where(item => item.Market == "KRX").ToList(), trades.Where(item => item.Market == "KRX").ToList()),
-                BuildSummary(runId, "NXT", signals.Where(item => item.Market == "NXT").ToList(), trades.Where(item => item.Market == "NXT").ToList()),
-                BuildSummary(runId, "AL", signals.Where(item => item.Market == "AL").ToList(), trades.Where(item => item.Market == "AL").ToList())
+                BuildSummary(runId, exitRuleCode, "MIXED", signals, trades),
+                BuildSummary(runId, exitRuleCode, "KRX", signals.Where(item => item.Market == "KRX").ToList(), trades.Where(item => item.Market == "KRX").ToList()),
+                BuildSummary(runId, exitRuleCode, "NXT", signals.Where(item => item.Market == "NXT").ToList(), trades.Where(item => item.Market == "NXT").ToList()),
+                BuildSummary(runId, exitRuleCode, "AL", signals.Where(item => item.Market == "AL").ToList(), trades.Where(item => item.Market == "AL").ToList())
             ];
 
             var config = new BacktestRunConfig
@@ -190,8 +215,8 @@ namespace TradingDashboard.Services.Backtests
                 LiveOrder = false,
                 ExecutionType = "BacktestOnly",
                 Memo = useConditionSearchGate
-                    ? "Condition search gate first: intraday daily BB upper break + previous high break + 5m 40eok + latest 3m avg 30eok. Then buy first MA5/MA10 pullback support candle. No live orders."
-                    : "After close crosses above previous day high, buy the first MA5/MA10 pullback support candle that still closes above previous high. No live orders."
+                    ? $"Condition search gate first: intraday daily BB upper break + previous high break + 5m 40eok + latest 3m avg 30eok. Then buy first MA5/MA10 pullback support candle. {(useOneMinutePrevLowCloseStop ? "Exit early when completed 1m candle closes below previous 1m low; otherwise hold until max exit." : "No early signal exit.")} Max exit is {(useNextDay1100MaxExit ? "next trading day 11:00" : "180m observation close")}. No live orders."
+                    : $"After close crosses above previous day high, buy the first MA5/MA10 pullback support candle that still closes above previous high. {(useOneMinutePrevLowCloseStop ? "Exit early when completed 1m candle closes below previous 1m low; otherwise hold until max exit." : "No early signal exit.")} Max exit is {(useNextDay1100MaxExit ? "next trading day 11:00" : "180m observation close")}. No live orders."
             };
 
             string outputDirectory = _runStore.SaveRun(runId, signals, trades, summaries, config);
@@ -368,6 +393,113 @@ namespace TradingDashboard.Services.Backtests
             return result;
         }
 
+        private static List<BacktestMinuteBar> ResolveHoldingBarsToNextDay1100(IReadOnlyList<BacktestMinuteBar> bars, int signalIndex)
+        {
+            if (signalIndex < 0 || signalIndex >= bars.Count)
+                return [];
+
+            string signalDate = ResolveDate(bars[signalIndex].DateTime);
+            string nextDate = string.Empty;
+            for (int i = signalIndex + 1; i < bars.Count; i++)
+            {
+                string date = ResolveDate(bars[i].DateTime);
+                if (!string.IsNullOrWhiteSpace(date) && !string.Equals(date, signalDate, StringComparison.Ordinal))
+                {
+                    nextDate = date;
+                    break;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(nextDate))
+                return ResolveHoldingBars(bars, signalIndex, Math.Max(1, ObservationMinutes / Minute));
+
+            string maxExitTime = $"{nextDate}110000";
+            var result = new List<BacktestMinuteBar>();
+            for (int i = signalIndex + 1; i < bars.Count; i++)
+            {
+                if (string.CompareOrdinal(bars[i].DateTime, maxExitTime) > 0)
+                    break;
+
+                result.Add(bars[i]);
+            }
+
+            return result;
+        }
+
+        private static ExitState ResolveExit(
+            IReadOnlyList<BacktestMinuteBar> holding,
+            IReadOnlyList<BacktestMinuteBar> oneBars,
+            string entryTime,
+            bool useOneMinutePrevLowCloseStop,
+            bool useNextDay1100MaxExit)
+        {
+            BacktestMinuteBar plannedExit = holding[^1];
+            long maxHigh = holding.Max(item => item.High);
+            long minLow = holding.Min(item => item.Low);
+            string maxExitReason = useNextDay1100MaxExit
+                ? "max next trading day 11:00 close"
+                : $"observe {ObservationMinutes}m close only";
+
+            if (useOneMinutePrevLowCloseStop &&
+                TryResolveOneMinutePrevLowCloseStop(oneBars, entryTime, plannedExit.DateTime, out BacktestMinuteBar stopBar, out BacktestMinuteBar previousBar))
+            {
+                List<BacktestMinuteBar> oneMinuteWindow = [.. oneBars
+                    .Where(item => string.CompareOrdinal(item.DateTime, entryTime) > 0 &&
+                                   string.CompareOrdinal(item.DateTime, stopBar.DateTime) <= 0)];
+                if (oneMinuteWindow.Count > 0)
+                {
+                    maxHigh = oneMinuteWindow.Max(item => item.High);
+                    minLow = oneMinuteWindow.Min(item => item.Low);
+                }
+
+                return new ExitState(
+                    stopBar.DateTime,
+                    stopBar.Close,
+                    maxHigh,
+                    minLow,
+                    ResolveHoldingMinutes(entryTime, stopBar.DateTime, oneMinuteWindow.Count),
+                    $"1m previous-low close stop; prevLow {previousBar.Low:N0}");
+            }
+
+            return new ExitState(
+                plannedExit.DateTime,
+                plannedExit.Close,
+                maxHigh,
+                minLow,
+                holding.Count * Minute,
+                maxExitReason);
+        }
+
+        private static bool TryResolveOneMinutePrevLowCloseStop(
+            IReadOnlyList<BacktestMinuteBar> oneBars,
+            string entryTime,
+            string maxExitTime,
+            out BacktestMinuteBar stopBar,
+            out BacktestMinuteBar previousBar)
+        {
+            stopBar = new BacktestMinuteBar();
+            previousBar = new BacktestMinuteBar();
+            for (int i = 1; i < oneBars.Count; i++)
+            {
+                BacktestMinuteBar previous = oneBars[i - 1];
+                BacktestMinuteBar current = oneBars[i];
+                if (string.CompareOrdinal(current.DateTime, entryTime) <= 0)
+                    continue;
+
+                if (string.CompareOrdinal(current.DateTime, maxExitTime) > 0)
+                    break;
+
+                if (current.Close < previous.Low)
+                {
+                    stopBar = current;
+                    previousBar = previous;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static string ResolveDate(string dateTime) =>
             dateTime.Length >= 8 ? dateTime[..8] : string.Empty;
 
@@ -384,6 +516,7 @@ namespace TradingDashboard.Services.Backtests
 
         private static BacktestRunSummary BuildSummary(
             string runId,
+            string exitRuleCode,
             string market,
             IReadOnlyList<BacktestSignalRow> signals,
             IReadOnlyList<BacktestTradeRow> trades)
@@ -396,7 +529,7 @@ namespace TradingDashboard.Services.Backtests
             {
                 RunId = runId,
                 StrategyCode = StrategyCode,
-                ExitRuleCode = ExitRuleCode,
+                ExitRuleCode = exitRuleCode,
                 Market = market,
                 SignalCount = signals.Count,
                 TradeCount = trades.Count,
@@ -438,5 +571,6 @@ namespace TradingDashboard.Services.Backtests
         private sealed record StockMarketKey(string Code, string Market);
         private readonly record struct PreviousDayState(long High, long Low, long Close, decimal PreviousBollingerUpper, IReadOnlyList<decimal> PreviousCloses);
         private readonly record struct MaState(decimal Ma5, decimal Ma10);
+        private readonly record struct ExitState(string ExitTime, long ExitPrice, long MaxHigh, long MinLow, int HoldingMinutesFallback, string ExitReason);
     }
 }

@@ -185,6 +185,14 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-condition01-prevhigh-branch-sweep", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunCondition01PrevHighBranchSweepBacktest();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             if (e.Args.Any(arg => string.Equals(arg, "--backtest-ma200-bblower-rebound", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunMa200BbLowerReboundBacktest();
@@ -393,6 +401,32 @@ namespace TradingDashboard
                 return;
             }
 
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-30m-baseline-scan", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunThirtyMinuteBaselineScan();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            if (e.Args.Any(arg => string.Equals(arg, "--backtest-30m-baseline-chart-smoke", StringComparison.OrdinalIgnoreCase)))
+            {
+                int exitCode = RunThirtyMinuteBaselineChartSmoke();
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
+            string? baselineChartCodesArg = e.Args.FirstOrDefault(arg => arg.StartsWith("--backtest-30m-baseline-chart-codes=", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(baselineChartCodesArg))
+            {
+                string codes = baselineChartCodesArg.Split('=', 2)[1];
+                int exitCode = RunThirtyMinuteBaselineChartCodes(codes);
+                Shutdown(exitCode);
+                Environment.Exit(exitCode);
+                return;
+            }
+
             if (e.Args.Any(arg => string.Equals(arg, "--leader-history-rebuild", StringComparison.OrdinalIgnoreCase)))
             {
                 int exitCode = RunLeaderHistoryRebuild();
@@ -573,6 +607,121 @@ namespace TradingDashboard
                 {
                     RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
                     Error = $"backtest condition01 5m money-base failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunCondition01PrevHighBranchSweepBacktest()
+        {
+            try
+            {
+                var results = new[]
+                {
+                    (
+                        Branch: "AggressiveSupportEntry",
+                        Entry: "Condition01 gate -> previous-high break -> first MA5/MA10 pullback support entry",
+                        Defense: "Max next trading day 11:00",
+                        Result: new PrevHighFirstPullbackSupportEntryBacktest().Run(
+                            useConditionSearchGate: true,
+                            useNextDay1100MaxExit: true)
+                    ),
+                    (
+                        Branch: "AggressiveSupportEntry_1mPrevLowStop",
+                        Entry: "Condition01 gate -> previous-high break -> first MA5/MA10 pullback support entry",
+                        Defense: "1m completed close below previous 1m low, otherwise max next trading day 11:00",
+                        Result: new PrevHighFirstPullbackSupportEntryBacktest().Run(
+                            useConditionSearchGate: true,
+                            useOneMinutePrevLowCloseStop: true,
+                            useNextDay1100MaxExit: true)
+                    ),
+                    (
+                        Branch: "StablePullbackHighBreakout",
+                        Entry: "Condition01 gate -> previous-high break -> first pullback support -> pullback-high breakout entry",
+                        Defense: "Max next trading day 11:00",
+                        Result: new PrevHighFirstPullbackBreakoutBacktest().Run(
+                            useConditionSearchGate: true,
+                            useNextDay1100MaxExit: true)
+                    ),
+                    (
+                        Branch: "StableBreakoutRisk5",
+                        Entry: "Condition01 gate -> previous-high break -> first pullback support -> pullback-high breakout entry",
+                        Defense: "Entry to pullback-low risk <= 5%, max next trading day 11:00",
+                        Result: new PrevHighFirstPullbackBreakoutBacktest().Run(
+                            useConditionSearchGate: true,
+                            maxEntryToPullbackRiskRate: 5m,
+                            useNextDay1100MaxExit: true)
+                    ),
+                    (
+                        Branch: "StableBreakoutRisk5_1mPrevLowStop",
+                        Entry: "Condition01 gate -> previous-high break -> first pullback support -> pullback-high breakout entry",
+                        Defense: "Entry-to-pullback-low risk <= 5% + 1m previous-low close stop, otherwise max next trading day 11:00",
+                        Result: new PrevHighFirstPullbackBreakoutBacktest().Run(
+                            useConditionSearchGate: true,
+                            maxEntryToPullbackRiskRate: 5m,
+                            useOneMinutePrevLowCloseStop: true,
+                            useNextDay1100MaxExit: true)
+                    ),
+                    (
+                        Branch: "StableBreakoutRisk5_1mPrevLowStop_ReentryMa10To20High",
+                        Entry: "Condition01 gate -> previous-high break -> first pullback support -> pullback-high breakout entry; after stop, track one 1m MA10-or-lower reset then 20-bar high breakout re-entry",
+                        Defense: "Entry-to-pullback-low risk <= 5% + 1m previous-low close stop; one MA10 reset + 20-bar high breakout re-entry; max next trading day 11:00",
+                        Result: new PrevHighFirstPullbackBreakoutBacktest().Run(
+                            useConditionSearchGate: true,
+                            maxEntryToPullbackRiskRate: 5m,
+                            useOneMinutePrevLowCloseStop: true,
+                            useNextDay1100MaxExit: true,
+                            useOneMinuteMa10ResetTwentyHighBreakReentry: true)
+                    ),
+                    (
+                        Branch: "OneMinuteTriggerStructuralDefense",
+                        Entry: "Condition01 5m money base -> 1m trigger",
+                        Defense: "Structural 1m MA5 / 5m base-low / 15m max-180m exit",
+                        Result: new Condition01FiveMinuteMoneyBaseBacktest().Run(useCloseExit: false)
+                    ),
+                    (
+                        Branch: "OneMinuteTriggerCloseExit",
+                        Entry: "Condition01 5m money base -> 1m trigger",
+                        Defense: "Same-day close exit",
+                        Result: new Condition01FiveMinuteMoneyBaseBacktest().Run(useCloseExit: true)
+                    )
+                };
+
+                string runId = $"condition01_prevhigh_branch_sweep_{DateTime.Now:yyyyMMddHHmmss}";
+                var summaryResult = new
+                {
+                    RunId = runId,
+                    Source = "Condition01 intraday money-flow gate. Current backtest gate includes 5m 40eok, latest 3x3m avg 30eok, previous-high break, intraday daily BB upper break, and 09:00-12:00 window. K/O rank filters are not fully replayed in this sweep.",
+                    Results = results.Select(item => new
+                    {
+                        item.Branch,
+                        item.Entry,
+                        item.Defense,
+                        item.Result.RunId,
+                        item.Result.OutputDirectory,
+                        item.Result.SignalCount,
+                        item.Result.TradeCount,
+                        item.Result.Summary.WinRate,
+                        item.Result.Summary.AvgProfit,
+                        item.Result.Summary.AvgLoss,
+                        item.Result.Summary.Expectancy,
+                        item.Result.Summary.MAE,
+                        item.Result.Summary.MFE,
+                        item.Result.Summary.AvgHoldingMinutes,
+                        item.Result.Summary.ConsecutiveLosses
+                    })
+                };
+
+                WriteBacktestJobSummary(summaryResult, "last_strategy_run_summary.json", $"strategy_run_summary_{runId}.json");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var result = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"backtest condition01 prev-high branch sweep failed: {ex.GetType().Name}: {ex.Message}"
                 };
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
                 return 1;
@@ -1441,6 +1590,96 @@ namespace TradingDashboard
                     Error = $"backtest stochastic quick reaction failed: {ex.GetType().Name}: {ex.Message}"
                 };
                 WriteBacktestJobSummary(result, "last_strategy_run_summary.json", $"strategy_run_summary_{result.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunThirtyMinuteBaselineScan()
+        {
+            try
+            {
+                var service = new ThirtyMinuteBaselineService();
+                string outputDirectory = service.SaveFullScan(lookbackBars: 600);
+                var summary = new
+                {
+                    RunId = Path.GetFileName(outputDirectory),
+                    OutputDirectory = outputDirectory,
+                    Csv = Path.Combine(outputDirectory, "thirty_minute_baselines.csv"),
+                    Message = "30m 600-bar baseline scan completed"
+                };
+                WriteBacktestJobSummary(summary, "last_30m_baseline_scan_summary.json", $"30m_baseline_scan_summary_{summary.RunId}.json");
+                Console.WriteLine($"30m baseline scan saved: {outputDirectory}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var summary = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"30m baseline scan failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(summary, "last_30m_baseline_scan_summary.json", $"30m_baseline_scan_summary_{summary.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunThirtyMinuteBaselineChartSmoke()
+        {
+            try
+            {
+                var service = new ThirtyMinuteBaselineService();
+                string outputDirectory = service.SaveCandidateChartSmoke(lookbackBars: 600, chartBars: 260, maxCharts: 12);
+                var summary = new
+                {
+                    RunId = Path.GetFileName(outputDirectory),
+                    OutputDirectory = outputDirectory,
+                    Csv = Path.Combine(outputDirectory, "chart_smoke_summary.csv"),
+                    Message = "30m 600-bar baseline chart smoke completed"
+                };
+                WriteBacktestJobSummary(summary, "last_30m_baseline_chart_smoke_summary.json", $"30m_baseline_chart_smoke_summary_{summary.RunId}.json");
+                Console.WriteLine($"30m baseline chart smoke saved: {outputDirectory}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var summary = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"30m baseline chart smoke failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(summary, "last_30m_baseline_chart_smoke_summary.json", $"30m_baseline_chart_smoke_summary_{summary.RunId}.json");
+                return 1;
+            }
+        }
+
+        private static int RunThirtyMinuteBaselineChartCodes(string codes)
+        {
+            try
+            {
+                var service = new ThirtyMinuteBaselineService();
+                string[] codeList = [.. (codes ?? string.Empty)
+                    .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
+                string outputDirectory = service.SaveCodeChartSmoke(codeList, lookbackBars: 600, chartBars: 260);
+                var summary = new
+                {
+                    RunId = Path.GetFileName(outputDirectory),
+                    Codes = codeList,
+                    OutputDirectory = outputDirectory,
+                    Csv = Path.Combine(outputDirectory, "chart_code_summary.csv"),
+                    Message = "30m 600-bar baseline code chart completed"
+                };
+                WriteBacktestJobSummary(summary, "last_30m_baseline_chart_codes_summary.json", $"30m_baseline_chart_codes_summary_{summary.RunId}.json");
+                Console.WriteLine($"30m baseline code chart saved: {outputDirectory}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                var summary = new
+                {
+                    RunId = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Error = $"30m baseline code chart failed: {ex.GetType().Name}: {ex.Message}"
+                };
+                WriteBacktestJobSummary(summary, "last_30m_baseline_chart_codes_summary.json", $"30m_baseline_chart_codes_summary_{summary.RunId}.json");
                 return 1;
             }
         }
