@@ -57,6 +57,9 @@ namespace TradingDashboard.Services.Backtests
         public const string OneMinuteHeikinAshiExitRuleCodePrefix = "ONE_MINUTE_HEIKIN_ASHI";
 
         private const int MaxHoldingMinutes = 180;
+        private const int PriorDailyBaseLookbackDays = 6;
+        private const decimal PriorDailyBaseRiseRate = 25m;
+        private const long PriorDailyBaseTradingValue = 70_000_000_000;
 
         private readonly BacktestDataStore _dataStore;
         private readonly BacktestRunStore _runStore;
@@ -114,6 +117,7 @@ namespace TradingDashboard.Services.Backtests
                     continue;
 
                 Dictionary<string, DailyTrendState> dailyTrendByDate = BuildDailyTrendStateMap(dailyBars);
+                HashSet<string> priorDailyBaseBlockedDates = BuildPriorDailyBaseBlockedDates(dailyBars);
                 Dictionary<string, long> dayOpenByDate = BuildDayOpenByDate(fiveBars);
                 Dictionary<string, decimal> fiveRsi2ByTime = BuildRsiStateMap(fiveBars, 2);
                 int oneMinuteTouchPeriod = ResolveOneMinuteTouchPeriod(_entryMode);
@@ -182,6 +186,9 @@ namespace TradingDashboard.Services.Backtests
                     }
 
                     if (!baseSignal)
+                        continue;
+
+                    if (!avgifMergedMode && priorDailyBaseBlockedDates.Contains(date))
                         continue;
 
                     decimal ma200 = i >= 199
@@ -465,6 +472,40 @@ namespace TradingDashboard.Services.Backtests
             }
 
             return result;
+        }
+
+        private static HashSet<string> BuildPriorDailyBaseBlockedDates(IReadOnlyList<BacktestDailyBar> bars)
+        {
+            HashSet<string> blocked = new(StringComparer.Ordinal);
+            for (int i = 1; i < bars.Count; i++)
+            {
+                int start = Math.Max(1, i - PriorDailyBaseLookbackDays);
+                for (int j = start; j < i; j++)
+                {
+                    if (!IsStrongPriorDailyBaseCandle(bars, j))
+                        continue;
+
+                    blocked.Add(BacktestDataStore.NormalizeDate(bars[i].Date));
+                    break;
+                }
+            }
+
+            return blocked;
+        }
+
+        private static bool IsStrongPriorDailyBaseCandle(IReadOnlyList<BacktestDailyBar> bars, int index)
+        {
+            if (index <= 0 || index >= bars.Count)
+                return false;
+
+            BacktestDailyBar current = bars[index];
+            BacktestDailyBar previous = bars[index - 1];
+            if (previous.Close <= 0)
+                return false;
+
+            decimal riseRate = (current.Close - previous.Close) / (decimal)previous.Close * 100m;
+            return riseRate >= PriorDailyBaseRiseRate &&
+                ResolveDailyTradingValue(current) >= PriorDailyBaseTradingValue;
         }
 
         private static long ResolveDailyTradingValue(BacktestDailyBar bar)
@@ -2926,17 +2967,6 @@ namespace TradingDashboard.Services.Backtests
                 List<double?> ma200 = CalculateMa(bars, 200);
                 DrawMa(dc, bars, ma200, left, xStep, PriceY, Color.FromRgb(180, 180, 180));
 
-                if (entryPrice > 0 && entryPrice >= low && entryPrice <= high)
-                {
-                    double entryY = PriceY(entryPrice);
-                    var entryPen = new Pen(new SolidColorBrush(Color.FromRgb(80, 220, 120)), 1.4)
-                    {
-                        DashStyle = DashStyles.Dash
-                    };
-                    dc.DrawLine(entryPen, new Point(left, entryY), new Point(width - right, entryY));
-                    DrawText(dc, $"BUY {entryPrice:N0}", width - right - 96, entryY - 15, 11, Color.FromRgb(120, 255, 160));
-                }
-
                 if (exitPrice > 0 && exitPrice >= low && exitPrice <= high)
                 {
                     double exitY = PriceY(exitPrice);
@@ -2947,6 +2977,9 @@ namespace TradingDashboard.Services.Backtests
                     dc.DrawLine(exitPen, new Point(left, exitY), new Point(width - right, exitY));
                     DrawText(dc, $"SELL {exitPrice:N0}", width - right - 104, exitY + 4, 11, Color.FromRgb(255, 170, 115));
                 }
+
+                int entryMarkerIndex = FindLastTimeIndexAtOrBefore(bars, entryTime);
+                int exitMarkerIndex = FindLastTimeIndexAtOrBefore(bars, exitTime);
 
                 for (int i = 0; i < bars.Count; i++)
                 {
@@ -2968,9 +3001,9 @@ namespace TradingDashboard.Services.Backtests
 
                     if (bar.DateTime == baseTime)
                         DrawMarker(dc, x, top, priceBottom, "BASE", Colors.Gold);
-                    if (bar.DateTime == entryTime)
-                        DrawMarker(dc, x, top, priceBottom, "BUY", Color.FromRgb(80, 220, 120));
-                    if (bar.DateTime == exitTime)
+                    if (i == entryMarkerIndex)
+                        DrawBuyArrow(dc, x, Math.Min(priceBottom - 18, PriceY(bar.Low) + 10), "BUY", Color.FromRgb(80, 220, 120));
+                    if (i == exitMarkerIndex)
                         DrawMarker(dc, x, top, priceBottom, "SELL", Color.FromRgb(255, 120, 80));
                 }
             }
@@ -2988,6 +3021,22 @@ namespace TradingDashboard.Services.Backtests
             var pen = new Pen(new SolidColorBrush(color), 2);
             dc.DrawLine(pen, new Point(x, top), new Point(x, bottom));
             DrawText(dc, label, x + 4, top + 8, 11, color);
+        }
+
+        private static void DrawBuyArrow(DrawingContext dc, double x, double y, string label, Color color)
+        {
+            var brush = new SolidColorBrush(color);
+            var pen = new Pen(brush, 1.4);
+            var geometry = new StreamGeometry();
+            using (StreamGeometryContext ctx = geometry.Open())
+            {
+                ctx.BeginFigure(new Point(x, y), true, true);
+                ctx.LineTo(new Point(x - 7, y + 12), true, false);
+                ctx.LineTo(new Point(x + 7, y + 12), true, false);
+            }
+            geometry.Freeze();
+            dc.DrawGeometry(brush, pen, geometry);
+            DrawText(dc, label, x + 7, y + 4, 11, color);
         }
 
         private static void DrawMa(

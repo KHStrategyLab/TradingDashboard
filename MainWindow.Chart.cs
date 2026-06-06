@@ -678,9 +678,11 @@ namespace TradingDashboard
 
             double threshold = ResolveSupplyProfileThreshold(values);
             int pocIndex = Array.IndexOf(values, maxValue);
+            (int valueAreaStart, int valueAreaEnd) = ResolveSupplyProfileValueArea(values, pocIndex, 0.58);
             double maxBarWidth = Math.Max(80, chartW * 0.74);
             var profileBrush = new SolidColorBrush(Color.FromRgb(230, 207, 170));
             var pocBrush = new SolidColorBrush(Color.FromRgb(255, 232, 176));
+            var watchBrush = new SolidColorBrush(Color.FromRgb(86, 220, 165));
 
             var title = new TextBlock
             {
@@ -694,6 +696,20 @@ namespace TradingDashboard
             Canvas.SetLeft(title, 8);
             Canvas.SetTop(title, 4);
             canvas.Children.Add(title);
+
+            DrawSupplyProfileBuyGuide(
+                canvas,
+                chartW,
+                h,
+                min,
+                max,
+                binSize,
+                pocIndex,
+                valueAreaStart,
+                valueAreaEnd,
+                currentPrice,
+                pocBrush,
+                watchBrush);
 
             for (int i = 0; i < binCount; i++)
             {
@@ -740,6 +756,136 @@ namespace TradingDashboard
                     canvas.Children.Add(pocLine);
                 }
             }
+        }
+
+        private static (int Start, int End) ResolveSupplyProfileValueArea(
+            IReadOnlyList<double> values,
+            int pocIndex,
+            double targetRatio)
+        {
+            if (values.Count == 0 || pocIndex < 0 || pocIndex >= values.Count)
+                return (0, 0);
+
+            double total = values.Sum(v => Math.Max(0, v));
+            if (total <= 0)
+                return (pocIndex, pocIndex);
+
+            double target = total * Math.Clamp(targetRatio, 0.1, 0.95);
+            double accumulated = Math.Max(0, values[pocIndex]);
+            int start = pocIndex;
+            int end = pocIndex;
+
+            while (accumulated < target && (start > 0 || end < values.Count - 1))
+            {
+                double leftValue = start > 0 ? values[start - 1] : -1;
+                double rightValue = end < values.Count - 1 ? values[end + 1] : -1;
+
+                if (rightValue >= leftValue && end < values.Count - 1)
+                {
+                    end++;
+                    accumulated += Math.Max(0, values[end]);
+                }
+                else if (start > 0)
+                {
+                    start--;
+                    accumulated += Math.Max(0, values[start]);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return (start, end);
+        }
+
+        private void DrawSupplyProfileBuyGuide(
+            Canvas canvas,
+            double chartW,
+            double h,
+            double min,
+            double max,
+            double binSize,
+            int pocIndex,
+            int valueAreaStart,
+            int valueAreaEnd,
+            double currentPrice,
+            Brush pocBrush,
+            Brush watchBrush)
+        {
+            if (pocIndex < 0 || chartW <= 0 || max <= min)
+                return;
+
+            double range = Math.Max(1, max - min);
+            double centerPrice = min + (pocIndex + 0.5) * binSize;
+            double zoneLow = min + valueAreaStart * binSize;
+            double zoneHigh = Math.Min(max, min + (valueAreaEnd + 1) * binSize);
+            double centerY = (max - centerPrice) / range * (h - 4) + 2;
+            double zoneTop = (max - zoneHigh) / range * (h - 4) + 2;
+            double zoneBottom = (max - zoneLow) / range * (h - 4) + 2;
+
+            var buyZone = new Rectangle
+            {
+                Width = chartW,
+                Height = Math.Max(4, zoneBottom - zoneTop),
+                Fill = watchBrush,
+                Opacity = 0.055,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(buyZone, 0);
+            Canvas.SetTop(buyZone, zoneTop);
+            canvas.Children.Add(buyZone);
+
+            canvas.Children.Add(new Line
+            {
+                X1 = 0,
+                X2 = chartW,
+                Y1 = centerY,
+                Y2 = centerY,
+                Stroke = watchBrush,
+                StrokeThickness = 1.25,
+                Opacity = 0.72,
+                StrokeDashArray = new DoubleCollection { 8, 5 },
+                IsHitTestVisible = false
+            });
+
+            string currentState = string.Empty;
+            if (currentPrice > 0 && centerPrice > 0)
+            {
+                double distancePercent = (currentPrice - centerPrice) / centerPrice * 100.0;
+                currentState = Math.Abs(distancePercent) <= 1.8
+                    ? " / watch"
+                    : distancePercent > 0
+                        ? $" / +{distancePercent:0.0}%"
+                        : $" / {distancePercent:0.0}%";
+            }
+
+            var centerText = new TextBlock
+            {
+                Text = $"center {centerPrice:N0}{currentState}",
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = watchBrush,
+                Background = new SolidColorBrush(Color.FromArgb(150, 12, 18, 16)),
+                Padding = new Thickness(4, 1, 4, 1),
+                Opacity = 0.92,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(centerText, Math.Max(4, chartW - 138));
+            Canvas.SetTop(centerText, Math.Max(0, Math.Min(h - 18, centerY - 10)));
+            canvas.Children.Add(centerText);
+
+            canvas.Children.Add(new Line
+            {
+                X1 = 0,
+                X2 = Math.Max(42, chartW * 0.12),
+                Y1 = centerY,
+                Y2 = centerY,
+                Stroke = pocBrush,
+                StrokeThickness = 2.0,
+                Opacity = 0.64,
+                IsHitTestVisible = false
+            });
         }
 
         private IReadOnlyList<ChartCandle> ResolveSupplyProfileCandles(IReadOnlyList<ChartCandle> visibleCandles)
