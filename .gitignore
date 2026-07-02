@@ -17,6 +17,7 @@ Config/watchlist_stock_cache.json
 Config/watchlist_stock_cache.*.bak.json
 Config/stock_master_cache.json
 Config/chart_candle_cache.json
+Config/chart_candle_cache.db*
 Docs/LectureNotes/
 Storage/StrategyMinuteSeeds/
 Storage/StrategyAnchors/
