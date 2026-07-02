@@ -64,6 +64,7 @@ namespace TradingDashboard
         private readonly PaperTradeMarkStore _paperTradeMarkStore = new();
         private readonly WatchlistStockCacheStore _watchlistCacheStore = new();
         private readonly ChartCandleCacheStore _chartCandleFileCacheStore = new();
+        private readonly ChartCandleSqliteCacheStore _chartCandleSqliteCacheStore = new();
         private readonly Queue<LogLineEntry> _logLines = new();
         private readonly object _screenLogFileLock = new();
         private readonly Brush _upColorBrush;
@@ -132,7 +133,7 @@ namespace TradingDashboard
         private readonly HashSet<string> _conditionEnterAlertSentStockCodes = new(StringComparer.Ordinal);
         private readonly object _conditionEnterAlertLock = new();
         private DateTime _conditionEnterAlertSentDate = DateTime.Today;
-        private const int MinuteChartCandleCount = 240;
+        private const int MinuteChartCandleCount = 300;
         private const int ChartLoadMoreCandleStep = 100;
         private const int DailyChartRealtimeDrawIntervalMs = 350;
         private const int MinuteChartRealtimeDrawIntervalMs = 1500;
@@ -3529,6 +3530,8 @@ namespace TradingDashboard
                 _watchlistCacheRefreshCts?.Dispose();
                 _strategyMinuteAutoPreloadCts?.Cancel();
                 _strategyMinuteAutoPreloadCts?.Dispose();
+                _allStockChartCacheCts?.Cancel();
+                _allStockChartCacheCts?.Dispose();
                 CancelStockSearchSuggestion();
                 _balanceRequestCts?.Cancel();
                 _balanceRequestCts?.Dispose();

@@ -37,6 +37,7 @@ namespace TradingDashboard
             StrategyProgressItemsControl.ItemsSource = _strategyProgressRows;
             if (StrategyMinutePreloadIdleSecondsTextBox != null)
                 StrategyMinutePreloadIdleSecondsTextBox.Text = ResolveConfiguredStrategyMinuteAutoPreloadIdleSeconds().ToString();
+            UpdateAllStockChartCacheStatus("OFF");
             _isInitializingStrategyControls = false;
 
             UpdateStrategyExitStrategySelectorLocks();
@@ -1394,6 +1395,7 @@ namespace TradingDashboard
             bool preloadMinutes = IsStrategyMinutePreloadEnabled();
             bool saveMinuteSeeds = IsStrategyMinuteSeedFileSaveEnabled();
             bool saveDebugSnapshots = IsStrategyDebugSnapshotEnabled();
+            bool allStockChartCache = IsAllStockChartCacheRunning();
             int preloadIdleSeconds = ResolveStrategyMinuteAutoPreloadIdleSeconds();
             IReadOnlyList<StrategySlotSetting> settings = GetStrategySlotSettings();
             StrategyWatchReadiness readiness = BuildStrategyWatchReadiness();
@@ -1421,7 +1423,8 @@ namespace TradingDashboard
                 $"DUP ALERT {(duplicate.NotifyDuplicateSignal ? "ON" : "OFF")} · " +
                 $"MINUTE PRELOAD {(preloadMinutes ? "ON" : "OFF")} / " +
                 $"IDLE {preloadIdleSeconds}s / FILE SAVE {(saveMinuteSeeds ? "ON" : "OFF")} / " +
-                $"CODEX CHECK {(saveDebugSnapshots ? "ON" : "OFF")}";
+                $"CODEX CHECK {(saveDebugSnapshots ? "ON" : "OFF")} / " +
+                $"ALLSTOCK CACHE {(allStockChartCache ? "ON" : "OFF")}";
         }
 
         private StrategyWatchReadiness BuildStrategyWatchReadiness()

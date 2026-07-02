@@ -3225,7 +3225,8 @@
                                                   IsChecked="False"
                                                   Style="{StaticResource PolicyCardToggleStyle}"
                                                   Checked="StrategyControlBoard_Changed"
-                                                  Unchecked="StrategyControlBoard_Changed">
+                                                  Unchecked="StrategyControlBoard_Changed"
+                                                  Margin="0,0,0,7">
                                         <StackPanel>
                                             <TextBlock Text="Codex 확인"
                                                        Foreground="{StaticResource TextMainBrush}"
@@ -3235,6 +3236,30 @@
                                                        Style="{StaticResource CardMutedTextStyle}"
                                                        FontSize="10"
                                                        Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+
+                                    <ToggleButton x:Name="AllStockChartCacheToggle"
+                                                  IsChecked="False"
+                                                  Style="{StaticResource PolicyCardToggleStyle}"
+                                                  Checked="AllStockChartCacheToggle_Changed"
+                                                  Unchecked="AllStockChartCacheToggle_Changed">
+                                        <StackPanel>
+                                            <TextBlock Text="전종목 차트 캐시"
+                                                       Foreground="{StaticResource TextMainBrush}"
+                                                       FontSize="15"
+                                                       FontWeight="Bold"/>
+                                            <TextBlock Text="KRX는 KRX, NXT 가능 종목은 AL/SOR 통합봉으로 일봉 600개 후 5분봉 300개를 천천히 채운다"
+                                                       Style="{StaticResource CardMutedTextStyle}"
+                                                       FontSize="10"
+                                                       Margin="0,3,0,0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="AllStockChartCacheStatusText"
+                                                       Text="OFF"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="10"
+                                                       Margin="0,5,0,0"
                                                        TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </ToggleButton>

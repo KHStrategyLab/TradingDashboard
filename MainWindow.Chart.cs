@@ -140,13 +140,23 @@ namespace TradingDashboard
                 string marketLabel = ResolveDisplayMarketForStockCode(selectedStockCode);
                 bool useNxtMarket = string.Equals(marketLabel, "NXT", StringComparison.Ordinal);
                 ChartCacheKey cacheKey = CreateChartCacheKey(selectedStockCode, useNxtMarket, requestedPeriod);
+                bool allowCachedChart = !ShouldAlwaysFetchFreshChartPeriod(requestedPeriod);
                 bool showedCachedChart = false;
-                if (TryGetChartMemoryCache(cacheKey, count, out List<ChartCandle> cachedCandles))
+                if (allowCachedChart && TryGetChartMemoryCache(cacheKey, count, out List<ChartCandle> cachedCandles))
                 {
                     if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
                         return;
 
                     ApplyChartCandles(cachedCandles, selectedStockCode, marketLabel, requestedPeriod, $"{marketLabel} cache");
+                    showedCachedChart = true;
+                }
+                else if (allowCachedChart && TryGetChartSqliteCache(cacheKey, count, out List<ChartCandle> sqliteCachedCandles))
+                {
+                    if (selectionVersion != _selectionVersion || chartVersion != _chartRenderVersion || selectedStockCode != _selectedStockCode || requestedPeriod != _currentChartPeriod)
+                        return;
+
+                    SetChartMemoryCache(cacheKey, sqliteCachedCandles, count);
+                    ApplyChartCandles(sqliteCachedCandles, selectedStockCode, marketLabel, requestedPeriod, $"{marketLabel} sqlite cache");
                     showedCachedChart = true;
                 }
                 else if (TryGetChartFileCache(cacheKey, count, out List<ChartCandle> fileCachedCandles))
@@ -160,6 +170,7 @@ namespace TradingDashboard
                 }
 
                 List<ChartCandle> candles;
+                int dailyFetchCount = Math.Max(count, ResolveChartFileCacheRetainCount(ChartPeriod.Daily));
                 if (IsMinuteChartPeriod(requestedPeriod))
                 {
                     candles = [.. (await _kiwoomConditionService.GetMinuteCandlesAsync(selectedStockCode, ResolveMinuteChartInterval(requestedPeriod), useNxtMarket, count, cancellationToken))
@@ -170,12 +181,12 @@ namespace TradingDashboard
                 {
                     candles = requestedPeriod switch
                     {
-                        ChartPeriod.Daily => [.. (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
+                        ChartPeriod.Daily => [.. (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, dailyFetchCount, cancellationToken))
                             .TakeLast(count)
                             .Select(ToChartCandle)],
                         ChartPeriod.Weekly => [.. (await _kiwoomConditionService.GetWeeklyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken)).Select(ToChartCandle)],
                         ChartPeriod.Monthly => [.. (await _kiwoomConditionService.GetMonthlyCandlesAsync(selectedStockCode, useNxtMarket, count, cancellationToken)).Select(ToChartCandle)],
-                        _ => [.. (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, 300, cancellationToken))
+                        _ => [.. (await _kiwoomConditionService.GetDailyCandlesAsync(selectedStockCode, useNxtMarket, dailyFetchCount, cancellationToken))
                             .TakeLast(count)
                             .Select(ToChartCandle)]
                     };
@@ -186,7 +197,9 @@ namespace TradingDashboard
                 if (candles.Count == 0)
                     return;
 
-                SetChartMemoryCache(cacheKey, candles, count);
+                if (!ShouldAlwaysFetchFreshChartPeriod(requestedPeriod))
+                    SetChartMemoryCache(cacheKey, candles, count);
+                SaveChartSqliteCache(cacheKey, candles, "REST");
                 ApplyChartCandles(candles, selectedStockCode, marketLabel, requestedPeriod, showedCachedChart ? $"{marketLabel} refresh" : $"{marketLabel} initial");
             }
             catch (OperationCanceledException)
@@ -285,6 +298,130 @@ namespace TradingDashboard
 
             candles = [.. fileCandles.TakeLast(count).Select(ToChartCandle)];
             return candles.Count > 0;
+        }
+
+        private bool TryGetChartSqliteCache(ChartCacheKey key, int count, out List<ChartCandle> candles)
+        {
+            candles = [];
+            if (!ShouldReadChartSqliteCachePeriod(key.Period))
+                return false;
+
+            try
+            {
+                if (TryGetDerivedChartSqliteCache(key, count, out candles))
+                    return true;
+
+                if (!_chartCandleSqliteCacheStore.TryGet(key.Code, key.UseNxtMarket, key.Period.ToString(), count, out List<DailyCandle> sqliteCandles))
+                    return false;
+
+                candles = [.. sqliteCandles.TakeLast(count).Select(ToChartCandle)];
+                return candles.Count > 0;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"chart sqlite cache read skipped: {key.Code} / {FormatChartPeriodLabel(key.Period)} / {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool TryGetDerivedChartSqliteCache(ChartCacheKey key, int count, out List<ChartCandle> candles)
+        {
+            candles = [];
+            if (!ShouldDeriveFromFiveMinuteSqliteCache(key.Period))
+                return false;
+
+            int targetMinute = ResolveMinuteChartInterval(key.Period);
+            int sourceCount = Math.Max(MinuteChartCandleCount, count * Math.Max(1, targetMinute / 5) + 10);
+            if (!_chartCandleSqliteCacheStore.TryGet(
+                    key.Code,
+                    key.UseNxtMarket,
+                    ChartPeriod.Minute5.ToString(),
+                    sourceCount,
+                    out List<DailyCandle> fiveMinuteCandles))
+            {
+                return false;
+            }
+
+            List<DailyCandle> derivedCandles = AggregateFiveMinuteCandles(fiveMinuteCandles, targetMinute, count);
+            candles = [.. derivedCandles.Select(ToChartCandle)];
+            return candles.Count > 0;
+        }
+
+        private static List<DailyCandle> AggregateFiveMinuteCandles(
+            IReadOnlyList<DailyCandle> fiveMinuteCandles,
+            int targetMinute,
+            int count)
+        {
+            if (fiveMinuteCandles == null || fiveMinuteCandles.Count == 0 || targetMinute <= 5 || targetMinute % 5 != 0)
+                return [];
+
+            return [.. fiveMinuteCandles
+                .Where(candle => candle != null &&
+                    candle.Close > 0 &&
+                    TryParseMinuteCandleTime(candle.Date, out _))
+                .OrderBy(candle => NormalizeMinuteCandleTimeKey(candle.Date), StringComparer.Ordinal)
+                .GroupBy(candle => BuildDerivedMinuteBucketKey(candle.Date, targetMinute), StringComparer.Ordinal)
+                .Select(group =>
+                {
+                    List<DailyCandle> items = [.. group.OrderBy(candle => NormalizeMinuteCandleTimeKey(candle.Date), StringComparer.Ordinal)];
+                    DailyCandle first = items[0];
+                    DailyCandle last = items[^1];
+                    return new DailyCandle
+                    {
+                        Date = group.Key,
+                        Open = first.Open,
+                        High = items.Max(candle => candle.High),
+                        Low = items.Min(candle => candle.Low),
+                        Close = last.Close,
+                        Volume = items.Aggregate(0L, (sum, candle) => AddLongClamped(sum, Math.Max(0, candle.Volume))),
+                        TradingValue = items.Aggregate(0L, (sum, candle) => AddLongClamped(sum, Math.Max(0, candle.TradingValue)))
+                    };
+                })
+                .Where(candle => candle.Close > 0)
+                .OrderBy(candle => candle.Date, StringComparer.Ordinal)
+                .TakeLast(Math.Max(1, count))];
+        }
+
+        private static string BuildDerivedMinuteBucketKey(string chartDate, int targetMinute)
+        {
+            if (!TryParseMinuteCandleTime(chartDate, out DateTime time))
+                return chartDate ?? string.Empty;
+
+            int interval = Math.Max(1, targetMinute);
+            int totalMinutes = time.Hour * 60 + time.Minute;
+            int bucketTotalMinutes = totalMinutes - (totalMinutes % interval);
+            return time.Date.AddMinutes(bucketTotalMinutes).ToString("yyyyMMddHHmmss");
+        }
+
+        private static long AddLongClamped(long current, long value)
+        {
+            if (value <= 0)
+                return current;
+
+            return current > long.MaxValue - value
+                ? long.MaxValue
+                : current + value;
+        }
+
+        private void SaveChartSqliteCache(ChartCacheKey key, IEnumerable<ChartCandle> candles, string source)
+        {
+            if (!ShouldStoreChartSqliteCachePeriod(key.Period))
+                return;
+
+            try
+            {
+                _chartCandleSqliteCacheStore.Upsert(
+                    key.Code,
+                    key.UseNxtMarket,
+                    key.Period.ToString(),
+                    ConvertChartCandlesToDailyCandles(candles),
+                    ResolveChartFileCacheRetainCount(key.Period),
+                    source);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"chart sqlite cache save skipped: {key.Code} / {FormatChartPeriodLabel(key.Period)} / {ex.Message}");
+            }
         }
 
         private void SetChartMemoryCache(ChartCacheKey key, IEnumerable<ChartCandle> candles)
@@ -1349,6 +1486,7 @@ namespace TradingDashboard
             if (!IsSameChartDate(last.Date, bucketTime))
             {
                 UpdateCompletedChartMovingAverages(_currentChartCandles, _currentChartCandles.Count - 1);
+                SaveCompletedMinuteChartCandle(last);
                 isNewCandle = true;
                 last = new ChartCandle
                 {
@@ -1400,6 +1538,22 @@ namespace TradingDashboard
 
             _lastRealtimeChartDrawAt = DateTime.Now;
             DrawFullChart(_currentChartCandles, $"{FormatChartPeriodLabel(_currentChartDataPeriod)} axis recalculation");
+        }
+
+        private void SaveCompletedMinuteChartCandle(ChartCandle candle)
+        {
+            if (candle == null ||
+                !IsMinuteChartPeriod(_currentChartDataPeriod) ||
+                string.IsNullOrWhiteSpace(_currentChartCode) ||
+                string.IsNullOrWhiteSpace(candle.Date) ||
+                candle.Close <= 0)
+            {
+                return;
+            }
+
+            bool useNxtMarket = string.Equals(_currentChartMarket, "NXT", StringComparison.Ordinal);
+            ChartCacheKey key = CreateChartCacheKey(_currentChartCode, useNxtMarket, _currentChartDataPeriod);
+            SaveChartSqliteCache(key, [CloneChartCandle(candle)], "REALTIME_CLOSED");
         }
 
         private void DrawFullChart(List<ChartCandle> candles, string reason)
@@ -1707,6 +1861,30 @@ namespace TradingDashboard
                 period == ChartPeriod.Minute30 ||
                 period == ChartPeriod.Minute60 ||
                 period == ChartPeriod.Minute120;
+        }
+
+        private static bool ShouldAlwaysFetchFreshChartPeriod(ChartPeriod period)
+        {
+            return period is ChartPeriod.Minute1 or ChartPeriod.Minute3;
+        }
+
+        private static bool ShouldReadChartSqliteCachePeriod(ChartPeriod period)
+        {
+            return period is ChartPeriod.Daily or
+                ChartPeriod.Minute5 or
+                ChartPeriod.Minute10 or
+                ChartPeriod.Minute15 or
+                ChartPeriod.Minute30;
+        }
+
+        private static bool ShouldStoreChartSqliteCachePeriod(ChartPeriod period)
+        {
+            return period is ChartPeriod.Daily or ChartPeriod.Minute5;
+        }
+
+        private static bool ShouldDeriveFromFiveMinuteSqliteCache(ChartPeriod period)
+        {
+            return period is ChartPeriod.Minute10 or ChartPeriod.Minute15 or ChartPeriod.Minute30;
         }
 
         private static bool IsCalendarChartPeriod(ChartPeriod period)

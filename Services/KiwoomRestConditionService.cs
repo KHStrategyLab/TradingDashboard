@@ -216,6 +216,31 @@ namespace TradingDashboard.Services
                 .ToList();
         }
 
+        public async Task<IReadOnlyList<StockMasterItem>> GetStockMasterItemsAsync(CancellationToken cancellationToken = default)
+        {
+            ValidateSettings();
+            string token = await IssueTokenAsync(cancellationToken).ConfigureAwait(false);
+            Dictionary<string, StockMarketInfo> marketInfoByCode = await GetStockMarketInfoMapAsync(token, cancellationToken).ConfigureAwait(false);
+
+            return [.. marketInfoByCode
+                .Select(kv => new StockMasterItem
+                {
+                    Code = kv.Key,
+                    Name = kv.Value.Name,
+                    MarketCode = kv.Value.MarketTypeCode,
+                    MarketName = kv.Value.MarketName,
+                    ProgramMarketType = kv.Value.ProgramMarketType,
+                    SupportsNxt = kv.Value.SupportsNxt,
+                    LastPrice = kv.Value.LastPrice > 0 ? kv.Value.LastPrice.ToString() : string.Empty,
+                    OrderWarning = kv.Value.OrderWarning,
+                    AuditInfo = kv.Value.AuditInfo,
+                    StockState = kv.Value.StockState,
+                    SectorName = kv.Value.SectorName,
+                    CompanyClassName = kv.Value.CompanyClassName
+                })
+                .OrderBy(item => item.Code, StringComparer.Ordinal)];
+        }
+
         public async Task<IReadOnlyList<MarketIndexSnapshot>> GetMarketIndexSnapshotsAsync(CancellationToken cancellationToken = default)
         {
             ValidateSettings();
