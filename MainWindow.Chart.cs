@@ -204,6 +204,7 @@ namespace TradingDashboard
             string normalizedMarket = NormalizeIdentityMarket(market);
             _currentChartCandles.Clear();
             _currentChartCandles.AddRange(CloneChartCandles(candles));
+            RecalculateChartMovingAverages(_currentChartCandles);
             _currentChartCode = selectedStockCode;
             _currentChartMarket = normalizedMarket;
             _currentChartDataPeriod = period;
@@ -525,8 +526,122 @@ namespace TradingDashboard
                 High = c.High,
                 Low = c.Low,
                 Close = c.Close,
-                Volume = c.Volume
+                Volume = c.Volume,
+                Ma5 = c.Ma5,
+                Ma10 = c.Ma10,
+                Ma20 = c.Ma20,
+                Ma60 = c.Ma60,
+                Ma240 = c.Ma240,
+                Ma480 = c.Ma480,
+                VolumeMa5 = c.VolumeMa5,
+                VolumeMa20 = c.VolumeMa20,
+                VolumeMa60 = c.VolumeMa60
             };
+        }
+
+        private static void RecalculateChartMovingAverages(IList<ChartCandle> candles)
+        {
+            if (candles == null || candles.Count == 0)
+                return;
+
+            double close5 = 0;
+            double close10 = 0;
+            double close20 = 0;
+            double close60 = 0;
+            double close240 = 0;
+            double close480 = 0;
+            long volume5 = 0;
+            long volume20 = 0;
+            long volume60 = 0;
+
+            for (int i = 0; i < candles.Count; i++)
+            {
+                ChartCandle candle = candles[i];
+                double close = candle.Close;
+                long volume = Math.Max(0, candle.Volume);
+
+                close5 += close;
+                close10 += close;
+                close20 += close;
+                close60 += close;
+                close240 += close;
+                close480 += close;
+                volume5 += volume;
+                volume20 += volume;
+                volume60 += volume;
+
+                if (i >= 5)
+                    close5 -= candles[i - 5].Close;
+                if (i >= 10)
+                    close10 -= candles[i - 10].Close;
+                if (i >= 20)
+                    close20 -= candles[i - 20].Close;
+                if (i >= 60)
+                    close60 -= candles[i - 60].Close;
+                if (i >= 240)
+                    close240 -= candles[i - 240].Close;
+                if (i >= 480)
+                    close480 -= candles[i - 480].Close;
+                if (i >= 5)
+                    volume5 -= Math.Max(0, candles[i - 5].Volume);
+                if (i >= 20)
+                    volume20 -= Math.Max(0, candles[i - 20].Volume);
+                if (i >= 60)
+                    volume60 -= Math.Max(0, candles[i - 60].Volume);
+
+                candle.Ma5 = i >= 4 ? close5 / 5.0 : 0;
+                candle.Ma10 = i >= 9 ? close10 / 10.0 : 0;
+                candle.Ma20 = i >= 19 ? close20 / 20.0 : 0;
+                candle.Ma60 = i >= 59 ? close60 / 60.0 : 0;
+                candle.Ma240 = i >= 239 ? close240 / 240.0 : 0;
+                candle.Ma480 = i >= 479 ? close480 / 480.0 : 0;
+                candle.VolumeMa5 = i >= 4 ? volume5 / 5.0 : 0;
+                candle.VolumeMa20 = i >= 19 ? volume20 / 20.0 : 0;
+                candle.VolumeMa60 = i >= 59 ? volume60 / 60.0 : 0;
+            }
+        }
+
+        private static void UpdateCompletedChartMovingAverages(IList<ChartCandle> candles, int index)
+        {
+            if (candles == null || index < 0 || index >= candles.Count)
+                return;
+
+            ChartCandle candle = candles[index];
+            candle.Ma5 = CalculateChartCloseAverage(candles, index, 5);
+            candle.Ma10 = CalculateChartCloseAverage(candles, index, 10);
+            candle.Ma20 = CalculateChartCloseAverage(candles, index, 20);
+            candle.Ma60 = CalculateChartCloseAverage(candles, index, 60);
+            candle.Ma240 = CalculateChartCloseAverage(candles, index, 240);
+            candle.Ma480 = CalculateChartCloseAverage(candles, index, 480);
+            candle.VolumeMa5 = CalculateChartVolumeAverage(candles, index, 5);
+            candle.VolumeMa20 = CalculateChartVolumeAverage(candles, index, 20);
+            candle.VolumeMa60 = CalculateChartVolumeAverage(candles, index, 60);
+        }
+
+        private static double CalculateChartCloseAverage(IList<ChartCandle> candles, int index, int period)
+        {
+            if (candles == null || period <= 0 || index < period - 1 || index >= candles.Count)
+                return 0;
+
+            double sum = 0;
+            int start = index - period + 1;
+            for (int i = start; i <= index; i++)
+                sum += candles[i].Close;
+
+            return sum / period;
+        }
+
+        private static double CalculateChartVolumeAverage(IList<ChartCandle> candles, int index, int period)
+        {
+            if (candles == null || period <= 0 || index < period - 1 || index >= candles.Count)
+                return 0;
+
+            long sum = 0;
+            int start = index - period + 1;
+            for (int i = start; i <= index; i++)
+                sum += Math.Max(0, candles[i].Volume);
+
+            return sum / (double)period;
         }
 
         private void DrawPriceChart(List<ChartCandle> candles)
@@ -1103,6 +1218,7 @@ namespace TradingDashboard
             bool shouldSnapViewportToLatest = IsChartViewportNearLatest();
             if (!IsSameCalendarChartBucket(last.Date, period, now))
             {
+                UpdateCompletedChartMovingAverages(_currentChartCandles, _currentChartCandles.Count - 1);
                 isNewCandle = true;
                 last = new ChartCandle
                 {
@@ -1232,6 +1348,7 @@ namespace TradingDashboard
             bool shouldSnapViewportToLatest = IsChartViewportNearLatest();
             if (!IsSameChartDate(last.Date, bucketTime))
             {
+                UpdateCompletedChartMovingAverages(_currentChartCandles, _currentChartCandles.Count - 1);
                 isNewCandle = true;
                 last = new ChartCandle
                 {
@@ -1827,22 +1944,14 @@ namespace TradingDashboard
             double range = Math.Max(1, max - min);
             double gap = w / visibleCount;
             var points = new PointCollection();
-            double sum = 0;
 
             int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, visibleStartIndex + visibleCount - 1);
-            for (int i = 0; i < _currentChartCandles.Count; i++)
+            for (int i = visibleStartIndex; i <= visibleEndIndex; i++)
             {
-                sum += _currentChartCandles[i].Close;
-                if (i >= period)
-                    sum -= _currentChartCandles[i - period].Close;
-                if (i < period - 1)
+                double avg = GetChartCloseMovingAverage(_currentChartCandles[i], period);
+                if (avg <= 0)
                     continue;
-                if (i < visibleStartIndex)
-                    continue;
-                if (i > visibleEndIndex)
-                    break;
 
-                double avg = sum / period;
                 double x = (i - visibleStartIndex) * gap + gap / 2;
                 double y = (max - avg) / range * (h - 4) + 2;
                 points.Add(new Point(x, y));
@@ -1855,6 +1964,20 @@ namespace TradingDashboard
                 Points = points
             };
             canvas.Children.Add(line);
+        }
+
+        private static double GetChartCloseMovingAverage(ChartCandle candle, int period)
+        {
+            return period switch
+            {
+                5 => candle.Ma5,
+                10 => candle.Ma10,
+                20 => candle.Ma20,
+                60 => candle.Ma60,
+                240 => candle.Ma240,
+                480 => candle.Ma480,
+                _ => 0
+            };
         }
 
         private void DrawPredayRangeBreakoutSignals(Canvas canvas, int visibleCount, int visibleStartIndex, double w, double h, double min, double max)
@@ -2171,20 +2294,11 @@ namespace TradingDashboard
             int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, visibleStartIndex + visibleCount - 1);
             foreach (int period in periods.Where(p => p > 0))
             {
-                long sum = 0;
-                for (int i = 0; i < _currentChartCandles.Count; i++)
+                for (int i = visibleStartIndex; i <= visibleEndIndex; i++)
                 {
-                    sum += Math.Max(0, _currentChartCandles[i].Volume);
-                    if (i >= period)
-                        sum -= Math.Max(0, _currentChartCandles[i - period].Volume);
-                    if (i < period - 1)
-                        continue;
-                    if (i < visibleStartIndex)
-                        continue;
-                    if (i > visibleEndIndex)
-                        break;
-
-                    max = Math.Max(max, sum / (double)period);
+                    double avg = GetChartVolumeMovingAverage(_currentChartCandles[i], period);
+                    if (avg > 0)
+                        max = Math.Max(max, avg);
                 }
             }
 
@@ -2198,22 +2312,14 @@ namespace TradingDashboard
 
             double gap = w / visibleCount;
             var points = new PointCollection();
-            long sum = 0;
             int visibleEndIndex = Math.Min(_currentChartCandles.Count - 1, visibleStartIndex + visibleCount - 1);
 
-            for (int i = 0; i < _currentChartCandles.Count; i++)
+            for (int i = visibleStartIndex; i <= visibleEndIndex; i++)
             {
-                sum += Math.Max(0, _currentChartCandles[i].Volume);
-                if (i >= period)
-                    sum -= Math.Max(0, _currentChartCandles[i - period].Volume);
-                if (i < period - 1)
+                double avg = GetChartVolumeMovingAverage(_currentChartCandles[i], period);
+                if (avg <= 0)
                     continue;
-                if (i < visibleStartIndex)
-                    continue;
-                if (i > visibleEndIndex)
-                    break;
 
-                double avg = sum / (double)period;
                 double x = (i - visibleStartIndex) * gap + gap / 2;
                 double y = h - avg / maxVol * (h - 2);
                 points.Add(new Point(x, Math.Max(1, Math.Min(h - 1, y))));
@@ -2229,6 +2335,17 @@ namespace TradingDashboard
                 Opacity = 0.95,
                 Points = points
             });
+        }
+
+        private static double GetChartVolumeMovingAverage(ChartCandle candle, int period)
+        {
+            return period switch
+            {
+                5 => candle.VolumeMa5,
+                20 => candle.VolumeMa20,
+                60 => candle.VolumeMa60,
+                _ => 0
+            };
         }
 
         private void DrawVolumeMaLegend(Canvas canvas)
@@ -2349,6 +2466,15 @@ namespace TradingDashboard
             public double Low { get; set; }
             public double Close { get; set; }
             public long Volume { get; set; }
+            public double Ma5 { get; set; }
+            public double Ma10 { get; set; }
+            public double Ma20 { get; set; }
+            public double Ma60 { get; set; }
+            public double Ma240 { get; set; }
+            public double Ma480 { get; set; }
+            public double VolumeMa5 { get; set; }
+            public double VolumeMa20 { get; set; }
+            public double VolumeMa60 { get; set; }
         }
 
         private sealed record ChartRenderState(

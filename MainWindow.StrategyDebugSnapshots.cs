@@ -474,6 +474,7 @@ namespace TradingDashboard
             {
                 _currentChartCandles.Clear();
                 _currentChartCandles.AddRange(CloneChartCandles(renderContext.Candles));
+                RecalculateChartMovingAverages(_currentChartCandles);
                 _currentChartCode = renderContext.Code;
                 _currentChartMarket = renderContext.Market;
                 _currentChartDataPeriod = renderContext.Period;
